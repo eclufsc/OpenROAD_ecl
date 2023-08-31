@@ -135,6 +135,10 @@ namespace pad {
 class ICeWall;
 }
 
+namespace tut {
+class Tutorial;
+}
+
 namespace utl {
 class Logger;
 }
@@ -192,6 +196,7 @@ class OpenRoad
   ppl::IOPlacer* getIOPlacer() { return ioPlacer_; }
   pdn::PdnGen* getPdnGen() { return pdngen_; }
   pad::ICeWall* getICeWall() { return icewall_; }
+  tut::Tutorial* getTutorial() { return tutorial_; }
   dst::Distributed* getDistributed() { return distributer_; }
   stt::SteinerTreeBuilder* getSteinerTreeBuilder() { return stt_builder_; }
   dft::Dft* getDft() { return dft_; }
@@ -277,6 +282,7 @@ class OpenRoad
   par::PartitionMgr* partitionMgr_ = nullptr;
   pdn::PdnGen* pdngen_ = nullptr;
   pad::ICeWall* icewall_ = nullptr;
+  tut::Tutorial *tutorial_ = nullptr;
   dst::Distributed* distributer_ = nullptr;
   stt::SteinerTreeBuilder* stt_builder_ = nullptr;
   dft::Dft* dft_ = nullptr;

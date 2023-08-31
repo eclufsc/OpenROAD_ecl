@@ -218,6 +218,13 @@ getICeWall()
   return openroad->getICeWall();
 }
 
+tut::Tutorial*
+getTutorial()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getTutorial();
+}
+
 stt::SteinerTreeBuilder*
 getSteinerTreeBuilder()
 {
