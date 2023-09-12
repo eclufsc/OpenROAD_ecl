@@ -4,6 +4,7 @@
 #include "utl/Logger.h"
 
 #include <iostream>
+#include <math.h>
 
 /*
  * How to use:
@@ -79,6 +80,29 @@ Tutorial::printHPWLs()
 {
   //TODO
   //Challenge: Traverse all nets printing the total HPWL
+  std::cout<<"Total HPWL: "<<std::end;
+  auto block = db_->getChip()->getBlock();
+  double HPWL=0;
+  int HX,HY,LX,LY;
+  int x, y;
+  for(auto net : block->getNets()) {
+    HX=-1; HY=-1; LX=-1; LY=-1;
+    for(auto iterm : net->getITerms()) {
+      x=0; y=0;
+      iterm->getAvgXY(&x,&y);
+      if((x<LX)||(LX==-1))
+        LX = x;
+      if((x>HX)||(LX==-1))
+        HX = x;
+      if((y<LY)||(LY==-1))
+        LY = y;
+      if((y>HY)||(HY==-1))
+        HY = y;
+    }
+    HPWL+=((HX-LX)+(HY-LY));
+  }
+  std::cout<<std::to_string(HPWL)<<std::endl;
+  logger_->report("Total HPWL: "+std::to_string(HPWL));
 }
 
 Tutorial::~Tutorial()
