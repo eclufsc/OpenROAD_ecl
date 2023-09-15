@@ -78,10 +78,14 @@ Tutorial::printPins()
 void
 Tutorial::printHPWLs()
 {
-  /*
+  using std::string, std::to_string;
+
   auto block = db_->getChip()->getBlock();
   for(auto net : block->getNets())
   {
+    string pins;
+
+    using std::numeric_limits;
     int min_x = numeric_limits<int>::max(),
         min_y = numeric_limits<int>::max(),
         max_x = numeric_limits<int>::min(),
@@ -94,6 +98,8 @@ Tutorial::printHPWLs()
         if (x > max_x) max_x = x;
         if (y < min_y) min_y = y;
         if (y > max_y) max_y = y;
+
+        pins += string("(") + to_string(x) + ", " + to_string(y) + "); ";
       }
     }
 
@@ -101,12 +107,19 @@ Tutorial::printHPWLs()
     if (net->getITerms().size() == 0) {
       hpwl = 0;
     } else {
-      hpwl = (max_x - min_x + 1) + (max_y - min_y + 1); 
+      hpwl = (max_x - min_x) + (max_y - min_y); 
     }
 
-    std::cout << "Net = " << net->getName() << "; HPWL = " << hpwl << "\n";
+    string s;
+    s += string("Net = ") + net->getName() + "\n";
+    s += string("HPWL = ") + to_string(hpwl) + "\n";
+    s += string("(min_x, min_y) = ") + "(" + to_string(min_x) + ", " + to_string(min_y) + ")" + "\n";
+    s += string("(max_x, max_y) = ") + "(" + to_string(max_x) + ", " + to_string(max_y) + ")" + "\n";
+    s += string("Pins = ") + pins + "\n\n";
+
+//    std::cout << s;
+    logger_->report(s);
   }
-  */
 }
 
 Tutorial::~Tutorial()
