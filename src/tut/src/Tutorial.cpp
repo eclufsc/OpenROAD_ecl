@@ -4,6 +4,7 @@
 #include "utl/Logger.h"
 
 #include <iostream>
+#include <limits>
 
 /*
  * How to use:
@@ -77,8 +78,35 @@ Tutorial::printPins()
 void
 Tutorial::printHPWLs()
 {
-  //TODO
-  //Challenge: Traverse all nets printing the total HPWL
+  /*
+  auto block = db_->getChip()->getBlock();
+  for(auto net : block->getNets())
+  {
+    int min_x = numeric_limits<int>::max(),
+        min_y = numeric_limits<int>::max(),
+        max_x = numeric_limits<int>::min(),
+        max_y = numeric_limits<int>::min();
+    for (auto iterm : net->getITerms()) {
+      int x, y; 
+      const bool pinExist = iterm->getAvgXY(&x, &y);
+      if (pinExist) {
+        if (x < min_x) min_x = x;
+        if (x > max_x) max_x = x;
+        if (y < min_y) min_y = y;
+        if (y > max_y) max_y = y;
+      }
+    }
+
+    int hpwl;
+    if (net->getITerms().size() == 0) {
+      hpwl = 0;
+    } else {
+      hpwl = (max_x - min_x + 1) + (max_y - min_y + 1); 
+    }
+
+    std::cout << "Net = " << net->getName() << "; HPWL = " << hpwl << "\n";
+  }
+  */
 }
 
 Tutorial::~Tutorial()
