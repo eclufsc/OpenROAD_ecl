@@ -80,6 +80,7 @@ Tutorial::printHPWLs()
 {
   //TODO
   //Challenge: Traverse all nets printing the total HPWL
+  /*
   std::cout<<"Total HPWL: "<<std::end;
   auto block = db_->getChip()->getBlock();
   double HPWL=0;
@@ -103,6 +104,7 @@ Tutorial::printHPWLs()
   }
   std::cout<<std::to_string(HPWL)<<std::endl;
   logger_->report("Total HPWL: "+std::to_string(HPWL));
+  */
 }
 
 Tutorial::~Tutorial()
