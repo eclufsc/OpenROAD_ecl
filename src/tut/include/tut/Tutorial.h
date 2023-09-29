@@ -15,20 +15,7 @@ class Tutorial {
     Tutorial();
     ~Tutorial();
 
-    //Print Hello World
-    void printHello();
-
-    //Print all cell names
-    void printCells();
-
-    //Print all net names
-    void printNets();
-
-    //Print all pin names
-    void printPins();
-
-    //Traverse all nets printing the total HPWL
-    void printHPWLs();
+    void test();
 
   private:
     odb::dbDatabase* db_;
