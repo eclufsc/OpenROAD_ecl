@@ -1,7 +1,10 @@
 #pragma once
 
+#include <vector>
+
 namespace odb {
   class dbDatabase;
+  class dbInst;
 }
 
 namespace utl {
@@ -16,6 +19,8 @@ class Tutorial {
     ~Tutorial();
 
     void test();
+    void tetris();
+    void shuffle();
 
   private:
     odb::dbDatabase* db_;

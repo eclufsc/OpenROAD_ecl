@@ -21,6 +21,16 @@ void test() {
   tutorial->test();
 }
 
+void shuffle() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->shuffle();
+}
+
+void tetris() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->tetris();
+}
+
 } // namespace
 
 %} // inline
