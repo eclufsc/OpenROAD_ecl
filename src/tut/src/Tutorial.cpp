@@ -3,8 +3,8 @@
 #include "ord/OpenRoad.hh"
 #include "utl/Logger.h"
 #include "odb/dbTypes.h"
+#include "odb/dbTransform.h"
 
-#include <iostream>
 #include <limits>
 
 /*
@@ -21,88 +21,137 @@ namespace tut {
 
     Tutorial::~Tutorial() {}
 
+    // both (get/set)(Location/Origin) operate at block coordinate system
     void Tutorial::test() {
-        using std::vector;
-        using odb::dbRow;
-        using odb::dbRowDir;
+        using namespace odb;
 
-        auto block = db_->getChip()->getBlock();
+        dbChip* chip = db_->getChip();
+        if (!chip) {
+            fprintf(stderr, "no circuit loaded\n");
+            return;
+        }
+        dbBlock* block = chip->getBlock();
 
-        auto dbuToMicrons = [&](int64_t dbu) -> double {
-            return (double) dbu / (block->getDbUnitsPerMicron());
+        dbSet<dbInst> cells = block->getInsts();
+
+        auto dbu_to_microns = [&](int64_t dbu) -> double {
+            return (double) dbu / block->getDbUnitsPerMicron();
         };
 
-        auto rows = block->getRows();
-        vector<dbRow*> lines;
-        vector<dbRow*> columns;
-        for (auto row : rows) {
-            if (row->getDirection().getValue() == dbRowDir::Value::HORIZONTAL) {
-                lines.push_back(row);
-            } else {
-                columns.push_back(row);
+        auto microns_to_dbu = [&](double microns) -> double {
+            return microns * block->getDbUnitsPerMicron();
+        };
+
+        auto xy_dbu_to_microns = [&](int x, int y) -> std::pair<double, double> {
+            return {dbu_to_microns(x), dbu_to_microns(y)};
+        };
+
+        auto xy_microns_to_dbu = [&](double x, double y) -> std::pair<int, int> {
+            return {microns_to_dbu(x), microns_to_dbu(y)};
+        };
+
+        auto get_pos = [&](dbInst* cell) -> Point {
+            if (!cell) {
+                fprintf(stderr, "cell null\n");
+                return Point(1.0f, 1.0f);
+            }
+            dbBox* box = cell->getBBox();
+            return Point(box->xMin(), box->yMin());
+        };
+
+        auto set_pos = [&](dbInst* cell, int x, int y) {
+            cell->setOrigin(x, y);
+        };
+
+        auto p_cell = cells.begin();
+        p_cell++;
+        p_cell++;
+        p_cell++;
+        dbInst* cell = *p_cell;
+        printf("%s\n", cell->getName().c_str());
+        auto [x, y] = xy_microns_to_dbu(50, 25);
+        cell->setLocation(x, y);
+        {
+            int x, y;
+            cell->getLocation(x, y);
+            auto [xd, yd] = xy_dbu_to_microns(x, y);
+            printf("location: %lf, %lf\n", xd, yd);
+        }
+        {
+            int x, y;
+            cell->getOrigin(x, y);
+            auto [xd, yd] = xy_dbu_to_microns(x, y);
+            printf("origin: %lf, %lf\n", xd, yd);
+        }
+
+        /*
+        for (dbInst* cell : cells) {
+            {
+                auto [x, y] = point_to_dbu(get_pos(cell));
+                printf("%s\n", cell->getName().c_str());
+                printf("old_pos: %lf, %lf\n", x, y);
+            }
+
+            {
+                set_pos(cell, microns_to_dbu(50), microns_to_dbu(50));
+
+                auto [x, y] = point_to_dbu(get_pos(cell));
+                printf("new_pos: %lf, %lf\n", x, y);
+
+                int x_l, y_l;
+                cell->getLocation(x_l, y_l);
+                printf("getLocation: %lf, %lf\n", dbu_to_microns(x), dbu_to_microns(x));
+                printf("\n");
             }
         }
-        std::sort(lines.begin(), lines.end(),
-            [&](dbRow* row1, dbRow* row2) {
-                int x1, y1; 
-                row1->getOrigin(x1, y1);
-                int x2, y2; 
-                row2->getOrigin(x2, y2);
-                return y1 < y2; 
-            }
-        );
-        std::sort(columns.begin(), columns.end(),
-            [&](dbRow* row1, dbRow* row2) {
-                int x1, y1; 
-                row1->getOrigin(x1, y1);
-                int x2, y2; 
-                row2->getOrigin(x2, y2);
-                return x1 < x2;
-            }
-        );
-
-        std::cout << "size = " << rows.size() << "\n";
-
-        printf("lines\n");
-        for (dbRow* line : lines) {
-            int x_i, y_i;
-            line->getOrigin(x_i, y_i);
-            double x = dbuToMicrons(x_i);
-            double y = dbuToMicrons(y_i);
-            printf("x, y = %lf, %lf\n", x, y);
-        }
-        printf("\n");
-
-        printf("columns\n");
-        for (dbRow* column : columns) {
-            int x_i, y_i;
-            column->getOrigin(x_i, y_i);
-            double x = dbuToMicrons(x_i);
-            double y = dbuToMicrons(y_i);
-            printf("x, y = %lf, %lf\n", x, y);
-        }
-        printf("\n");
-
-//        for (auto inst : block->getInsts()) {
-//            int x_i, y_i;
-//            inst->getOrigin(x_i, y_i);
-//
-//            
-////            double x = dbuToMicrons(block, x_i);
-////            double y = dbuToMicrons(block, y_i);
-////
-////            printf("%s\n", inst->getName().c_str());
-////            printf("x, y = %lf, %lf\n", x, y);
-//            
-//        }
+        */
     }
 
     void Tutorial::shuffle() {
         using namespace odb;
-        dbBlock* block = db_->getChip()->getBlock();
+
+        dbChip* chip = db_->getChip();
+        if (!chip) {
+            fprintf(stderr, "no circuit loaded\n");
+            return;
+        }
+        dbBlock* block = chip->getBlock();
+
+        auto microns_to_dbu = [&](double microns) -> double {
+            return (double) microns * block->getDbUnitsPerMicron();
+        };
+        
+        auto get_width = [&](dbInst* cell) {
+            return cell->getMaster()->getWidth();
+        };
+
+        auto get_height = [&](dbInst* cell) {
+            return cell->getMaster()->getHeight();
+        };
+
+        // todo: hardcoded. Substituir por funcao do openroad
+        int min_x = microns_to_dbu(41.8);
+        int max_x = microns_to_dbu(52.2);
+        int min_y = microns_to_dbu(35.9);
+        int max_y = microns_to_dbu(45.6);
+
         dbSet<dbInst> cells = block->getInsts();
         for (odb::dbInst* cell : cells) {
-            cell->setOrigin(rand()%70000, rand()%70000);
+            int x;
+            int y;
+            
+            while (true) {
+                x = rand()%(max_x-min_x) + min_x;
+                y = rand()%(max_y-min_y) + min_y;
+
+                if (x + get_width(cell) <= max_x
+                    && y + get_height(cell) <= max_y
+                ) {
+                    break;
+                }
+            }
+
+            cell->setLocation(x, y);
         }
     }
 
@@ -110,14 +159,20 @@ namespace tut {
         using std::vector;
         using namespace odb;
 
-        dbBlock* block = db_->getChip()->getBlock();
+        dbChip* chip = db_->getChip();
+        if (!chip) {
+            fprintf(stderr, "no circuit loaded\n");
+            return;
+        }
+        dbBlock* block = chip->getBlock();
+
         vector<dbInst*> cells;
         dbSet<dbInst> cells_set = block->getInsts();
         for (dbInst* cell : cells_set) {
             cells.push_back(cell);
         }
 
-        float left_factor = 1.0; 
+        float left_factor = 0.5; 
         float width_factor = 0.5;
         float x_to_y_priority_ratio = 1.0f;
 
@@ -138,35 +193,38 @@ namespace tut {
                 return row_to_y(row1) < row_to_y(row2);
             }
         );
-        // nos ispd 2018 (alguns deles, nao sei se todos) nao tem nenhum row vertical
-//        std::sort(columns.begin(), columns.end(),
-//            [&](dbRow* row1, dbRow* row2) {
-//                int x1, y1; 
-//                row1->getOrigin(x1, y1);
-//                int x2, y2; 
-//                row2->getOrigin(x2, y2);
-//                return x1 < x2;
-//            }
-//        );
 
-        printf("rows funcionaram\n");
-        fflush(stdout);
-
-        auto dbuToMicrons = [&](int64_t dbu) -> double {
-            return (double) dbu / (block->getDbUnitsPerMicron());
+        auto dbu_to_microns = [&](int64_t dbu) -> double {
+            return (double) dbu / block->getDbUnitsPerMicron();
         };
 
+        auto microns_to_dbu = [&](double microns) -> double {
+            return (double) microns * block->getDbUnitsPerMicron();
+        };
+
+        auto xy_dbu_to_microns = [&](int x, int y) -> std::pair<double, double> {
+            return {dbu_to_microns(x), dbu_to_microns(y)};
+        };
+
+        auto xy_microns_to_dbu = [&](double x, double y) -> std::pair<int, int> {
+            return {microns_to_dbu(x), microns_to_dbu(y)};
+        };
+
+        // todo: talvez de problema com celula rotacionada?
         auto get_width = [&](dbInst* cell) {
             return cell->getMaster()->getWidth();
         };
 
-        auto get_pos = [&](dbInst* cell) -> Point {
+        auto get_pos = [&](dbInst* cell) -> std::pair<int, int> {
             int x, y;
-            cell->getOrigin(x, y);
-            return Point(x, y);
+            cell->getLocation(x, y);
+            return {x, y};
         };
 
-        // move to closest leftmost positions of the rows
+        auto set_pos = [&](dbInst* cell, int x, int y) {
+            cell->setLocation(x, y);
+        };
+
         int widest_width = get_width(*std::max_element(cells.begin(), cells.end(),
             [&](dbInst* cell1, dbInst* cell2) {
                 return get_width(cell1) < get_width(cell2);
@@ -175,7 +233,8 @@ namespace tut {
 
         auto effective_x = [&](dbInst* cell){
             // +width -> +priority
-            return get_pos(cell).x() - get_width(cell) * width_factor;
+            auto [x, y] = get_pos(cell);
+            return x - get_width(cell) * width_factor;
         };
         std::sort(cells.begin(), cells.end(), 
             [&](dbInst* cell1, dbInst* cell2){
@@ -183,17 +242,24 @@ namespace tut {
             }
         );
 
-        int max_col = block->getBBox()->xMax();
+        int min_x = microns_to_dbu(41.8);
+        int max_x = microns_to_dbu(52.2);
         auto cell_can_fit_here = [&](dbInst* cell, int col, dbRow* row) -> bool {
+            //////////////
             // check if cell is in bounds
-            if (col + get_width(cell) > max_col) return false;
+            //////////////
+            if (!(min_x < col && col + get_width(cell) < max_x)) return false;
 
+            //////////////
             // check if cell is not colliding with other placed cell
-            for (dbInst* other = *cells.begin(); other != cell; other++) {
-                if (get_pos(other).y() == row_to_y(row)) {
-                    // same row
-                    int x1 = col;
-                    int x2 = get_pos(other).x();
+            //////////////
+
+            for (auto p_other = cells.begin(); *p_other != cell; p_other++) {
+                dbInst* other = *p_other;
+                int x1 = col;
+                int y1 = row_to_y(row);
+                auto [x2, y2] = get_pos(other);
+                if (y1 == y2) {
                     if ((x2 <= x1 && x1 < x2 + get_width(other))
                         || (x1 <= x2 && x2 < x1 + get_width(cell))) {
                         return false;
@@ -206,15 +272,17 @@ namespace tut {
 
         for (dbInst* cell : cells) {
             // cells cannot move too much (left_factor)
-            int target_x = get_pos(cell).x() - left_factor * widest_width;
-            int target_y = get_pos(cell).y();
-            int lowest_cost = INT_MAX;
+            auto [x, y] = get_pos(cell);
+            int target_x = x - left_factor * widest_width;
+            int target_y = y;
+            double lowest_cost = std::numeric_limits<double>::max();
 
             dbRow* winning_row = 0;
             int winning_col = 0;
 
             for (dbRow* row : rows) {
-                for (int col = target_x; col < max_col; col++) {
+                // todo: iterar pelos sites em vez das colunas?
+                for (int col = target_x; col < max_x; col++) {
                     if (!cell_can_fit_here(cell, col, row)) {
                         continue;
                     }
@@ -232,13 +300,14 @@ namespace tut {
                     break;
                 }
             }
-            if (lowest_cost == INT_MAX) {
+            if (lowest_cost == std::numeric_limits<double>::max()) {
                 fprintf(stderr, "ERROR: could not place cell\n");
                 continue;
             }
-            cell->setOrigin(winning_col, row_to_y(winning_row));
+            int new_x = winning_col;
+            int new_y = row_to_y(winning_row);
+            set_pos(cell, new_x, new_y);
         }
-
 
 //            // moves to col with lowest cost
 //            // detailed placement?
