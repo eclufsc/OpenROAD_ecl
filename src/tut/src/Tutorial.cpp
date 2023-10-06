@@ -122,11 +122,13 @@ namespace tut {
         };
         
         auto get_width = [&](dbInst* cell) {
-            return cell->getMaster()->getWidth();
+            dbBox* box = cell->getBBox();
+            return box->xMax() - box->xMin();
         };
 
         auto get_height = [&](dbInst* cell) {
-            return cell->getMaster()->getHeight();
+            dbBox* box = cell->getBBox();
+            return box->yMax() - box->yMin();
         };
 
         Rect rect = block->getDieArea();
@@ -210,9 +212,9 @@ namespace tut {
             return {microns_to_dbu(x), microns_to_dbu(y)};
         };
 
-        // todo: talvez de problema com celula rotacionada?
         auto get_width = [&](dbInst* cell) {
-            return cell->getMaster()->getWidth();
+            dbBox* box = cell->getBBox();
+            return box->xMax() - box->xMin();
         };
 
         auto get_pos = [&](dbInst* cell) -> std::pair<int, int> {
