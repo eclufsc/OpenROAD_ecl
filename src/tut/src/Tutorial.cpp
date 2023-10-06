@@ -157,6 +157,8 @@ namespace tut {
         }
     }
 
+    // todo: crasha quando existem "FIRM instances"
+    // todo: openroad "hangs" para circuito grande. Talvez substituir col para sites?
     void Tutorial::tetris() {
         using std::vector;
         using namespace odb;
