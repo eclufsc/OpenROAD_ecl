@@ -129,11 +129,11 @@ namespace tut {
             return cell->getMaster()->getHeight();
         };
 
-        // todo: hardcoded. Substituir por funcao do openroad
-        int min_x = microns_to_dbu(41.8);
-        int max_x = microns_to_dbu(52.2);
-        int min_y = microns_to_dbu(35.9);
-        int max_y = microns_to_dbu(45.6);
+        Rect rect = block->getDieArea();
+        int min_x = rect.xMin();
+        int max_x = rect.xMax();
+        int min_y = rect.yMin();
+        int max_y = rect.yMax();
 
         dbSet<dbInst> cells = block->getInsts();
         for (odb::dbInst* cell : cells) {
@@ -242,8 +242,9 @@ namespace tut {
             }
         );
 
-        int min_x = microns_to_dbu(41.8);
-        int max_x = microns_to_dbu(52.2);
+        Rect rect = block->getDieArea();
+        int min_x = rect.xMin();
+        int max_x = rect.xMax();
         auto cell_can_fit_here = [&](dbInst* cell, int col, dbRow* row) -> bool {
             //////////////
             // check if cell is in bounds
