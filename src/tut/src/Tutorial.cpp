@@ -118,6 +118,8 @@ namespace tut {
 
         dbSet<dbInst> cells = block->getInsts();
         for (odb::dbInst* cell : cells) {
+            if (cell->isFixed()) continue;
+
             int x;
             int y;
             
@@ -149,13 +151,15 @@ namespace tut {
         }
         dbBlock* block = chip->getBlock();
 
+        vector<dbInst*> fixed_cells;
         vector<dbInst*> cells;
         dbSet<dbInst> cells_set = block->getInsts();
         for (dbInst* cell : cells_set) {
-            cells.push_back(cell);
+            if (cell->isFixed()) fixed_cells.push_back(cell);
+            else                 cells.push_back(cell);
         }
 
-        float left_factor = 0.5; 
+        float left_factor = 1.0; 
         float width_factor = 0.5;
         float x_to_y_priority_ratio = 1.0f;
 
@@ -237,7 +241,17 @@ namespace tut {
             //////////////
             // check if cell is not colliding with other placed cell
             //////////////
-
+            for (dbInst* other : fixed_cells) {
+                int x1 = col;
+                int y1 = row_to_y(row);
+                auto [x2, y2] = get_pos(other);
+                if (y1 == y2) {
+                    if ((x2 <= x1 && x1 < x2 + get_width(other))
+                        || (x1 <= x2 && x2 < x1 + get_width(cell))) {
+                        return false;
+                    }
+                }
+            }
             for (auto p_other = cells.begin(); *p_other != cell; p_other++) {
                 dbInst* other = *p_other;
                 int x1 = col;
@@ -266,8 +280,11 @@ namespace tut {
 
             for (dbRow* row : rows) {
                 int site_n = row->getSiteCount(); 
-                unsigned site_width = row->getSite()->getWidth();
-                int start_site_x = row->getBBox().xMin();
+                int site_width = row->getSite()->getWidth();
+                int row_start = row->getBBox().xMin();
+
+                int start_site_x = (target_x - row_start)/site_width * site_width
+                                    + row_start;
                 int end_site_x = row->getBBox().xMax();
 
                 for (int site_x = start_site_x; site_x < end_site_x; site_x += site_width) {
