@@ -6,6 +6,7 @@
 #include "odb/dbTransform.h"
 
 #include <limits>
+#include <algorithm>
 
 /*
  * How to use:
@@ -86,6 +87,49 @@ namespace tut {
         }
     }
 
+    void Tutorial::disturb() {
+        using namespace odb;
+
+        dbChip* chip = db_->getChip();
+        if (!chip) {
+            fprintf(stderr, "no circuit loaded\n");
+            return;
+        }
+        dbBlock* block = chip->getBlock();
+        
+        auto get_width = [&](dbInst* cell) {
+            dbBox* box = cell->getBBox();
+            return box->xMax() - box->xMin();
+        };
+
+        auto get_height = [&](dbInst* cell) {
+            dbBox* box = cell->getBBox();
+            return box->yMax() - box->yMin();
+        };
+
+        auto get_pos = [&](dbInst* cell) -> std::pair<int, int> {
+            int x, y;
+            cell->getLocation(x, y);
+            return {x, y};
+        };
+
+        auto set_pos = [&](dbInst* cell, int x, int y) {
+            cell->setLocation(x, y);
+        };
+
+        dbSet<dbInst> cells = block->getInsts();
+        for (odb::dbInst* cell : cells) {
+            if (cell->isFixed()) continue;
+
+            auto [x, y] = get_pos(cell);
+
+            int new_x = x + rand() % get_width(cell);
+            int new_y = y + rand() % get_height(cell);
+
+            set_pos(cell, new_x, new_y);
+        }
+    }
+
     void Tutorial::shuffle() {
         using namespace odb;
 
@@ -138,7 +182,6 @@ namespace tut {
         }
     }
 
-    // todo: crasha quando existem "FIRM instances"
     // todo: openroad "hangs" para circuito grande. Talvez substituir col para sites?
     void Tutorial::tetris() {
         using std::vector;
@@ -229,14 +272,18 @@ namespace tut {
             }
         );
 
+        vector<vector<dbInst*>> fixed_per_row(rows.size());
+
         Rect rect = block->getCoreArea();
         int min_x = rect.xMin();
         int max_x = rect.xMax();
-        auto cell_can_fit_here = [&](dbInst* cell, int col, dbRow* row) -> bool {
+        auto cell_can_fit_here = [&](dbInst* cell, int col, int row_i) -> bool {
             //////////////
             // check if cell is in bounds
             //////////////
             if (!(min_x <= col && col + get_width(cell) <= max_x)) return false;
+
+            dbRow* row = rows[row_i];
 
             //////////////
             // check if cell is not colliding with other placed cell
@@ -252,8 +299,7 @@ namespace tut {
                     }
                 }
             }
-            for (auto p_other = cells.begin(); *p_other != cell; p_other++) {
-                dbInst* other = *p_other;
+            for (dbInst* other : fixed_per_row[row_i]) {
                 int x1 = col;
                 int y1 = row_to_y(row);
                 auto [x2, y2] = get_pos(other);
@@ -268,6 +314,11 @@ namespace tut {
             return true;
         };
 
+        vector<int> rows_y(rows.size());
+        for (int i = 0; i < rows.size(); i++) {
+            rows_y[i] = row_to_y(rows[i]);
+        }
+
         for (dbInst* cell : cells) {
             // cells cannot move too much (left_factor)
             auto [x, y] = get_pos(cell);
@@ -275,10 +326,23 @@ namespace tut {
             int target_y = y;
             double lowest_cost = std::numeric_limits<double>::max();
 
-            dbRow* winning_row = 0;
+            printf("%s\n", cell->getName().c_str());
+
+            int winning_row = 0;
             int winning_col = 0;
 
-            for (dbRow* row : rows) {
+            auto iter = std::lower_bound(rows_y.begin(), rows_y.end(), target_y);
+            int approx_row;
+            if (iter == rows_y.end()) approx_row = 0;
+            else                      approx_row = iter - rows_y.begin();
+            for (int row_i = approx_row; row_i < rows.size(); row_i++) {
+                dbRow* row = rows[row_i];
+
+                int sqrt_cost_y = row_to_y(row) - target_y;
+                int cost_y = sqrt_cost_y*sqrt_cost_y;
+
+                if (cost_y > lowest_cost) break;
+
                 int site_n = row->getSiteCount(); 
                 int site_width = row->getSite()->getWidth();
                 int row_start = row->getBBox().xMin();
@@ -288,17 +352,50 @@ namespace tut {
                 int end_site_x = row->getBBox().xMax();
 
                 for (int site_x = start_site_x; site_x < end_site_x; site_x += site_width) {
-                    if (!cell_can_fit_here(cell, site_x, row)) {
+                    if (!cell_can_fit_here(cell, site_x, row_i)) {
                         continue;
                     }
 
                     int sqrt_cost_x = site_x - target_x;
-                    int sqrt_cost_y = row_to_y(row) - target_y;
-                    double cost = sqrt_cost_x*sqrt_cost_x
-                        + x_to_y_priority_ratio * sqrt_cost_y*sqrt_cost_y;
+                    int cost_x = sqrt_cost_x*sqrt_cost_x;
+                    double cost = cost_x
+                        + x_to_y_priority_ratio * cost_y;
                     if (cost < lowest_cost) {
                         lowest_cost = cost;
-                        winning_row = row;
+                        winning_row = row_i;
+                        winning_col = site_x;
+                    }
+                    break;
+                }
+            }
+            for (int row_i = approx_row-1; row_i >= 0; row_i--) {
+                dbRow* row = rows[row_i];
+
+                int sqrt_cost_y = row_to_y(row) - target_y;
+                int cost_y = sqrt_cost_y*sqrt_cost_y;
+
+                if (cost_y > lowest_cost) break;
+
+                int site_n = row->getSiteCount(); 
+                int site_width = row->getSite()->getWidth();
+                int row_start = row->getBBox().xMin();
+
+                int start_site_x = (target_x - row_start)/site_width * site_width
+                                    + row_start;
+                int end_site_x = row->getBBox().xMax();
+
+                for (int site_x = start_site_x; site_x < end_site_x; site_x += site_width) {
+                    if (!cell_can_fit_here(cell, site_x, row_i)) {
+                        continue;
+                    }
+
+                    int sqrt_cost_x = site_x - target_x;
+                    int cost_x = sqrt_cost_x*sqrt_cost_x;
+                    double cost = cost_x
+                        + x_to_y_priority_ratio * cost_y;
+                    if (cost < lowest_cost) {
+                        lowest_cost = cost;
+                        winning_row = row_i;
                         winning_col = site_x;
                     }
                     break;
@@ -309,8 +406,10 @@ namespace tut {
                 continue;
             }
             int new_x = winning_col;
-            int new_y = row_to_y(winning_row);
+            int new_y = row_to_y(rows[winning_row]);
             set_pos(cell, new_x, new_y);
+
+            fixed_per_row[winning_row].push_back(cell);
         }
     }
 }

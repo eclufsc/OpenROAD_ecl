@@ -26,6 +26,11 @@ void shuffle() {
   tutorial->shuffle();
 }
 
+void disturb() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->disturb();
+}
+
 void tetris() {
   Tutorial* tutorial = getTutorial();
   tutorial->tetris();

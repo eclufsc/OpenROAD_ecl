@@ -21,6 +21,7 @@ class Tutorial {
     void test();
     void tetris();
     void shuffle();
+    void disturb();
 
   private:
     odb::dbDatabase* db_;
