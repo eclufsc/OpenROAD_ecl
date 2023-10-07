@@ -7,6 +7,7 @@
 
 #include <limits>
 #include <algorithm>
+#include <deque>
 
 /*
  * How to use:
@@ -182,9 +183,9 @@ namespace tut {
         }
     }
 
-    // todo: openroad "hangs" para circuito grande. Talvez substituir col para sites?
     void Tutorial::tetris() {
         using std::vector;
+        using std::deque;
         using namespace odb;
 
         dbChip* chip = db_->getChip();
@@ -272,7 +273,9 @@ namespace tut {
             }
         );
 
-        vector<vector<dbInst*>> fixed_per_row(rows.size());
+        // using deque instead of queue because queue doesnt support iteration
+        // max deque size = 8 (by crude experimentation with ispd18_test4)
+        vector<deque<dbInst*>> last_fixed_per_row(rows.size());
 
         Rect rect = block->getCoreArea();
         int min_x = rect.xMin();
@@ -299,7 +302,7 @@ namespace tut {
                     }
                 }
             }
-            for (dbInst* other : fixed_per_row[row_i]) {
+            for (dbInst* other : last_fixed_per_row[row_i]) {
                 int x1 = col;
                 int y1 = row_to_y(row);
                 auto [x2, y2] = get_pos(other);
@@ -326,7 +329,7 @@ namespace tut {
             int target_y = y;
             double lowest_cost = std::numeric_limits<double>::max();
 
-            printf("%s\n", cell->getName().c_str());
+//            printf("%s\n", cell->getName().c_str());
 
             int winning_row = 0;
             int winning_col = 0;
@@ -409,7 +412,29 @@ namespace tut {
             int new_y = row_to_y(rows[winning_row]);
             set_pos(cell, new_x, new_y);
 
-            fixed_per_row[winning_row].push_back(cell);
+            while (true) {
+                deque<dbInst*>* last_fixed = &last_fixed_per_row[winning_row];
+
+                if (last_fixed->size() == 0) break;
+
+                dbInst* cell = last_fixed->front();
+
+                // x2 - left_factor * width2 >= x1 - left_factor * width1
+                // x2 >= x1 - left_factor * width1
+                // x2 == effective_x(x1)
+                int curr_effective_x = x - get_width(cell) * width_factor;
+                int lower_bound_of_next_target_x = curr_effective_x - left_factor * widest_width;
+
+                int cell_max_x = cell->getBBox()->xMax();
+
+                if (cell_max_x <= lower_bound_of_next_target_x) {
+                    last_fixed->pop_front();
+                } else {
+                    break;
+                }
+            }
+
+            last_fixed_per_row[winning_row].push_back(cell);
         }
     }
 }
