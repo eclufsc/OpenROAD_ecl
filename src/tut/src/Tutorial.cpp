@@ -63,48 +63,27 @@ namespace tut {
             cell->setOrigin(x, y);
         };
 
-        auto p_cell = cells.begin();
-        p_cell++;
-        p_cell++;
-        p_cell++;
-        dbInst* cell = *p_cell;
-        printf("%s\n", cell->getName().c_str());
-        auto [x, y] = xy_microns_to_dbu(50, 25);
-        cell->setLocation(x, y);
-        {
-            int x, y;
-            cell->getLocation(x, y);
-            auto [xd, yd] = xy_dbu_to_microns(x, y);
-            printf("location: %lf, %lf\n", xd, yd);
-        }
-        {
-            int x, y;
-            cell->getOrigin(x, y);
-            auto [xd, yd] = xy_dbu_to_microns(x, y);
-            printf("origin: %lf, %lf\n", xd, yd);
+        std::vector<dbRow*> rows;
+        dbSet<dbRow> rows_set = block->getRows();
+        for (dbRow* row : rows_set) {
+            rows.push_back(row);
         }
 
-        /*
-        for (dbInst* cell : cells) {
+        printf("rows:\n");
+        for (dbRow* row : rows) {
+            printf("\n%s\n", row->getName().c_str());
             {
-                auto [x, y] = point_to_dbu(get_pos(cell));
-                printf("%s\n", cell->getName().c_str());
-                printf("old_pos: %lf, %lf\n", x, y);
-            }
+                Rect rect = row->getBBox();
 
-            {
-                set_pos(cell, microns_to_dbu(50), microns_to_dbu(50));
-
-                auto [x, y] = point_to_dbu(get_pos(cell));
-                printf("new_pos: %lf, %lf\n", x, y);
-
-                int x_l, y_l;
-                cell->getLocation(x_l, y_l);
-                printf("getLocation: %lf, %lf\n", dbu_to_microns(x), dbu_to_microns(x));
-                printf("\n");
+                auto [x_min, y_min] = xy_dbu_to_microns(rect.xMin(), rect.yMin());
+                auto [x_max, y_max] = xy_dbu_to_microns(rect.xMax(), rect.yMax());
+                printf("box: min = (%lf, %lf); max = (%lf, %lf)\n", x_min, y_min, x_max, y_max);
+                printf("site count = %d\n", row->getSiteCount());
+                printf("site width = %u\n", row->getSite()->getWidth());
+                printf("row width = %d\n", rect.xMax() - rect.xMin());
+                printf("count * width = %u\n", row->getSiteCount()*row->getSite()->getWidth());
             }
         }
-        */
     }
 
     void Tutorial::shuffle() {
@@ -131,7 +110,7 @@ namespace tut {
             return box->yMax() - box->yMin();
         };
 
-        Rect rect = block->getDieArea();
+        Rect rect = block->getCoreArea();
         int min_x = rect.xMin();
         int max_x = rect.xMax();
         int min_y = rect.yMin();
@@ -246,14 +225,14 @@ namespace tut {
             }
         );
 
-        Rect rect = block->getDieArea();
+        Rect rect = block->getCoreArea();
         int min_x = rect.xMin();
         int max_x = rect.xMax();
         auto cell_can_fit_here = [&](dbInst* cell, int col, dbRow* row) -> bool {
             //////////////
             // check if cell is in bounds
             //////////////
-            if (!(min_x < col && col + get_width(cell) < max_x)) return false;
+            if (!(min_x <= col && col + get_width(cell) <= max_x)) return false;
 
             //////////////
             // check if cell is not colliding with other placed cell
@@ -286,21 +265,24 @@ namespace tut {
             int winning_col = 0;
 
             for (dbRow* row : rows) {
-                // todo: iterar pelos sites em vez das colunas?
-                for (int col = target_x; col < max_x; col++) {
-                    if (!cell_can_fit_here(cell, col, row)) {
+                int site_n = row->getSiteCount(); 
+                unsigned site_width = row->getSite()->getWidth();
+                int start_site_x = row->getBBox().xMin();
+                int end_site_x = row->getBBox().xMax();
+
+                for (int site_x = start_site_x; site_x < end_site_x; site_x += site_width) {
+                    if (!cell_can_fit_here(cell, site_x, row)) {
                         continue;
                     }
 
-                    // todo: por que o custo esta sendo computado em relacao a target_x em vez de cell.x?
-                    int sqrt_cost_x = col - target_x;
+                    int sqrt_cost_x = site_x - target_x;
                     int sqrt_cost_y = row_to_y(row) - target_y;
                     double cost = sqrt_cost_x*sqrt_cost_x
                         + x_to_y_priority_ratio * sqrt_cost_y*sqrt_cost_y;
                     if (cost < lowest_cost) {
                         lowest_cost = cost;
                         winning_row = row;
-                        winning_col = col;
+                        winning_col = site_x;
                     }
                     break;
                 }
@@ -313,57 +295,6 @@ namespace tut {
             int new_y = row_to_y(winning_row);
             set_pos(cell, new_x, new_y);
         }
-
-//            // moves to col with lowest cost
-//            // detailed placement?
-//            std::sort(cells.begin(), cells.end(),
-//                [&](cell1, cell2) {
-//                    if (cell1.y != cell2.y) {
-//                        return cell1.y < cell2.y;
-//                    } else {
-//                        return cell1.x > cell2.x;
-//                    }
-//                }
-//            );
-//            for (auto cell : cells) {
-//                int row = y_to_row(cell.y);
-//                for (int col = x_to_col(cell.x); col < num_cols; col++) {
-//                    if (!cell_can_fit_here(cell, col, row)) {
-//                        continue;
-//                    }
-//                    cost = cost_function(cell, col, row);
-//                    if (cost < current_cost) {
-//                        cell.x = col_to_x(col);
-//                        current_cost = cost;
-//                    }
-//                }
-//            }
-//            // minimizing cost by rotating cell
-//            int max_passes = 2;
-//            for (pass = 0; pass < max_passes; pass++) {
-//                std::sort(cells.begin(), cells.end(),
-//                    [&](cell1, cell2) {
-//                        if (cell1.y != cell2.y) {
-//                            return cell1.y < cell2.y;
-//                        } else {
-//                            return cell1.x < cell2.x;
-//                        }
-//                    }
-//                );
-//                for (auto cell : cells) {
-//                    double best_cost = wire_cost(cell, cell.orientation);
-//                    original_orientation = cell.orientation;
-//                    foreach (orientation) {
-//                        if (cell_is_valid(cell, orientation)) {
-//                            continue;
-//                        }
-//                        cost = wire_cost(cell, orientation);
-//                        if (cost < best_cost) {
-//                            cell.orientation = orientation;
-//                        }
-//                    }
-//                }
-//            }
     }
 }
 
