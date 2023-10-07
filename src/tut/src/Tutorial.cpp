@@ -184,6 +184,8 @@ namespace tut {
     }
 
     void Tutorial::tetris() {
+        printf("starting tetris\n");
+
         using std::vector;
         using std::deque;
         using namespace odb;
@@ -202,6 +204,8 @@ namespace tut {
             if (cell->isFixed()) fixed_cells.push_back(cell);
             else                 cells.push_back(cell);
         }
+
+        printf("fixed_cells.size() = %lu\n", fixed_cells.size());
 
         float left_factor = 1.0; 
         float width_factor = 0.5;
@@ -246,6 +250,11 @@ namespace tut {
             return box->xMax() - box->xMin();
         };
 
+        auto get_height = [&](dbInst* cell) {
+            dbBox* box = cell->getBBox();
+            return box->yMax() - box->yMin();
+        };
+
         auto get_pos = [&](dbInst* cell) -> std::pair<int, int> {
             int x, y;
             cell->getLocation(x, y);
@@ -274,7 +283,6 @@ namespace tut {
         );
 
         // using deque instead of queue because queue doesnt support iteration
-        // max deque size = 8 (by crude experimentation with ispd18_test4)
         vector<deque<dbInst*>> last_fixed_per_row(rows.size());
 
         Rect rect = block->getCoreArea();
@@ -304,13 +312,10 @@ namespace tut {
             }
             for (dbInst* other : last_fixed_per_row[row_i]) {
                 int x1 = col;
-                int y1 = row_to_y(row);
                 auto [x2, y2] = get_pos(other);
-                if (y1 == y2) {
-                    if ((x2 <= x1 && x1 < x2 + get_width(other))
-                        || (x1 <= x2 && x2 < x1 + get_width(cell))) {
-                        return false;
-                    }
+                if ((x2 <= x1 && x1 < x2 + get_width(other))
+                    || (x1 <= x2 && x2 < x1 + get_width(cell))) {
+                    return false;
                 }
             }
 
@@ -322,11 +327,25 @@ namespace tut {
             rows_y[i] = row_to_y(rows[i]);
         }
 
+        // todo: delete
+        int max_deque_size = 0;
+        int max_rows_iter = 0;
+
+        // todo: delete
+        int max_iter_site = 0;
+        int curr_target_site = 0;
+        vector<int> site_maxs;
+        const char* max_inst_name = 0;
+        int cell_i = 0;
+
+        // Cells cannot move too much (like tetris). The left factor determines the fall speed
+        int delta_x = -left_factor * widest_width;
         for (dbInst* cell : cells) {
-            // cells cannot move too much (left_factor)
-            auto [x, y] = get_pos(cell);
-            int target_x = x - left_factor * widest_width;
-            int target_y = y;
+            cell_i++;
+
+            auto [orig_x, orig_y] = get_pos(cell);
+            int target_x = orig_x + delta_x;
+            int target_y = orig_y;
             double lowest_cost = std::numeric_limits<double>::max();
 
 //            printf("%s\n", cell->getName().c_str());
@@ -334,11 +353,16 @@ namespace tut {
             int winning_row = 0;
             int winning_col = 0;
 
+            // todo: delete
+            int rows_iter = 0;
+
             auto iter = std::lower_bound(rows_y.begin(), rows_y.end(), target_y);
             int approx_row;
             if (iter == rows_y.end()) approx_row = 0;
             else                      approx_row = iter - rows_y.begin();
             for (int row_i = approx_row; row_i < rows.size(); row_i++) {
+                rows_iter++;
+
                 dbRow* row = rows[row_i];
 
                 int sqrt_cost_y = row_to_y(row) - target_y;
@@ -346,18 +370,61 @@ namespace tut {
 
                 if (cost_y > lowest_cost) break;
 
-                int site_n = row->getSiteCount(); 
                 int site_width = row->getSite()->getWidth();
                 int row_start = row->getBBox().xMin();
 
-                int start_site_x = (target_x - row_start)/site_width * site_width
+                int approx_site_x = (target_x - row_start)/site_width * site_width
                                     + row_start;
-                int end_site_x = row->getBBox().xMax();
+                int row_end = row->getBBox().xMax();
 
-                for (int site_x = start_site_x; site_x < end_site_x; site_x += site_width) {
-                    if (!cell_can_fit_here(cell, site_x, row_i)) {
-                        continue;
+                // todo: delete
+                int iter_site = 0; 
+
+                int site_x = std::max(row_start, approx_site_x);
+
+                while (true) {
+                    iter_site++;
+
+                    auto collide = [&](int pos1, int pos2, int dimens1, int dimens2) {
+                        return pos1 < pos2 + dimens2 && pos2 < pos1 + dimens1;
+                    };
+
+                    int width1 = get_width(cell);
+                    int height1 = get_height(cell);
+
+                    int x1 = site_x;
+                    int y1 = rows_y[row_i];
+
+                    if (x1 + width1 > row_end) break;
+
+                    bool collided = false;
+                    for (dbInst* other : fixed_cells) {
+                        auto [x2, y2] = get_pos(other);
+                        int width2 = get_width(other);
+                        int height2 = get_height(other);
+
+                        if (  collide(x1, x2, width1, width2)
+                           && collide(y1, y2, height1, height2)
+                        ) {
+                            site_x = x2 + width2;
+                            collided = true;
+                            break;
+                        }
                     }
+
+                    if (collided) continue;
+
+                    for (dbInst* other : last_fixed_per_row[row_i]) {
+                        auto [x2, y2] = get_pos(other);
+                        int width2 = get_width(other);
+                        if (collide(x1, x2, width1, width2)) {
+                            site_x = x2 + width2;
+                            collided = true;
+                            break;
+                        }
+                    }
+
+                    if (collided) continue;
 
                     int sqrt_cost_x = site_x - target_x;
                     int cost_x = sqrt_cost_x*sqrt_cost_x;
@@ -370,8 +437,24 @@ namespace tut {
                     }
                     break;
                 }
+
+                if (iter_site > max_iter_site) {
+                    max_iter_site = iter_site;
+                    curr_target_site = (target_x - row_start)/site_width;
+                    max_inst_name = cell->getName().c_str();
+
+                    site_maxs.clear();
+                    for (dbInst* curr_cell : last_fixed_per_row[row_i]) {
+                        int x = curr_cell->getBBox()->xMax();
+                        site_maxs.push_back((x - row_start)/site_width);
+                    }
+                }
+
+//                printf("%d\n", iter_site);
             }
             for (int row_i = approx_row-1; row_i >= 0; row_i--) {
+                rows_iter++;
+
                 dbRow* row = rows[row_i];
 
                 int sqrt_cost_y = row_to_y(row) - target_y;
@@ -379,18 +462,61 @@ namespace tut {
 
                 if (cost_y > lowest_cost) break;
 
-                int site_n = row->getSiteCount(); 
                 int site_width = row->getSite()->getWidth();
                 int row_start = row->getBBox().xMin();
 
-                int start_site_x = (target_x - row_start)/site_width * site_width
+                int approx_site_x = (target_x - row_start)/site_width * site_width
                                     + row_start;
-                int end_site_x = row->getBBox().xMax();
+                int row_end = row->getBBox().xMax();
 
-                for (int site_x = start_site_x; site_x < end_site_x; site_x += site_width) {
-                    if (!cell_can_fit_here(cell, site_x, row_i)) {
-                        continue;
+                // todo: delete
+                int iter_site = 0; 
+
+                int site_x = std::max(row_start, approx_site_x);
+
+                while (true) {
+                    iter_site++;
+
+                    auto collide = [&](int pos1, int pos2, int dimens1, int dimens2) {
+                        return pos1 < pos2 + dimens2 && pos2 < pos1 + dimens1;
+                    };
+
+                    int width1 = get_width(cell);
+                    int height1 = get_height(cell);
+
+                    int x1 = site_x;
+                    int y1 = rows_y[row_i];
+
+                    if (x1 + width1 > row_end) break;
+
+                    bool collided = false;
+                    for (dbInst* other : fixed_cells) {
+                        auto [x2, y2] = get_pos(other);
+                        int width2 = get_width(other);
+                        int height2 = get_height(other);
+
+                        if (  collide(x1, x2, width1, width2)
+                           && collide(y1, y2, height1, height2)
+                        ) {
+                            site_x = x2 + width2;
+                            collided = true;
+                            break;
+                        }
                     }
+
+                    if (collided) continue;
+
+                    for (dbInst* other : last_fixed_per_row[row_i]) {
+                        auto [x2, y2] = get_pos(other);
+                        int width2 = get_width(other);
+                        if (collide(x1, x2, width1, width2)) {
+                            site_x = x2 + width2;
+                            collided = true;
+                            break;
+                        }
+                    }
+
+                    if (collided) continue;
 
                     int sqrt_cost_x = site_x - target_x;
                     int cost_x = sqrt_cost_x*sqrt_cost_x;
@@ -403,7 +529,23 @@ namespace tut {
                     }
                     break;
                 }
+
+                if (iter_site > max_iter_site) {
+                    max_iter_site = iter_site;
+                    curr_target_site = (target_x - row_start)/site_width;
+                    max_inst_name = cell->getName().c_str();
+
+                    site_maxs.clear();
+                    for (dbInst* curr_cell : last_fixed_per_row[row_i]) {
+                        int x = curr_cell->getBBox()->xMax();
+                        site_maxs.push_back((x - row_start)/site_width);
+                    }
+                }
+//                printf("%d\n", iter_site);
             }
+
+            if (rows_iter > max_rows_iter) max_rows_iter = rows_iter;
+
             if (lowest_cost == std::numeric_limits<double>::max()) {
                 fprintf(stderr, "ERROR: could not place cell\n");
                 continue;
@@ -412,9 +554,8 @@ namespace tut {
             int new_y = row_to_y(rows[winning_row]);
             set_pos(cell, new_x, new_y);
 
+            deque<dbInst*>* last_fixed = &last_fixed_per_row[winning_row];
             while (true) {
-                deque<dbInst*>* last_fixed = &last_fixed_per_row[winning_row];
-
                 if (last_fixed->size() == 0) break;
 
                 dbInst* cell = last_fixed->front();
@@ -422,7 +563,7 @@ namespace tut {
                 // x2 - left_factor * width2 >= x1 - left_factor * width1
                 // x2 >= x1 - left_factor * width1
                 // x2 == effective_x(x1)
-                int curr_effective_x = x - get_width(cell) * width_factor;
+                int curr_effective_x = orig_x - get_width(cell) * width_factor;
                 int lower_bound_of_next_target_x = curr_effective_x - left_factor * widest_width;
 
                 int cell_max_x = cell->getBBox()->xMax();
@@ -433,9 +574,44 @@ namespace tut {
                     break;
                 }
             }
+            last_fixed->push_back(cell);
 
-            last_fixed_per_row[winning_row].push_back(cell);
+            if (last_fixed->size() > max_deque_size) {
+                max_deque_size = last_fixed->size();
+            }
+
+            /*
+            printf("cell_i = %d\n", cell_i);
+            printf("max_rows_iter = %d\n", max_rows_iter);
+            printf("max_iter_site = %d\n", max_iter_site);
+            printf("max_deque_size = %d\n", max_deque_size);
+            printf("\n");
+            */
         }
+
+        int site_width = rows.back()->getSite()->getWidth();
+
+        printf("max_cell = %s\n", max_inst_name);
+        printf("max_iter_site = %d\n", max_iter_site);
+        printf("curr_target_site = %d\n", curr_target_site);
+        for (int curr_site : site_maxs) {
+            printf("%d ", curr_site);
+        }
+        printf("\n\n");
+
+        printf("max_rows_iter = %d\n", max_rows_iter);
+        printf("max_iter_site = %d\n", max_iter_site);
+        printf("max_deque_size = %d\n", max_deque_size);
+        printf("max sites = %d\n", delta_x / site_width);
+        printf("delta_x = %d\n", delta_x);
+        printf("widest_width_in_sites = %d\n", widest_width/site_width);
+        printf("site_width = %d\n", site_width);
+        printf("left_factor = %lf\n", left_factor);
+        printf("width_factor = %lf\n", width_factor);
+        printf("widest_width = %d\n", widest_width);
+
+        printf("finished tetris\n");
+        printf("\n");
     }
 }
 
