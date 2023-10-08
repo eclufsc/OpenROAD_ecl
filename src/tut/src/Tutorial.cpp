@@ -282,8 +282,31 @@ namespace tut {
             }
         );
 
+        auto collide = [&](int pos1, int pos2, int dimens1, int dimens2) {
+            return pos1 < pos2 + dimens2 && pos2 < pos1 + dimens1;
+        };
+
         // using deque instead of queue because queue doesnt support iteration
-        vector<deque<dbInst*>> last_fixed_per_row(rows.size());
+        vector<deque<dbInst*>> last_placed_per_row(rows.size());
+
+        vector<vector<dbInst*>> fixed_per_row(rows.size());
+        for (dbInst* fixed : fixed_cells) {
+            for (int i = 0; i < rows.size(); i++) {
+                auto [x1, y1] = get_pos(fixed);
+                int height1 = get_height(fixed);
+
+                int y2 = rows[i]->getBBox().yMin();
+                int height2 = rows[i]->getBBox().yMax() - y2;
+
+                if (collide(y1, y2, height1, height2)) {
+                    fixed_per_row[i].push_back(fixed);
+                }
+            }
+        }
+
+        std::size_t max_fixed_per_row = std::max_element(fixed_per_row.begin(), fixed_per_row.end(),
+                [&](vector<dbInst*>& a, vector<dbInst*>& b) { return a.size() < b.size(); })->size();
+        printf("max fixed_per_row = %lu\n", max_fixed_per_row);
 
         Rect rect = block->getCoreArea();
         int min_x = rect.xMin();
@@ -310,7 +333,7 @@ namespace tut {
                     }
                 }
             }
-            for (dbInst* other : last_fixed_per_row[row_i]) {
+            for (dbInst* other : last_placed_per_row[row_i]) {
                 int x1 = col;
                 auto [x2, y2] = get_pos(other);
                 if ((x2 <= x1 && x1 < x2 + get_width(other))
@@ -385,10 +408,6 @@ namespace tut {
                 while (true) {
                     iter_site++;
 
-                    auto collide = [&](int pos1, int pos2, int dimens1, int dimens2) {
-                        return pos1 < pos2 + dimens2 && pos2 < pos1 + dimens1;
-                    };
-
                     int width1 = get_width(cell);
                     int height1 = get_height(cell);
 
@@ -398,7 +417,7 @@ namespace tut {
                     if (x1 + width1 > row_end) break;
 
                     bool collided = false;
-                    for (dbInst* other : fixed_cells) {
+                    for (dbInst* other : fixed_per_row[row_i]) {
                         auto [x2, y2] = get_pos(other);
                         int width2 = get_width(other);
                         int height2 = get_height(other);
@@ -414,7 +433,7 @@ namespace tut {
 
                     if (collided) continue;
 
-                    for (dbInst* other : last_fixed_per_row[row_i]) {
+                    for (dbInst* other : last_placed_per_row[row_i]) {
                         auto [x2, y2] = get_pos(other);
                         int width2 = get_width(other);
                         if (collide(x1, x2, width1, width2)) {
@@ -444,7 +463,7 @@ namespace tut {
                     max_inst_name = cell->getName().c_str();
 
                     site_maxs.clear();
-                    for (dbInst* curr_cell : last_fixed_per_row[row_i]) {
+                    for (dbInst* curr_cell : last_placed_per_row[row_i]) {
                         int x = curr_cell->getBBox()->xMax();
                         site_maxs.push_back((x - row_start)/site_width);
                     }
@@ -477,10 +496,6 @@ namespace tut {
                 while (true) {
                     iter_site++;
 
-                    auto collide = [&](int pos1, int pos2, int dimens1, int dimens2) {
-                        return pos1 < pos2 + dimens2 && pos2 < pos1 + dimens1;
-                    };
-
                     int width1 = get_width(cell);
                     int height1 = get_height(cell);
 
@@ -490,7 +505,7 @@ namespace tut {
                     if (x1 + width1 > row_end) break;
 
                     bool collided = false;
-                    for (dbInst* other : fixed_cells) {
+                    for (dbInst* other : fixed_per_row[row_i]) {
                         auto [x2, y2] = get_pos(other);
                         int width2 = get_width(other);
                         int height2 = get_height(other);
@@ -506,7 +521,7 @@ namespace tut {
 
                     if (collided) continue;
 
-                    for (dbInst* other : last_fixed_per_row[row_i]) {
+                    for (dbInst* other : last_placed_per_row[row_i]) {
                         auto [x2, y2] = get_pos(other);
                         int width2 = get_width(other);
                         if (collide(x1, x2, width1, width2)) {
@@ -536,11 +551,12 @@ namespace tut {
                     max_inst_name = cell->getName().c_str();
 
                     site_maxs.clear();
-                    for (dbInst* curr_cell : last_fixed_per_row[row_i]) {
+                    for (dbInst* curr_cell : last_placed_per_row[row_i]) {
                         int x = curr_cell->getBBox()->xMax();
                         site_maxs.push_back((x - row_start)/site_width);
                     }
                 }
+
 //                printf("%d\n", iter_site);
             }
 
@@ -554,11 +570,11 @@ namespace tut {
             int new_y = row_to_y(rows[winning_row]);
             set_pos(cell, new_x, new_y);
 
-            deque<dbInst*>* last_fixed = &last_fixed_per_row[winning_row];
+            deque<dbInst*>* last_placed = &last_placed_per_row[winning_row];
             while (true) {
-                if (last_fixed->size() == 0) break;
+                if (last_placed->size() == 0) break;
 
-                dbInst* cell = last_fixed->front();
+                dbInst* cell = last_placed->front();
 
                 // x2 - left_factor * width2 >= x1 - left_factor * width1
                 // x2 >= x1 - left_factor * width1
@@ -569,15 +585,15 @@ namespace tut {
                 int cell_max_x = cell->getBBox()->xMax();
 
                 if (cell_max_x <= lower_bound_of_next_target_x) {
-                    last_fixed->pop_front();
+                    last_placed->pop_front();
                 } else {
                     break;
                 }
             }
-            last_fixed->push_back(cell);
+            last_placed->push_back(cell);
 
-            if (last_fixed->size() > max_deque_size) {
-                max_deque_size = last_fixed->size();
+            if (last_placed->size() > max_deque_size) {
+                max_deque_size = last_placed->size();
             }
 
             /*
