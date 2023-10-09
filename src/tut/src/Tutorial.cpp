@@ -9,28 +9,227 @@
 #include <algorithm>
 #include <deque>
 
+// todo: maybe remove row_to_y(?) and x_to_site
+// todo: maybe change collide definition to receive pos1_min, pos1_max, pos2_min, pos2_max
+
 namespace tut {
     using namespace odb;
+    using std::vector;
 
     Tutorial::Tutorial() :
-        db{ord::OpenRoad::openRoad()->getDb()},
         logger{ord::OpenRoad::openRoad()->getLogger()},
-        block{0},
+        db{ord::OpenRoad::openRoad()->getDb()},
         debug_data{}
         {}
 
     Tutorial::~Tutorial() {}
 
-    void Tutorial::init() {
+    dbBlock* Tutorial::get_block() {
         dbChip* chip = db->getChip();
-        if (chip) block = chip->getBlock();
-        else      fprintf(stderr, "no circuit loaded\n");
+        if (chip) return chip->getBlock();
+        else      return 0;
+    }
+
+    const char* Tutorial::error_message_from_get_block() {
+        return "Block not available";
+    }
+
+    bool Tutorial::move_x(std::string cell_name, int delta_x) {
+        dbBlock* block = get_block();
+        if (!block) {
+            std::string reason = error_message_from_get_block();
+            return false;
+        }
+
+        dbSet<dbInst> cells = block->getInsts();
+
+        dbInst* cell = 0;
+        for (dbInst* curr_cell : cells) {
+            if (curr_cell->getName() == cell_name) {
+                cell = curr_cell;
+            }
+        }
+
+        if (!cell) {
+            return false;
+        }
+
+        int x = cell->getBBox()->xMin();
+        int y = cell->getBBox()->yMin();
+        cell->setLocation(x + delta_x, y);
+
+        return true;
+    }
+
+    // no idea:
+    // todo: when the area is given, all the cells intersecting the area must be considered?
+
+    // i have a guess:
+    // todo: fixed cells are already legalized? (pginst, macro)
+    // todo: cells have 1-row height?
+    // todo: can 2 rows have the same y? If so, can a cell with the height of a row occupy many rows?
+
+    // premise:
+    // fixed cells are already legalized
+    // fixed cells can occupy many rows
+    // non-fixed cells occupies only one row
+    // rows cannot have the same y
+    std::pair<bool, std::string> Tutorial::is_legalized() {
+        dbBlock* block = get_block();
+        if (!block) {
+            std::string reason = error_message_from_get_block();
+            return {false, reason};
+        }
+
+        dbBox* box = block->getBBox();
+        int x_min = box->xMin();
+        int y_min = box->yMin();
+        int x_max = box->xMax();
+        int y_max = box->yMax();
+
+        return is_legalized(x_min, y_min, x_max, y_max);
+    }
+
+    std::pair<bool, std::string> Tutorial::is_legalized(int x1, int y1, int x2, int y2) {
+        int area_x_min, area_x_max;
+        if (x1 < x2) {
+            area_x_min = x1;
+            area_x_max = x2;
+        } else {
+            area_x_min = x2;
+            area_x_max = x1;
+        }
+
+        int area_y_min, area_y_max;
+        if (y1 < y2) {
+            area_y_min = y1;
+            area_y_max = y2;
+        } else {
+            area_y_min = y2;
+            area_y_max = y1;
+        }
+
+        dbBlock* block = get_block();
+        if (!block) {
+            std::string reason = error_message_from_get_block();
+            return {false, reason};
+        }
+
+        // rows
+        vector<dbRow*> rows;
+        dbSet<dbRow> rows_set = block->getRows();
+        for (dbRow* row : rows_set) {
+            rows.push_back(row);
+        }
+        std::sort(rows.begin(), rows.end(),
+            [&](dbRow* a, dbRow* b) {
+                return row_to_y(a) < row_to_y(b);
+            }
+        );
+
+        vector<int> rows_y_min(rows.size());
+        for (size_t i = 0; i < rows.size(); i++) {
+            rows_y_min[i] = row_to_y(rows[i]);
+        }
+
+        // cells
+        vector<dbInst*> block_cells;
+        dbSet<dbInst> cells_set = block->getInsts();
+        for (dbInst* cell : cells_set) {
+            block_cells.push_back(cell);
+        }
+        std::sort(block_cells.begin(), block_cells.end(),
+            [&](dbInst* a, dbInst* b) {
+                int x1 = a->getBBox()->xMin();
+                int x2 = b->getBBox()->xMin();
+                return x1 < x2;
+            }
+        );
+
+        // algorithm
+        vector<vector<dbInst*>> cells_per_row(rows.size());
+
+        // filter cells in area and check row and site
+        for (dbInst* cell : block_cells) {
+            int x_min = cell->getBBox()->xMin();
+            int x_max = cell->getBBox()->xMax();
+            int y_min = cell->getBBox()->yMin();
+            int y_max = cell->getBBox()->yMax();
+
+            // check if it collides with area
+            if (collide(x_min, x_max, area_x_min, area_x_max)
+                && collide(y_min, y_max, area_y_min, area_y_max)
+            ) {
+                int lower_row_i = std::lower_bound(
+                        rows_y_min.begin(), rows_y_min.end(), y_min
+                    )
+                    - rows_y_min.begin();
+
+                if (cell->isFixed()) {
+                    int upper_row_i_exc = std::lower_bound(
+                            rows_y_min.begin(), rows_y_min.end(), y_max
+                        )
+                        - rows_y_min.begin();
+
+                    for (int i = lower_row_i; i < upper_row_i_exc; i++) {
+                        cells_per_row[i].push_back(cell);
+                    }
+                } else {
+                    // check row
+                    if (lower_row_i == rows.size() || rows_y_min[lower_row_i] != y_min) {
+                        std::string reason = cell->getName() + " is not aligned with a row";
+                        return {false, reason};
+                    }
+
+                    dbRow* row = rows[lower_row_i];
+
+                    // check row limits
+                    int row_x_min = row->getBBox().xMin();
+                    int row_x_max = row->getBBox().xMax();
+
+                    if (!(row_x_min <= x_min && x_max <= row_x_max)) {
+                        std::string reason = cell->getName() + " is not totally within a row";
+                        return {false, reason};
+                    }
+
+                    // check site
+                    int site_width = row->getSite()->getWidth();
+                    if ((x_min - row_x_min) % site_width != 0) {
+                        std::string reason = cell->getName() + " is not aligned with a site";
+                        return {false, reason};
+                    }
+
+                    cells_per_row[lower_row_i].push_back(cell);
+                }
+            }
+        }
+
+        for (int row_i = 0; row_i < rows.size(); row_i++) {
+            std::vector<dbInst*> const& curr_cells = cells_per_row[row_i];
+            for (int i = 1; i < curr_cells.size(); i++) {
+                dbInst* last_cell = curr_cells[i-1];
+                dbInst* cell = curr_cells[i];
+
+                int x1_min = last_cell->getBBox()->xMin();
+                int x1_max = last_cell->getBBox()->xMax();
+                int x2_min = cell->getBBox()->xMin();
+                int x2_max = cell->getBBox()->xMax();
+
+                if (collide(x1_min, x1_max, x2_min, x2_max)) {
+                    std::string reason = last_cell->getName() + " is colliding with " + cell->getName();
+                    return {false, reason};
+                }
+            }
+        }
+
+        return {true, ""};
     }
 
     // both (get/set)(Location/Origin) operate at block coordinate system
     void Tutorial::test() {
+        dbBlock* block = get_block();
         if (!block) {
-            fprintf(stderr, "init not called succesfully\n");
+            fprintf(stderr, "%s\n", error_message_from_get_block());
             return;
         }
 
@@ -58,8 +257,9 @@ namespace tut {
     }
 
     void Tutorial::disturb() {
+        dbBlock* block = get_block();
         if (!block) {
-            fprintf(stderr, "init not called succesfully\n");
+            fprintf(stderr, "%s\n", error_message_from_get_block());
             return;
         }
 
@@ -67,7 +267,8 @@ namespace tut {
         for (dbInst* cell : cells) {
             if (cell->isFixed()) continue;
 
-            auto [x, y] = get_pos(cell);
+            int x = cell->getBBox()->xMin();
+            int y = cell->getBBox()->yMin();
 
             int new_x = x + (rand() % get_width(cell) - get_width(cell)/2);
             int new_y = y + (rand() % get_height(cell) - get_height(cell)/2);
@@ -77,8 +278,9 @@ namespace tut {
     }
 
     void Tutorial::shuffle() {
+        dbBlock* block = get_block();
         if (!block) {
-            fprintf(stderr, "init not called succesfully\n");
+            fprintf(stderr, "%s\n", error_message_from_get_block());
             return;
         }
 
@@ -110,9 +312,10 @@ namespace tut {
         }
     }
 
-    void Tutorial::tetris() {
+    void Tutorial::tetris(bool show_progress) {
+        dbBlock* block = get_block();
         if (!block) {
-            fprintf(stderr, "init not called succesfully\n");
+            fprintf(stderr, "%s\n", error_message_from_get_block());
             return;
         }
 
@@ -129,9 +332,8 @@ namespace tut {
             if (cell->isFixed()) fixed_cells.push_back(cell);
             else                 cells.push_back(cell);
         }
-        printf("fixed_cells.size() = %lu\n", fixed_cells.size());
 
-        // todo: move this to a struct
+        // todo: move this to a struct (or receive in the arguments)
         float left_factor = 1.0; 
         float width_factor = 0.5;
         float x_to_y_priority_ratio = 1.0f;
@@ -139,7 +341,7 @@ namespace tut {
         // sort cells by x
         auto effective_x = [&](dbInst* cell){
             // +width -> +priority
-            auto [x, y] = get_pos(cell);
+            int x = cell->getBBox()->xMin();
             return x - get_width(cell) * width_factor;
         };
         std::sort(cells.begin(), cells.end(), 
@@ -174,20 +376,25 @@ namespace tut {
 
         // initialize last_placed_per_row and fixed_per_row
         // note: using deque instead of queue because queue doesnt support iteration
+        // note: it is possible to substitute the queue for a vector with two indexes (WindowVector). All cells in the current row would be added beforehand. The pop_front would increment the start index; the push_back would increment the end index. I believe this is a better alternative due to its simplicity
         vector<deque<dbInst*>> last_placed_per_row(rows.size());
-
         vector<vector<dbInst*>> fixed_per_row(rows.size());
         for (dbInst* fixed : fixed_cells) {
-            for (int i = 0; i < rows.size(); i++) {
-                auto [x1, y1] = get_pos(fixed);
-                int height1 = get_height(fixed);
+            int y_min = fixed->getBBox()->yMin();
+            int y_max = fixed->getBBox()->yMax();
 
-                int y2 = rows[i]->getBBox().yMin();
-                int height2 = rows[i]->getBBox().yMax() - y2;
+            int lower_bound_row_i = std::lower_bound(
+                    rows_y.begin(), rows_y.end(), y_min
+                )
+                - rows_y.begin();
 
-                if (collide(y1, y2, height1, height2)) {
-                    fixed_per_row[i].push_back(fixed);
-                }
+            int upper_bound_row_i = std::lower_bound(
+                    rows_y.begin(), rows_y.end(), y_max
+                )
+                - rows_y.begin();
+
+            for (int i = lower_bound_row_i; i < upper_bound_row_i; i++) {
+                fixed_per_row[i].push_back(fixed);
             }
         }
 
@@ -213,13 +420,15 @@ namespace tut {
 
         // note: cells cannot move too much (like tetris). The left factor determines the fall speed
         int delta_x = -left_factor * max_width;
-        for (dbInst* cell : cells) {
-//            printf("%s\n", cell->getName().c_str());
+        int last_percentage = 0;
+        for (int i = 0; i < cells.size(); i++) {
+            dbInst* cell = cells[i];
 
             debug_data.cell_iter++;
             debug_data.row_iter = 0;
 
-            auto [orig_x, orig_y] = get_pos(cell);
+            int orig_x = cell->getBBox()->xMin();
+            int orig_y = cell->getBBox()->yMin();
             int target_x = orig_x + delta_x;
             int target_y = orig_y;
 
@@ -287,6 +496,14 @@ namespace tut {
                 }
             }
 
+            int curr_percentage = ((i+1)*10 / (int)cells.size())*10;
+            if (curr_percentage > last_percentage) {
+                if (show_progress) {
+                    logger->report(std::to_string(curr_percentage) + "% of the cells processed");
+                }
+                last_percentage = curr_percentage;
+            }
+
             if (lowest_cost == std::numeric_limits<double>::max()) {
                 fprintf(stderr, "ERROR: could not place cell\n");
                 continue;
@@ -323,29 +540,14 @@ namespace tut {
             if (debug_data.row_iter > debug_data.max_row_iter) {
                 debug_data.max_row_iter = debug_data.row_iter;
             }
-
-
-            /*
-            printf("cell_iter = %d\n", debug_data.cell_iter);
-            printf("max_row_iter = %d\n", debug_data.max_row_iter);
-            printf("max_site_iter = %d\n", debug_data.max_site_iter);
-            printf("max_deque_size = %d\n", debug_data.max_deque_size);
-            printf("\n");
-            */
         }
 
         int site_width = rows.back()->getSite()->getWidth();
 
-        printf("max_cell = %s\n", debug_data.max_site_iter_cell.c_str());
         printf("max_site_iter = %d\n", debug_data.max_site_iter);
-        printf("max_site_iter_site = %d\n", debug_data.max_site_iter_site);
-        for (int curr_site : debug_data.max_site_iter_last_placed_site) {
-            printf("%d ", curr_site);
-        }
-        printf("\n\n");
-
         printf("max_row_iter = %d\n", debug_data.max_row_iter);
         printf("max_site_iter = %d\n", debug_data.max_site_iter);
+        printf("\n");
         printf("max_deque_size = %d\n", debug_data.max_deque_size);
         printf("max sites = %d\n", delta_x / site_width);
         printf("delta_x = %d\n", delta_x);
@@ -375,30 +577,32 @@ namespace tut {
 
         int approx_site_x = x_to_site(row, target_x) * site_width + row_start;
 
-
         int site_x = std::max(row_start, approx_site_x);
 
         while (true) {
             debug_data.site_iter++;
 
             int width1 = get_width(cell);
+            int x1_min = site_x;
+            int x1_max = x1_min + width1;
+
             int height1 = get_height(cell);
+            int y1_min = row_to_y(row);
+            int y1_max = y1_min + height1;
 
-            int x1 = site_x;
-            int y1 = row_to_y(row);
-
-            if (x1 + width1 > row_end) return row_end;
+            if (x1_max > row_end) return row_end;
 
             bool collided = false;
             for (dbInst* other : fixed_cells) {
-                auto [x2, y2] = get_pos(other);
-                int width2 = get_width(other);
-                int height2 = get_height(other);
+                int x2_min = other->getBBox()->xMin();
+                int x2_max = other->getBBox()->xMax();
+                int y2_min = other->getBBox()->yMin();
+                int y2_max = other->getBBox()->yMax();
 
-                if (collide(x1, x2, width1, width2)
-                    && collide(y1, y2, height1, height2)
+                if (collide(x1_min, x1_max, x2_min, x2_max)
+                    && collide(y1_min, y1_max, y2_min, y2_max)
                 ) {
-                    site_x = x2 + width2;
+                    site_x = x2_max;
                     collided = true;
                     break;
                 }
@@ -407,10 +611,10 @@ namespace tut {
             if (collided) continue;
 
             for (dbInst* other : last_placed) {
-                auto [x2, y2] = get_pos(other);
-                int width2 = get_width(other);
-                if (collide(x1, x2, width1, width2)) {
-                    site_x = x2 + width2;
+                int x2_min = other->getBBox()->xMin();
+                int x2_max = other->getBBox()->xMax();
+                if (collide(x1_min, x1_max, x2_min, x2_max)) {
+                    site_x = x2_max;
                     collided = true;
                     break;
                 }
@@ -432,13 +636,12 @@ namespace tut {
 
             return site_x;
         }
-
-        //                printf("%d\n", debug_data.site_iter);
     }
 
     double Tutorial::dbu_to_microns(int64_t dbu) {
+        dbBlock* block = get_block();
         if (!block) {
-            fprintf(stderr, "init not called succesfully\n");
+            fprintf(stderr, "%s\n", error_message_from_get_block());
             return 0;
         }
 
@@ -446,8 +649,9 @@ namespace tut {
     };
 
     double Tutorial::microns_to_dbu(double microns) {
+        dbBlock* block = get_block();
         if (!block) {
-            fprintf(stderr, "init not called succesfully\n");
+            fprintf(stderr, "%s\n", error_message_from_get_block());
             return 0;
         }
 
@@ -472,12 +676,6 @@ namespace tut {
         return box->yMax() - box->yMin();
     };
 
-    std::pair<int, int> Tutorial::get_pos(dbInst* cell) {
-        int x, y;
-        cell->getLocation(x, y);
-        return {x, y};
-    };
-
     void Tutorial::set_pos(dbInst* cell, int x, int y) {
         cell->setLocation(x, y);
     };
@@ -494,8 +692,8 @@ namespace tut {
         return (x - row_start)/site_width;
     }
 
-    bool Tutorial::collide(int pos1, int pos2, int dimens1, int dimens2) {
-        return pos1 < pos2 + dimens2 && pos2 < pos1 + dimens1;
+    bool Tutorial::collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max) {
+        return pos1_min < pos2_max && pos2_min < pos1_max;
     };
 }
 

@@ -19,16 +19,22 @@ namespace tut {
 
 class Tutorial {
   public:
+    // methods
     Tutorial();
     ~Tutorial();
 
-    void init();
-
+    std::pair<bool, std::string> is_legalized();
+    std::pair<bool, std::string> is_legalized(int x1, int y1, int x2, int y2);
     void test();
-    void tetris();
+    void tetris(bool show_progress = false);
     void shuffle();
     void disturb();
+    bool move_x(std::string cell_name, int delta_x);
 
+    std::pair<int, int> xy_microns_to_dbu(double x, double y);
+
+    // attributes
+    utl::Logger* logger;
   private:
     struct DebugData {
         int max_deque_size;
@@ -45,6 +51,9 @@ class Tutorial {
     };
 
     // methods
+    const char* error_message_from_get_block();
+    odb::dbBlock* get_block();
+
     int try_to_place_in_row(
         odb::dbRow* row, odb::dbInst* cell,
         int target_x,
@@ -56,12 +65,10 @@ class Tutorial {
     double microns_to_dbu(double microns);
 
     std::pair<double, double> xy_dbu_to_microns(int x, int y);
-    std::pair<int, int> xy_microns_to_dbu(double x, double y);
 
     int get_width(odb::dbInst* cell);
     int get_height(odb::dbInst* cell);
 
-    std::pair<int, int> get_pos(odb::dbInst* cell);
     void set_pos(odb::dbInst* cell, int x, int y);
 
     int row_to_y(odb::dbRow* row);
@@ -71,8 +78,6 @@ class Tutorial {
 
     // attributes
     odb::dbDatabase* db;
-    utl::Logger* logger;
-    odb::dbBlock* block;
 
     DebugData debug_data;
   };
