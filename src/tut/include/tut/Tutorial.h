@@ -31,29 +31,26 @@ class Tutorial {
 
   private:
     struct DebugData {
-        int max_deque_size = 0;
-        int max_row_iter = 0;
-        int max_site_iter = 0;
+        int max_deque_size;
+        int max_row_iter;
+        int max_site_iter;
 
-        int row_iter = 0;
-        int site_iter = 0; 
-        int cell_iter = 0;
+        int row_iter;
+        int site_iter; 
+        int cell_iter;
 
-        int max_site_iter_x = 0;
-        std::vector<int> max_site_iter_last_placed_x;
-        const char* max_site_iter_cell = 0;
+        int max_site_iter_site;
+        std::vector<int> max_site_iter_last_placed_site;
+        std::string max_site_iter_cell;
     };
 
     // methods
-    /*
-    std::pair<int, double> try_to_place_in_row(
+    int try_to_place_in_row(
         odb::dbRow* row, odb::dbInst* cell,
-        int x_to_y_priority_ratio,
-        int lowest_cost,
-        int target_x, int target_y,
-        std::vector<odb::dbInst*> const& fixed_cells, std::deque<odb::dbInst*> const& last_placed
+        int target_x,
+        std::vector<odb::dbInst*> const& fixed_cells,
+        std::deque<odb::dbInst*> const& last_placed
     );
-    */
 
     double dbu_to_microns(int64_t dbu);
     double microns_to_dbu(double microns);
