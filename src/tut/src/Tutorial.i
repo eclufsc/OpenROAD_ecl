@@ -16,6 +16,11 @@ using tut::Tutorial;
 
 namespace tut {
 
+void init() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->init();
+}
+
 void test() {
   Tutorial* tutorial = getTutorial();
   tutorial->test();
