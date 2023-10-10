@@ -33,6 +33,8 @@ class Tutorial {
 
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
 
+    void dump_lowest_costs(std::string file_path);
+
     // attributes
     utl::Logger* logger;
   private:
@@ -48,6 +50,8 @@ class Tutorial {
         int max_site_iter_site;
         std::vector<int> max_site_iter_last_placed_site;
         std::string max_site_iter_cell;
+
+        std::vector<double> lowest_costs;
     };
 
     // methods

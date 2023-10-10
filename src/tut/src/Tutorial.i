@@ -17,6 +17,11 @@ using tut::Tutorial;
 
 namespace tut {
 
+void dump_lowest_costs(const char* file_path) {
+  Tutorial* tutorial = getTutorial();
+  tutorial->dump_lowest_costs(file_path);
+}
+
 void move_x(const char* cell_name, int delta_x) {
   Tutorial* tutorial = getTutorial();
   if (!tutorial->move_x(cell_name, delta_x)) {

@@ -8,6 +8,7 @@
 #include <limits>
 #include <algorithm>
 #include <deque>
+#include <fstream>
 
 // todo: maybe remove row_to_y(?) and x_to_site
 // todo: maybe change collide definition to receive pos1_min, pos1_max, pos2_min, pos2_max
@@ -155,7 +156,7 @@ namespace tut {
             int x_max = cell->getBBox()->xMax();
             int y_min = cell->getBBox()->yMin();
             int y_max = cell->getBBox()->yMax();
-
+            //
             // check if it collides with area
             if (collide(x_min, x_max, area_x_min, area_x_max)
                 && collide(y_min, y_max, area_y_min, area_y_max)
@@ -312,6 +313,16 @@ namespace tut {
         }
     }
 
+    void Tutorial::dump_lowest_costs(std::string file_path) {
+        std::ofstream file(file_path);
+
+        file << debug_data.lowest_costs.size() << "\n";
+        for (double cost : debug_data.lowest_costs) {
+            if (abs(cost) < 1e-10) cost = 0;
+            file << cost << " ";
+        }
+    }
+
     void Tutorial::tetris(bool show_progress) {
         dbBlock* block = get_block();
         if (!block) {
@@ -376,7 +387,7 @@ namespace tut {
 
         // initialize last_placed_per_row and fixed_per_row
         // note: using deque instead of queue because queue doesnt support iteration
-        // note: it is possible to substitute the queue for a vector with two indexes (WindowVector). All cells in the current row would be added beforehand. The pop_front would increment the start index; the push_back would increment the end index. I believe this is a better alternative due to its simplicity
+        // note: it is possible to substitute the queue for a vector with two indexes (WindowVector). All cells in the current row would be added beforehand. The pop_front would increment the start index; the push_back would increment the end index. I believe this is a better alternative due to its simplicity. Maybe it's possible to merge last_placed_per_row and fixed_per_row in a single data structure
         vector<deque<dbInst*>> last_placed_per_row(rows.size());
         vector<vector<dbInst*>> fixed_per_row(rows.size());
         for (dbInst* fixed : fixed_cells) {
@@ -418,6 +429,8 @@ namespace tut {
         debug_data.max_site_iter_last_placed_site = vector<int>();
         debug_data.max_site_iter_cell.clear();
 
+        debug_data.lowest_costs.resize(cells.size());
+
         // note: cells cannot move too much (like tetris). The left factor determines the fall speed
         int delta_x = -left_factor * max_width;
         int last_percentage = 0;
@@ -433,12 +446,13 @@ namespace tut {
             int target_y = orig_y;
 
             double lowest_cost = std::numeric_limits<double>::max();
+
             int winning_row = 0;
             int winning_site_x = 0;
 
             int approx_row;
             auto iter = std::lower_bound(rows_y.begin(), rows_y.end(), target_y);
-            if (iter == rows_y.end()) approx_row = 0;
+            if (iter == rows_y.end()) approx_row = rows.size()-1;
             else                      approx_row = iter - rows_y.begin();
 
             for (int row_i = approx_row; row_i < rows.size(); row_i++) {
@@ -504,10 +518,13 @@ namespace tut {
                 last_percentage = curr_percentage;
             }
 
+            debug_data.lowest_costs[i] = dbu_to_microns(sqrt(lowest_cost));
+
             if (lowest_cost == std::numeric_limits<double>::max()) {
                 fprintf(stderr, "ERROR: could not place cell\n");
                 continue;
             }
+
             int new_x = winning_site_x;
             int new_y = row_to_y(rows[winning_row]);
             set_pos(cell, new_x, new_y);
