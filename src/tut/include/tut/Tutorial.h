@@ -23,17 +23,23 @@ class Tutorial {
     Tutorial();
     ~Tutorial();
 
+    void destroy_cells_with_name_prefix(std::string prefix);
+
     std::pair<bool, std::string> is_legalized();
     std::pair<bool, std::string> is_legalized(int x1, int y1, int x2, int y2);
-    void test();
+    // exclude from verification the cells that are in the border, colliding by less than half of its dimension in at least one of the axis
+    std::pair<bool, std::string> is_legalized_excluding_border(int x1, int y1, int x2, int y2);
+
     void tetris(bool show_progress = false);
-    void shuffle();
-    void disturb();
+    void tetris(int area_x1, int area_y1, int area_x2, int area_y2, bool show_progress);
+
+    void test();
+    void dump_lowest_costs(std::string file_path);
     bool move_x(std::string cell_name, int delta_x);
 
+    void shuffle();
+    void disturb();
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
-
-    void dump_lowest_costs(std::string file_path);
 
     // attributes
     utl::Logger* logger;
@@ -60,6 +66,14 @@ class Tutorial {
 
     int try_to_place_in_row(
         odb::dbRow* row, odb::dbInst* cell,
+        int target_x,
+        std::vector<odb::dbInst*> const& fixed_cells,
+        std::deque<odb::dbInst*> const& last_placed
+    );
+
+    int try_to_place_in_row(
+        odb::dbRow* row, int row_x_min, int row_x_max,
+        odb::dbInst* cell,
         int target_x,
         std::vector<odb::dbInst*> const& fixed_cells,
         std::deque<odb::dbInst*> const& last_placed

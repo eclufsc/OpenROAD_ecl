@@ -17,6 +17,11 @@ using tut::Tutorial;
 
 namespace tut {
 
+void destroy_cells_with_name_prefix(const char* prefix) {
+  Tutorial* tutorial = getTutorial();
+  tutorial->destroy_cells_with_name_prefix(prefix);
+}
+
 void dump_lowest_costs(const char* file_path) {
   Tutorial* tutorial = getTutorial();
   tutorial->dump_lowest_costs(file_path);
@@ -32,7 +37,7 @@ void move_x(const char* cell_name, int delta_x) {
 void xy_microns_to_dbu(double x, double y) {
   Tutorial* tutorial = getTutorial();
   auto [dbu_x, dbu_y] = tutorial->xy_microns_to_dbu(x, y);
-  tutorial->logger->report(std::to_string(dbu_x) + ", " + std::to_string(dbu_y));
+  tutorial->logger->report(std::to_string(dbu_x) + " " + std::to_string(dbu_y));
 }
 
 void is_legalized() {
@@ -49,6 +54,17 @@ void is_legalized() {
 void is_legalized(int x1, int y1, int x2, int y2) {
   Tutorial* tutorial = getTutorial();
   auto [ok, reason] = tutorial->is_legalized(x1, y1, x2, y2);
+
+  if (ok) {
+    tutorial->logger->report("The area is legalized");
+  } else {
+    tutorial->logger->report("The area is not legalized: " + reason);
+  }
+}
+
+void is_legalized_excluding_border(int x1, int y1, int x2, int y2) {
+  Tutorial* tutorial = getTutorial();
+  auto [ok, reason] = tutorial->is_legalized_excluding_border(x1, y1, x2, y2);
 
   if (ok) {
     tutorial->logger->report("The area is legalized");
@@ -75,6 +91,11 @@ void disturb() {
 void tetris() {
   Tutorial* tutorial = getTutorial();
   tutorial->tetris(true);
+}
+
+void tetris(int area_x1, int area_y1, int area_x2, int area_y2) {
+  Tutorial* tutorial = getTutorial();
+  tutorial->tetris(area_x1, area_y1, area_x2, area_y2, true);
 }
 
 } // namespace
