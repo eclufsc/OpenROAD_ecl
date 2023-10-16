@@ -37,6 +37,26 @@ namespace tut {
         return "Block not available";
     }
 
+    // note: both (get/set)(Location/Origin) operate at block coordinate system
+    void Tutorial::test() {
+        dbBlock* block = get_block();
+        if (!block) {
+            fprintf(stderr, "%s\n", error_message_from_get_block());
+            return;
+        }
+
+        dbSet<dbInst> cells = block->getInsts();
+        for (dbInst* cell : cells) {
+            std::string name = cell->getName();
+            const char* compare = "FILL";
+            size_t size = strlen(compare);
+            if (name.size() >= size && memcmp(name.c_str(), compare, size) == 0) {
+                printf("%s\n", name.c_str());
+                dbInst::destroy(cell);
+            }
+        }
+    }
+
     bool Tutorial::move_x(std::string cell_name, int delta_x) {
         dbBlock* block = get_block();
         if (!block) {
@@ -364,26 +384,6 @@ namespace tut {
         return {true, ""};
     }
 
-    // both (get/set)(Location/Origin) operate at block coordinate system
-    void Tutorial::test() {
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        dbSet<dbInst> cells = block->getInsts();
-        for (dbInst* cell : cells) {
-            std::string name = cell->getName();
-            const char* compare = "FILL";
-            size_t size = strlen(compare);
-            if (name.size() >= size && memcmp(name.c_str(), compare, size) == 0) {
-                printf("%s\n", name.c_str());
-                dbInst::destroy(cell);
-            }
-        }
-    }
-
     void Tutorial::destroy_cells_with_name_prefix(std::string prefix) {
         dbBlock* block = get_block();
         if (!block) {
@@ -462,6 +462,127 @@ namespace tut {
         for (double cost : debug_data.lowest_costs) {
             if (abs(cost) < 1e-10) cost = 0;
             file << cost << " ";
+        }
+    }
+
+    void Tutorial::abacus() {
+        using std::sort, std::lower_bound, std::upper_bound;
+
+        dbBlock* block = get_block();
+        if (!block) {
+            fprintf(stderr, "%s\n", error_message_from_get_block());
+            return;
+        }
+
+        // get cells
+        vector<dbInst*> all_cells;
+        vector<Rect> cells;
+        vector<Rect> fixed_cells;
+        dbSet<dbInst> cells_set = block->getInsts();
+
+        for (dbInst* cell : cells_set) all_cells.push_back(cell);
+
+        std::sort(all_cells.begin(), all_cells.end(),
+            [&](dbInst* a, dbInst* b) {
+                return a->getBBox()->xMin() < b->getBBox()->xMin();
+            }
+        );
+
+        for (dbInst* cell : all_cells) {
+            Rect rect = cell->getBBox()->getBox();
+            if (cell->isFixed()) fixed_cells.push_back(rect);
+            else                 cells.push_back(rect);
+        }
+
+        // get rows
+        vector<Rect> orig_rows;
+        dbSet<dbRow> rows_set = block->getRows();
+        for (dbRow* row : rows_set) {
+            orig_rows.push_back(row->getBBox());
+        }
+        sort(orig_rows.begin(), orig_rows.end(),
+            [&](Rect a, Rect b) {
+                return a.yMin() < b.yMin();
+            }
+        );
+
+        auto compare_rows = [&](Rect a, Rect b) {
+            return a.yMin() < b.yMin();
+        };
+
+        for (Rect cell : fixed_cells) {
+            int row_start = lower_bound(
+                rows.begin(), rows.end(),
+                cell.yMin(), compare_rows
+            )
+            - rows.begin();
+
+            int row_end_exc = lower_bound(
+                rows.begin(), rows.end(),
+                cell.yMax(), compare_rows
+            )
+            - rows.begin();
+
+            int i = row_start;
+            while (i != row_end_exc) {
+                if (collide(cell.xMin(), cell.xMax(), row.xMin(), row.xMax())) {
+                    Rect old_row = rows[i];
+                    rows.erase(rows.begin() + i);
+
+                    if (cell.xMax() < old_row.xMax()) {
+                        Rect row_right(
+                            cell.xMax(), old_row.yMin(),
+                            row.xMax(), old_row.yMax()
+                        );
+                        rows.insert(rows.begin() + i, row_right);
+                        i += 1;
+                    }
+                    if (old_row.xMin() < cell.xMin()) {
+                        Rect row_left(
+                            old_row.xMin(), old_row.yMin(),
+                            cell.xMin(), old_row.yMax()
+                        );
+                        rows.insert(rows.begin() + i, row_left);
+                        i += 1;
+                    }
+                }
+
+                i += 1;
+            }
+        }
+
+        // todo: incomplete code. In addition to storing the current positions, it is necessary to store the original positions (global positions)
+        vector<vector<Rect>> cells_per_row(rows.size());
+        for (Rect cell : cells) {
+            double min_cost = numeric_limits<double>::max();
+
+            int row_start = lower_bound(
+                rows.begin(), rows.end(),
+                cell.yMin(), compare_rows
+            )
+            - rows.begin();
+
+            int approx_row = std::lower_bound(
+                rows_y.begin(), rows_y.end(),
+                cell.yMin(), compare_rows
+            )
+            - rows.begin();
+
+            if (approx_row == rows.size()) approx_row -= 1;
+
+            for (int row_i = approx_row; row_i < rows.size(); row_i++) {
+                Rect row = rows[row_i];
+                vector<Rect> trial_cells = cells_per_row[row_i];
+
+                trial_cells.push_back(cell);
+                abacus_place_row(row, &trial_cells);
+
+                Rect cell_after = trial_cells.back();
+                double sqrt_x_cost = cell_after.xMin() - cell.xMin();
+                double sqrt_y_cost = cell_after.yMin() - cell.yMin();
+                double curr_cost = 
+                    (cell_after.xMin() - 
+            }
         }
     }
 
@@ -594,7 +715,7 @@ namespace tut {
 
                 if (cost_y > lowest_cost) break;
 
-                int site_x = try_to_place_in_row(
+                int site_x = tetris_try_to_place_in_row(
                         row, cell,
                         target_x,
                         fixed_per_row[row_i],
@@ -621,7 +742,7 @@ namespace tut {
 
                 if (cost_y > lowest_cost) break;
 
-                int site_x = try_to_place_in_row(
+                int site_x = tetris_try_to_place_in_row(
                         row, cell,
                         target_x,
                         fixed_per_row[row_i],
@@ -691,7 +812,7 @@ namespace tut {
         }
     }
 
-    int Tutorial::try_to_place_in_row(
+    int Tutorial::tetris_try_to_place_in_row(
         dbRow* row, dbInst* cell,
         int target_x,
         std::vector<dbInst*> const& fixed_cells,
@@ -946,7 +1067,7 @@ namespace tut {
 
                 if (cost_y > lowest_cost) break;
 
-                int site_x = try_to_place_in_row(
+                int site_x = tetris_try_to_place_in_row(
                     row, area_x_min, area_x_max,
                     cell,
                     target_x,
@@ -974,7 +1095,7 @@ namespace tut {
 
                 if (cost_y > lowest_cost) break;
 
-                int site_x = try_to_place_in_row(
+                int site_x = tetris_try_to_place_in_row(
                     row, area_x_min, area_x_max,
                     cell,
                     target_x,
@@ -1055,8 +1176,7 @@ namespace tut {
         }
     }
 
-
-    int Tutorial::try_to_place_in_row(
+    int Tutorial::tetris_try_to_place_in_row(
         dbRow* row, int row_x_min, int row_x_max,
         dbInst* cell,
         int target_x,

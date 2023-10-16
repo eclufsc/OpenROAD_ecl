@@ -64,20 +64,22 @@ class Tutorial {
     const char* error_message_from_get_block();
     odb::dbBlock* get_block();
 
-    int try_to_place_in_row(
+    int tetris_try_to_place_in_row(
         odb::dbRow* row, odb::dbInst* cell,
         int target_x,
         std::vector<odb::dbInst*> const& fixed_cells,
         std::deque<odb::dbInst*> const& last_placed
     );
 
-    int try_to_place_in_row(
+    int tetris_try_to_place_in_row(
         odb::dbRow* row, int row_x_min, int row_x_max,
         odb::dbInst* cell,
         int target_x,
         std::vector<odb::dbInst*> const& fixed_cells,
         std::deque<odb::dbInst*> const& last_placed
     );
+
+    void abacus();
 
     double dbu_to_microns(int64_t dbu);
     double microns_to_dbu(double microns);
@@ -92,7 +94,7 @@ class Tutorial {
     int row_to_y(odb::dbRow* row);
     int x_to_site(odb::dbRow* row, int x);
 
-    bool collide(int pos1, int pos2, int dimens1, int dimens2);
+    bool collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max);
 
     // attributes
     odb::dbDatabase* db;
