@@ -551,11 +551,9 @@ namespace tut {
             }
         }
 
-        // todo: incomplete code. In addition to storing the current positions, it is necessary to store the original positions (global positions)
-        vector<vector<Rect>> cells_per_row(rows.size());
+        vector<vector<Rect>> legals_per_row(rows.size());
+        vector<vector<Rect>> globals_per_row(rows.size());
         for (Rect cell : cells) {
-            double min_cost = numeric_limits<double>::max();
-
             int row_start = lower_bound(
                 rows.begin(), rows.end(),
                 cell.yMin(), compare_rows
@@ -570,18 +568,83 @@ namespace tut {
 
             if (approx_row == rows.size()) approx_row -= 1;
 
+            double min_cost = numeric_limits<double>::max();
+            vector<vector<Rect>> final_cells;
+            int final_row_i = -1;
             for (int row_i = approx_row; row_i < rows.size(); row_i++) {
                 Rect row = rows[row_i];
-                vector<Rect> trial_cells = cells_per_row[row_i];
+                vector<Rect> trial_legals = legals_per_row[row_i];
 
-                trial_cells.push_back(cell);
-                abacus_place_row(row, &trial_cells);
+                trial_legals.push_back(cell);
 
-                Rect cell_after = trial_cells.back();
+                globals_per_row[row_i].push_back(cell);
+                abacus_place_row(row, &trial_legals, globals_per_row[row_i]);
+                globals_per_row[row_i].pop_back();
+
+                Rect cell_after = trial_legals.back();
+
                 double sqrt_x_cost = cell_after.xMin() - cell.xMin();
+                double x_cost = sqrt_x_cost*sqrt_x_cost;
                 double sqrt_y_cost = cell_after.yMin() - cell.yMin();
-                double curr_cost = 
-                    (cell_after.xMin() - 
+                double y_cost = sqrt_y_cost*sqrt_y_cost;
+
+                if (y_cost > min_cost) break;
+
+                double curr_cost = x_cost + y_cost;
+
+                if (curr_cost < min_cost) {
+                    min_cost = curr_cost;
+                    final_cells = move(trial_legals);
+                    final_row_i = row_i;
+                }
+            }
+            for (int row_i = approx_row-1; row_i > 0; row_i--) {
+                Rect row = rows[row_i];
+                vector<Rect> trial_legals = legals_per_row[row_i];
+
+                trial_legals.push_back(cell);
+
+                globals_per_row[row_i].push_back(cell);
+                abacus_place_row(row, &trial_legals, globals_per_row[row_i]);
+                globals_per_row[row_i].pop_back();
+
+                Rect cell_after = trial_legals.back();
+
+                double sqrt_x_cost = cell_after.xMin() - cell.xMin();
+                double x_cost = sqrt_x_cost*sqrt_x_cost;
+                double sqrt_y_cost = cell_after.yMin() - cell.yMin();
+                double y_cost = sqrt_y_cost*sqrt_y_cost;
+
+                if (y_cost > min_cost) break;
+
+                double curr_cost = x_cost + y_cost;
+
+                if (curr_cost < min_cost) {
+                    min_cost = curr_cost;
+                    final_cells = move(trial_legals);
+                    final_row_i = row_i;
+                }
+            }
+
+            if (final_row_i != -1) {
+                legals_per_row[final_row_i] = move(final_cells);
+                globals_per_row[final_row_i].push_back(cell);
+            }
+        }
+    }
+
+    // todo: pass weight of the cells
+    void Tutorial::abacus_place_row(Rect row, vector<Rect>* legals, vector<Rect> const& globals) {
+        vector<Cluster> clusters;
+        Cluster curr_cluster;
+        for (int cell_i = 0; cell_i < legals->size(); cell_i++) {
+            if (cell_i == 0 || curr_cluster.x + curr_cluster.width <= globals[cell_i]) {
+                curr_cluster.weight = 0;
+                curr_cluster.width = 0;
+                curr_cluster.q = 0;
+                curr_cluster.x = globals[cell_i];
+                curr_cluster.first = cell_i;
+                abacus_add_cell(&cluster, i);
             }
         }
     }

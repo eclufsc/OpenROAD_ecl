@@ -41,6 +41,9 @@ class Tutorial {
     void disturb();
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
 
+    void abacus();
+    void abacus_add_cell(Cluster* cluster, int cell_i);
+
     // attributes
     utl::Logger* logger;
   private:
@@ -79,7 +82,14 @@ class Tutorial {
         std::deque<odb::dbInst*> const& last_placed
     );
 
-    void abacus();
+    struct Cluster {
+        double weight;
+        int width;
+        double q;
+        double x;
+        int first_cell;
+        int last_cell;
+    };
 
     double dbu_to_microns(int64_t dbu);
     double microns_to_dbu(double microns);
