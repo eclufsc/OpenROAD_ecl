@@ -40,6 +40,11 @@ void xy_microns_to_dbu(double x, double y) {
   tutorial->logger->report(std::to_string(dbu_x) + " " + std::to_string(dbu_y));
 }
 
+void abacus() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->abacus();
+}
+
 void is_legalized() {
   Tutorial* tutorial = getTutorial();
   auto [ok, reason] = tutorial->is_legalized();

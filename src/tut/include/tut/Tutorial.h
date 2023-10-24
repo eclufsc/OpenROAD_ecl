@@ -41,6 +41,8 @@ class Tutorial {
     void disturb();
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
 
+    void abacus();
+
     // attributes
     utl::Logger* logger;
   private:
@@ -95,6 +97,10 @@ class Tutorial {
         double weight;
     };
 
+    bool abacus_place_row(odb::Rect row, int site_width, std::vector<AbacusCell>* cells);
+    void abacus_add_cell(AbacusCluster* cluster, AbacusCell* cell, int cell_i);
+    bool abacus_collapse(std::vector<AbacusCluster>* clusters, odb::Rect row, int site_width);
+    
     double dbu_to_microns(int64_t dbu);
     double microns_to_dbu(double microns);
 

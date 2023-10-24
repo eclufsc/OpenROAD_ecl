@@ -453,6 +453,9 @@ namespace tut {
     }
 
     void Tutorial::abacus() {
+        // todo: delete
+        setbuf(stdout, 0);
+
         using std::sort, std::lower_bound, std::upper_bound;
 
         dbBlock* block = get_block();
@@ -463,7 +466,8 @@ namespace tut {
 
         // get cells
         vector<dbInst*> all_cells;
-        vector<dbInst*> orig_cells;
+        vector<dbInst*> p_cells;
+        vector<Rect> cells;
         vector<Rect> fixed_cells;
         dbSet<dbInst> cells_set = block->getInsts();
 
@@ -482,43 +486,49 @@ namespace tut {
             if (cell->isFixed()) {
                 fixed_cells.push_back(rect);
             } else {
-                orig_cells.push_back(cell);
+                p_cells.push_back(cell);
+                cells.push_back(cell->getBBox()->getBox());
                 weights.push_back(rect.dx()*rect.dy());
             }
         }
 
         // get rows
-        vector<Rect> rows;
+        using std::pair;
+
         dbSet<dbRow> rows_set = block->getRows();
+        vector<pair<Rect, dbRow*>> rows_sort;
         for (dbRow* row : rows_set) {
-            rows.push_back(row->getBBox());
+            rows_sort.push_back({row->getBBox(), row});
         }
-        sort(rows.begin(), rows.end(),
-            [&](Rect a, Rect b) {
-                return a.yMin() < b.yMin();
+
+        sort(rows_sort.begin(), rows_sort.end(),
+            [&](pair<Rect, dbRow*> a, pair<Rect, dbRow*> b) {
+                return a.first.yMin() < b.first.yMin();
             }
         );
 
-        auto compare_rows = [&](Rect a, Rect b) {
-            return a.yMin() < b.yMin();
-        };
+        vector<Rect> rows(rows_set.size());
+        vector<dbRow*> p_rows(rows_set.size());
+        vector<int> rows_y(rows_set.size());
+        for (int i = 0; i < rows_sort.size(); i++) {
+            Rect rect = rows_sort[i].first;
+            dbRow* p_row = rows_sort[i].second;
+            rows[i] = rect;
+            p_rows[i] = p_row;
+            rows_y[i] = rect.yMin();
+        }
 
         // split rows colliding with fixed cells
         for (Rect fixed_cell : fixed_cells) {
-            int row_start = lower_bound(
-                rows.begin(), rows.end(),
-                fixed_cell.yMin(), compare_rows
-            )
-            - rows.begin();
+            int row_start = lower_bound(rows_y.begin(), rows_y.end(), fixed_cell.yMin())
+                - rows_y.begin();
 
-            int row_end_exc = lower_bound(
-                rows.begin(), rows.end(),
-                fixed_cell.yMax(), compare_rows
-            )
-            - rows.begin();
+            int row_end_exc = lower_bound(rows_y.begin(), rows_y.end(), fixed_cell.yMax())
+                - rows_y.begin();
 
             int i = row_start;
             for (int count = row_start; count < row_end_exc; count++) {
+                Rect row = rows[i];
                 if (collide(fixed_cell.xMin(), fixed_cell.xMax(), row.xMin(), row.xMax())) {
                     Rect old_row = rows[row_start];
                     rows.erase(rows.begin() + i);
@@ -539,6 +549,8 @@ namespace tut {
                         rows.insert(rows.begin() + i, row_left);
                         i += 1;
                     }
+                } else {
+                    i += 1;
                 }
             }
         }
@@ -546,42 +558,39 @@ namespace tut {
         // algorithm
         vector<vector<AbacusCell>> cells_per_row(rows.size());
 
-        for (int cell_i = 0; cell_i < orig_cells.size(); cell_i++) {
-            Rect global_pos = orig_cells[cell_i]->getBBox()->getBox();
+        // todo: delete
+        int contador = 0;
 
-            int row_start = lower_bound(
-                rows.begin(), rows.end(),
-                global_pos.yMin(), compare_rows
-            )
-            - rows.begin();
+        // todo: delete
+        int max_loop_iter = 0;
 
-            int approx_row = std::lower_bound(
-                rows_y.begin(), rows_y.end(),
-                global_pos.yMin(), compare_rows
-            )
-            - rows.begin();
+        for (int cell_i = 0; cell_i < p_cells.size(); cell_i++) {
+            if (cell_i % (p_cells.size() / 10) == 0) {
+                contador++;
+                printf("%%%d0\n", contador);
+            }
+
+            Rect global_pos = cells[cell_i];
+
+            int approx_row = std::lower_bound(rows_y.begin(), rows_y.end(), global_pos.yMin())
+                - rows_y.begin();
+
 
             if (approx_row == rows.size()) approx_row -= 1;
 
-            double min_cost = numeric_limits<double>::max();
+            double min_cost = std::numeric_limits<double>::max();
             int best_row_i = -1;
             vector<AbacusCell> best_row_cells;
 
-            for (int row_i = approx_row; row_i < rows.size(); row_i++) {
+            auto loop_body = [&](int row_i) -> bool {
                 Rect row = rows[row_i];
-
                 vector<AbacusCell> cells_in_row = cells_per_row[row_i];
 
                 Rect init_legal_pos = global_pos;
-                Rect previous_pos = cells_in_row.back().legal_pos;
-                if (init_legal_pols.xMin() < previous_pos.xMax()) {
-                    init_legal_pos.moveTo(previous_pos.xMax(), previous_pos.yMin());
-                }
-
                 AbacusCell cell = {cell_i, init_legal_pos, global_pos, weights[cell_i]};
                 cells_in_row.push_back(cell);
 
-                abacus_place_row(row, &cells_in_row);
+                if (!abacus_place_row(row, p_rows[row_i]->getSite()->getWidth(), &cells_in_row)) return true;
 
                 Rect legal_pos = cells_in_row.back().legal_pos;
 
@@ -590,7 +599,7 @@ namespace tut {
                 double sqrt_y_cost = legal_pos.yMin() - global_pos.yMin();
                 double y_cost = sqrt_y_cost*sqrt_y_cost;
 
-                if (y_cost > min_cost) break;
+                if (y_cost > min_cost) return false;
 
                 double curr_cost = x_cost + y_cost;
 
@@ -599,70 +608,112 @@ namespace tut {
                     best_row_i = row_i;
                     best_row_cells = move(cells_in_row);
                 }
+
+                return true;
+            };
+
+            // todo: delete
+            int curr_iter = 0;
+
+            for (int row_i = approx_row; row_i < rows.size(); row_i++) {
+                if (!loop_body(row_i)) break;
+                curr_iter++;
             }
             for (int row_i = approx_row-1; row_i > 0; row_i--) {
+                if (!loop_body(row_i)) break;
+                curr_iter++;
             }
 
-            if (best_row_i != -1) cells_per_row[row_i] = move(best_row_cells);
+            if (curr_iter > max_loop_iter) max_loop_iter = curr_iter;
+
+            if (best_row_i != -1) cells_per_row[best_row_i] = move(best_row_cells);
         }
 
         for (vector<AbacusCell> const& cells_in_row : cells_per_row) {
             for (AbacusCell const& cell : cells_in_row) {
                 Rect rect = cell.legal_pos;
-                set_pos(orig_cells[cell.id], rect.xMin(), rect.yMin());
+                set_pos(p_cells[cell.id], rect.xMin(), rect.yMin());
             }
         }
+
+        printf("max_loop_iter = %d\n", max_loop_iter);
     }
 
-    // todo: pass weight of the cells
-    void Tutorial::abacus_place_row(Rect row, vector<AbacusCell>* cells) {
+    bool Tutorial::abacus_place_row(Rect row, int site_width, vector<AbacusCell>* cells) {
         vector<AbacusCluster> clusters;
-        AbacusCluster curr_cluster;
-        for (int cell_i = 0; cell_i < legals->size(); cell_i++) {
-            if (cell_i == 0 || curr_cluster.x + curr_cluster.width <= globals[cell_i]) {
-                curr_cluster.weight = 0;
-                curr_cluster.width = 0;
-                curr_cluster.q = 0;
-                curr_cluster.x = globals[cell_i];
-                curr_cluster.first = cell_i;
-                abacus_add_cell(&cluster, i);
-            } else {
-                abacus_add_cell(&cluster, idlsajf);
-                collapse(curr_cluster);
+        for (int cell_i = 0; cell_i < cells->size(); cell_i++) {
+            AbacusCell* cell = &(*cells)[cell_i];
+            if (cell_i == 0
+                || clusters.back().x + clusters.back().width <= cell->global_pos.xMin()
+            ) {
+                AbacusCluster curr_cluster = {
+                    0, 0, 0,
+                    (double)cell->global_pos.xMin(),
+                    cell_i, 0
+                };
+                clusters.push_back(curr_cluster);
+            }
+
+            abacus_add_cell(&clusters.back(), cell, cell_i);
+            if (!abacus_collapse(&clusters, row, site_width)) return false;
+        }
+
+        // todo: remove legal_pos from the struct. It is only used for returning the value
+        // todo: maybe change AbacusCluster x's attribute to int
+        int cell_i = 0;
+        for (
+            AbacusCluster* cluster = &*clusters.begin(); cluster != &*clusters.end();
+            cluster++
+        ) {
+            int x = cluster->x;
+            while (cell_i <= cluster->last_cell) {
+                AbacusCell* cell = &(*cells)[cell_i];
+                cell->legal_pos.moveTo(x, row.yMin());
+                x += cell->global_pos.dx();
+
+                cell_i++;
             }
         }
+
+        return true;
     }
 
-    void Tutorial::abacus_add_cell(AbacusCluster* cluster, int cell, Rect local, Rect global) {
-        double weight = local.getWidth() * local.getHeight();
-
-        cluster->last_cell = cell;
-        cluster->weight += weight;
-        cluster->q += weight * (global.xMin() - cluster->width);
-        cluster->width += local.getWidth();
+    void Tutorial::abacus_add_cell(AbacusCluster* cluster, AbacusCell* cell, int cell_i) {
+        cluster->last_cell = cell_i;
+        cluster->weight += cell->weight;
+        cluster->q += cell->weight * (cell->global_pos.xMin() - cluster->width);
+        cluster->width += cell->global_pos.dx();
     }
 
-    void Tutorial::abacus_collapse(vector<AbacusCluster>* clusters, Rect row) {
-        AbacusCluster* cluster = cluster->back();
+    bool Tutorial::abacus_collapse(vector<AbacusCluster>* clusters, Rect row, int site_width) {
+        AbacusCluster* cluster = &clusters->back();
+
         cluster->x = cluster->q/cluster->weight;
 
-        if (cluster->x < row.xMin()) {
-            cluster->x = row.xMin();
+        if (cluster->width > row.dx()) return false;
+
+        if ((int)(cluster->x - row.xMin()) % site_width != 0) {
+            cluster->x = (int)(cluster->x - row.xMin()) / site_width * site_width + row.xMin();
         }
-        if (cluster->x + cluster->width > row.xMax()) {
-            cluster->x = row.xMax() − cluster->width;
-        }
-        // Overlap between c and its predecessor c′?:
+
+        cluster->x = std::clamp(cluster->x, (double)row.xMin(), (double)(row.xMax() - cluster->width));
+
         if (clusters->size() > 1) {
-            AbacusCluster previous = clusters[clusters.size()-2];
+            AbacusCluster* previous = &(*clusters)[clusters->size()-2];
             if (previous->x + previous->width > cluster->x) {
-                // add cluster
-
-                previous->last_cell = cluster->last_cell;
-                previous->weight = cluster->weight;
-
+                {
+                    // collapse cluster
+                    previous->last_cell = cluster->last_cell;
+                    previous->weight += cluster->weight;
+                    previous->q += cluster->q - cluster->weight * previous->width;
+                    previous->width += cluster->width;
+                }
+                clusters->pop_back();
+                if (!abacus_collapse(clusters, row, site_width)) return false;
             }
         }
+
+        return true;
     }
 
     // todo: merge the two tetris versions in a single one. Both would call `tetris(vector<Rect> rows, vector<Rect> cells, vector<Rect> fixed_cells)`
