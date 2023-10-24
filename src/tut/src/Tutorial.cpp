@@ -557,6 +557,7 @@ namespace tut {
 
         // algorithm
         vector<vector<AbacusCell>> cells_per_row(rows.size());
+        vector<vector<AbacusCluster>> clusters_per_row(rows.size());
 
         // todo: delete
         int contador = 0;
@@ -581,16 +582,20 @@ namespace tut {
             double min_cost = std::numeric_limits<double>::max();
             int best_row_i = -1;
             vector<AbacusCell> best_row_cells;
+            vector<AbacusCluster> best_row_clusters;
 
             auto loop_body = [&](int row_i) -> bool {
                 Rect row = rows[row_i];
                 vector<AbacusCell> cells_in_row = cells_per_row[row_i];
+                vector<AbacusClusters> clusters_in_row = clusters_per_row[row_i];
 
                 Rect init_legal_pos = global_pos;
                 AbacusCell cell = {cell_i, init_legal_pos, global_pos, weights[cell_i]};
-                cells_in_row.push_back(cell);
 
-                if (!abacus_place_row(row, p_rows[row_i]->getSite()->getWidth(), &cells_in_row)) return true;
+                if (!abacus_add_cell(
+                    row, p_rows[row_i]->getSite()->getWidth(),
+                    &cells_in_row, cell, &clusters_in_row
+                )) return true;
 
                 Rect legal_pos = cells_in_row.back().legal_pos;
 
@@ -607,6 +612,7 @@ namespace tut {
                     min_cost = curr_cost;
                     best_row_i = row_i;
                     best_row_cells = move(cells_in_row);
+                    best_row_clusters = move(clusters_in_row);
                 }
 
                 return true;
@@ -626,7 +632,10 @@ namespace tut {
 
             if (curr_iter > max_loop_iter) max_loop_iter = curr_iter;
 
-            if (best_row_i != -1) cells_per_row[best_row_i] = move(best_row_cells);
+            if (best_row_i != -1) {
+                cells_per_row[best_row_i] = move(best_row_cells);
+                clusters_per_row[best_row_i] = move(best_row_clusters);
+            }
         }
 
         for (vector<AbacusCell> const& cells_in_row : cells_per_row) {
@@ -637,26 +646,41 @@ namespace tut {
         }
 
         printf("max_loop_iter = %d\n", max_loop_iter);
+        printf("max_clusters = %d\n", max_clusters);
+        printf("rows size = %lu\n", rows.size());
+        printf("cells size = %lu\n", cells.size());
     }
 
-    bool Tutorial::abacus_place_row(Rect row, int site_width, vector<AbacusCell>* cells) {
-        vector<AbacusCluster> clusters;
-        for (int cell_i = 0; cell_i < cells->size(); cell_i++) {
-            AbacusCell* cell = &(*cells)[cell_i];
-            if (cell_i == 0
-                || clusters.back().x + clusters.back().width <= cell->global_pos.xMin()
-            ) {
-                AbacusCluster curr_cluster = {
-                    0, 0, 0,
-                    (double)cell->global_pos.xMin(),
-                    cell_i, 0
-                };
-                clusters.push_back(curr_cluster);
-            }
+    int Tutorial::max_clusters = 0;
 
-            abacus_add_cell(&clusters.back(), cell, cell_i);
-            if (!abacus_collapse(&clusters, row, site_width)) return false;
+    bool Tutorial::abacus_add_cell(
+        Rect row, int site_width,
+        vector<AbacusCell>* cells,
+        AbacusCell const& cell,
+        vector<AbacusCluster>* clusters
+    ) {
+        if (clusters->size() == 0
+            || clusters->back().x + clusters->back().width <= cell->global_pos.xMin()
+        ) {
+            AbacusCluster curr_cluster = {
+                0, 0, 0,
+                (double)cell->global_pos.xMin(),
+                0
+            };
+            clusters->push_back(curr_cluster);
         }
+
+        abacus_add_cell(&clusters->back(), cell);
+        if (!abacus_collapse(&clusters, row, site_width)) return false;
+
+        if (clusters.size() > max_clusters) max_clusters = clusters.size();
+
+        // todo: change
+        AbacusCell* cell = &(*cells)[cell_i];
+        cell->legal_pos.moveTo(x, row.yMin());
+        x += cell->global_pos.dx();
+
+        cell_i++;
 
         // todo: remove legal_pos from the struct. It is only used for returning the value
         // todo: maybe change AbacusCluster x's attribute to int
@@ -678,14 +702,14 @@ namespace tut {
         return true;
     }
 
-    void Tutorial::abacus_add_cell(AbacusCluster* cluster, AbacusCell* cell, int cell_i) {
-        cluster->last_cell = cell_i;
+    void Tutorial::abacus_add_cell(AbacusCluster* cluster, AbacusCell* cell) {
+        cluster->last_cell++;
         cluster->weight += cell->weight;
         cluster->q += cell->weight * (cell->global_pos.xMin() - cluster->width);
         cluster->width += cell->global_pos.dx();
     }
 
-    bool Tutorial::abacus_collapse(vector<AbacusCluster>* clusters, Rect row, int site_width) {
+    bool Tutorial::abacus_place_or_collapse(vector<AbacusCluster>* clusters, Rect row, int site_width) {
         AbacusCluster* cluster = &clusters->back();
 
         cluster->x = cluster->q/cluster->weight;

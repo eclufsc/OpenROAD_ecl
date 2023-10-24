@@ -86,7 +86,6 @@ class Tutorial {
         int width;
         double q;
         double x;
-        int first_cell;
         int last_cell;
     };
 
@@ -100,6 +99,9 @@ class Tutorial {
     bool abacus_place_row(odb::Rect row, int site_width, std::vector<AbacusCell>* cells);
     void abacus_add_cell(AbacusCluster* cluster, AbacusCell* cell, int cell_i);
     bool abacus_collapse(std::vector<AbacusCluster>* clusters, odb::Rect row, int site_width);
+
+    // todo: delete
+    static int max_clusters;
     
     double dbu_to_microns(int64_t dbu);
     double microns_to_dbu(double microns);
