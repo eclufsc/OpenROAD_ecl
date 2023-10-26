@@ -507,13 +507,18 @@ namespace tut {
             }
         );
 
+        // todo: the rows are getting splitted by fixed_cells. However, p_rows, sites_width and rows_y are not being updated
+
         vector<Rect> rows(rows_set.size());
+        vector<int> sites_width(rows_set.size());
         vector<dbRow*> p_rows(rows_set.size());
         vector<int> rows_y(rows_set.size());
         for (int i = 0; i < rows_sort.size(); i++) {
             Rect rect = rows_sort[i].first;
             dbRow* p_row = rows_sort[i].second;
+            int site_width = p_row->getSite()->getWidth();
             rows[i] = rect;
+            sites_width[i] = site_width;
             p_rows[i] = p_row;
             rows_y[i] = rect.yMin();
         }
@@ -530,15 +535,27 @@ namespace tut {
             for (int count = row_start; count < row_end_exc; count++) {
                 Rect row = rows[i];
                 if (collide(fixed_cell.xMin(), fixed_cell.xMax(), row.xMin(), row.xMax())) {
-                    Rect old_row = rows[row_start];
+                    Rect old_row = rows[i];
+                    int site_width = sites_width[i];
+                    dbRow* p_row = p_rows[i];
+                    int row_y = rows_y[i];
+
                     rows.erase(rows.begin() + i);
+                    sites_width.erase(sites_width.begin() + i);
+                    p_rows.erase(p_rows.begin() + i);
+                    rows_y.erase(rows_y.begin() + i);
 
                     if (fixed_cell.xMax() < old_row.xMax()) {
                         Rect row_right(
                             fixed_cell.xMax(), old_row.yMin(),
                             row.xMax(), old_row.yMax()
                         );
+
                         rows.insert(rows.begin() + i, row_right);
+                        sites_width.insert(sites_width.begin() + i, site_width);
+                        p_rows.insert(p_rows.begin() + i, p_row);
+                        rows_y.insert(rows_y.begin() + i, row_y);
+
                         i += 1;
                     }
                     if (old_row.xMin() < fixed_cell.xMin()) {
@@ -546,7 +563,12 @@ namespace tut {
                             old_row.xMin(), old_row.yMin(),
                             fixed_cell.xMin(), old_row.yMax()
                         );
+
                         rows.insert(rows.begin() + i, row_left);
+                        sites_width.insert(sites_width.begin() + i, site_width);
+                        p_rows.insert(p_rows.begin() + i, p_row);
+                        rows_y.insert(rows_y.begin() + i, row_y);
+
                         i += 1;
                     }
                 } else {
@@ -554,6 +576,9 @@ namespace tut {
                 }
             }
         }
+
+        printf("rows size = %lu\n", rows.size());
+        printf("p_rows size = %lu\n", p_rows.size());
 
         // algorithm
         vector<vector<AbacusCell>> cells_per_row(rows.size());
@@ -565,17 +590,18 @@ namespace tut {
         // todo: delete
         int max_loop_iter = 0;
 
-        for (int cell_i = 0; cell_i < p_cells.size(); cell_i++) {
-            if (cell_i % (p_cells.size() / 10) == 0) {
-                contador++;
+        for (int cell_i = 0; cell_i < cells.size(); cell_i++) {
+            if (cell_i % (cells.size() / 10) == 0) {
                 printf("%%%d0\n", contador);
+                contador++;
             }
 
             Rect global_pos = cells[cell_i];
 
-            int approx_row = std::lower_bound(rows_y.begin(), rows_y.end(), global_pos.yMin())
-                - rows_y.begin();
-
+            int approx_row = std::lower_bound(
+                rows_y.begin(), rows_y.end(), global_pos.yMin()
+            )
+            - rows_y.begin();
 
             if (approx_row == rows.size()) approx_row -= 1;
 
@@ -587,21 +613,25 @@ namespace tut {
             auto loop_body = [&](int row_i) -> bool {
                 Rect row = rows[row_i];
                 vector<AbacusCell> cells_in_row = cells_per_row[row_i];
-                vector<AbacusClusters> clusters_in_row = clusters_per_row[row_i];
+                vector<AbacusCluster> clusters_in_row = clusters_per_row[row_i];
 
-                Rect init_legal_pos = global_pos;
-                AbacusCell cell = {cell_i, init_legal_pos, global_pos, weights[cell_i]};
+                AbacusCell cell = {cell_i, global_pos, weights[cell_i]};
+                cells_in_row.push_back(cell);
 
-                if (!abacus_add_cell(
-                    row, p_rows[row_i]->getSite()->getWidth(),
-                    &cells_in_row, cell, &clusters_in_row
+                int site_width = sites_width[row_i];
+                if (!abacus_try_add_cell(
+                    row, site_width,
+                    cell,
+                    &clusters_in_row
                 )) return true;
 
-                Rect legal_pos = cells_in_row.back().legal_pos;
+                AbacusCluster const& cluster = clusters_in_row.back();
+                int new_x = cluster.x + cluster.width - cell.global_pos.dx();
+                int new_y = rows[row_i].yMin();
 
-                double sqrt_x_cost = legal_pos.xMin() - global_pos.xMin();
+                double sqrt_x_cost = new_x - global_pos.xMin();
                 double x_cost = sqrt_x_cost*sqrt_x_cost;
-                double sqrt_y_cost = legal_pos.yMin() - global_pos.yMin();
+                double sqrt_y_cost = new_y - global_pos.yMin();
                 double y_cost = sqrt_y_cost*sqrt_y_cost;
 
                 if (y_cost > min_cost) return false;
@@ -638,10 +668,22 @@ namespace tut {
             }
         }
 
-        for (vector<AbacusCell> const& cells_in_row : cells_per_row) {
-            for (AbacusCell const& cell : cells_in_row) {
-                Rect rect = cell.legal_pos;
-                set_pos(p_cells[cell.id], rect.xMin(), rect.yMin());
+        for (int row_i = 0; row_i < cells_per_row.size(); row_i++) {
+            vector<AbacusCell> const& cells_in_row = cells_per_row[row_i];
+            vector<AbacusCluster> const& clusters_in_row = clusters_per_row[row_i];
+
+            int cell_i = 0;
+            for (int cluster_i = 0; cluster_i < clusters_in_row.size(); cluster_i++) {
+                AbacusCluster const& cluster = clusters_in_row[cluster_i];
+
+                int x = cluster.x;
+                while (cell_i <= cluster.last_cell) {
+                    AbacusCell const& cell = cells_in_row[cell_i];
+                    set_pos(p_cells[cell.id], x, rows[row_i].yMin());
+                    x += cell.global_pos.dx();
+
+                    cell_i++;
+                }
             }
         }
 
@@ -653,87 +695,66 @@ namespace tut {
 
     int Tutorial::max_clusters = 0;
 
-    bool Tutorial::abacus_add_cell(
+    bool Tutorial::abacus_try_add_cell(
         Rect row, int site_width,
-        vector<AbacusCell>* cells,
         AbacusCell const& cell,
         vector<AbacusCluster>* clusters
     ) {
         if (clusters->size() == 0
-            || clusters->back().x + clusters->back().width <= cell->global_pos.xMin()
+            || clusters->back().x + clusters->back().width <= cell.global_pos.xMin()
         ) {
-            AbacusCluster curr_cluster = {
-                0, 0, 0,
-                (double)cell->global_pos.xMin(),
-                0
-            };
+            // note: last_cell is decremented because it is incremented in the "add cell" code
+            int last_cell_dec = -1;
+            if (clusters->size() > 0) last_cell_dec = clusters->back().last_cell;
+
+            AbacusCluster curr_cluster = {0, 0, 0, cell.global_pos.xMin(), last_cell_dec};
             clusters->push_back(curr_cluster);
         }
 
-        abacus_add_cell(&clusters->back(), cell);
-        if (!abacus_collapse(&clusters, row, site_width)) return false;
+        {
+            // add cell
+            AbacusCluster* cluster = &clusters->back();
 
-        if (clusters.size() > max_clusters) max_clusters = clusters.size();
-
-        // todo: change
-        AbacusCell* cell = &(*cells)[cell_i];
-        cell->legal_pos.moveTo(x, row.yMin());
-        x += cell->global_pos.dx();
-
-        cell_i++;
-
-        // todo: remove legal_pos from the struct. It is only used for returning the value
-        // todo: maybe change AbacusCluster x's attribute to int
-        int cell_i = 0;
-        for (
-            AbacusCluster* cluster = &*clusters.begin(); cluster != &*clusters.end();
-            cluster++
-        ) {
-            int x = cluster->x;
-            while (cell_i <= cluster->last_cell) {
-                AbacusCell* cell = &(*cells)[cell_i];
-                cell->legal_pos.moveTo(x, row.yMin());
-                x += cell->global_pos.dx();
-
-                cell_i++;
-            }
+            cluster->weight += cell.weight;
+            cluster->q      += cell.weight * (cell.global_pos.xMin() - cluster->width);
+            cluster->width  += cell.global_pos.dx();
+            cluster->last_cell++;
         }
+        if (!abacus_try_place_and_collapse(clusters, row, site_width)) return false;
+
+        if (clusters->size() > max_clusters) max_clusters = clusters->size();
 
         return true;
     }
 
-    void Tutorial::abacus_add_cell(AbacusCluster* cluster, AbacusCell* cell) {
-        cluster->last_cell++;
-        cluster->weight += cell->weight;
-        cluster->q += cell->weight * (cell->global_pos.xMin() - cluster->width);
-        cluster->width += cell->global_pos.dx();
-    }
-
-    bool Tutorial::abacus_place_or_collapse(vector<AbacusCluster>* clusters, Rect row, int site_width) {
+    bool Tutorial::abacus_try_place_and_collapse(vector<AbacusCluster>* clusters, Rect row, int site_width) {
         AbacusCluster* cluster = &clusters->back();
-
-        cluster->x = cluster->q/cluster->weight;
 
         if (cluster->width > row.dx()) return false;
 
-        if ((int)(cluster->x - row.xMin()) % site_width != 0) {
-            cluster->x = (int)(cluster->x - row.xMin()) / site_width * site_width + row.xMin();
+        cluster->x = cluster->q / cluster->weight;
+        if ((cluster->x - row.xMin()) % site_width != 0) {
+            cluster->x = (cluster->x - row.xMin()) / site_width * site_width + row.xMin();
         }
 
-        cluster->x = std::clamp(cluster->x, (double)row.xMin(), (double)(row.xMax() - cluster->width));
+        cluster->x = std::clamp(
+            cluster->x,
+            row.xMin(),
+            (row.xMax() - cluster->width)
+        );
 
         if (clusters->size() > 1) {
             AbacusCluster* previous = &(*clusters)[clusters->size()-2];
             if (previous->x + previous->width > cluster->x) {
                 {
                     // collapse cluster
-                    previous->last_cell = cluster->last_cell;
                     previous->weight += cluster->weight;
-                    previous->q += cluster->q - cluster->weight * previous->width;
-                    previous->width += cluster->width;
+                    previous->q      += cluster->q - cluster->weight * previous->width;
+                    previous->width  += cluster->width;
+                    previous->last_cell = cluster->last_cell;
                 }
                 clusters->pop_back();
-                if (!abacus_collapse(clusters, row, site_width)) return false;
+                if (!abacus_try_place_and_collapse(clusters, row, site_width)) return false;
             }
         }
 

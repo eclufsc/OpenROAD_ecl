@@ -83,22 +83,24 @@ class Tutorial {
 
     struct AbacusCluster {
         double weight;
-        int width;
         double q;
-        double x;
+        int width;
+        int x;
         int last_cell;
     };
 
     struct AbacusCell {
         int id;
-        odb::Rect legal_pos;
         odb::Rect global_pos;
         double weight;
     };
 
-    bool abacus_place_row(odb::Rect row, int site_width, std::vector<AbacusCell>* cells);
-    void abacus_add_cell(AbacusCluster* cluster, AbacusCell* cell, int cell_i);
-    bool abacus_collapse(std::vector<AbacusCluster>* clusters, odb::Rect row, int site_width);
+    bool abacus_try_add_cell(
+        odb::Rect row, int site_width,
+        AbacusCell const& cell,
+        std::vector<AbacusCluster>* clusters
+    );
+    bool abacus_try_place_and_collapse(std::vector<AbacusCluster>* clusters, odb::Rect row, int site_width);
 
     // todo: delete
     static int max_clusters;
