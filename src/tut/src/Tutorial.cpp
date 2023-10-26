@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <deque>
 #include <fstream>
+#include <chrono>
 
 // todo: create function to highlight area in openroad (maybe create a dummy cell and add it to a group?
 
@@ -456,6 +457,11 @@ namespace tut {
         // todo: delete
         setbuf(stdout, 0);
 
+        // todo: delete
+        using std::chrono::high_resolution_clock;
+        using std::chrono::nanoseconds;
+        using std::chrono::duration_cast;
+
         using std::sort, std::lower_bound, std::upper_bound;
 
         dbBlock* block = get_block();
@@ -580,6 +586,10 @@ namespace tut {
         printf("rows size = %lu\n", rows.size());
         printf("p_rows size = %lu\n", p_rows.size());
 
+        // todo: delete
+        auto algorithm_start = high_resolution_clock::now();
+        unsigned long long copy_time = 0;
+
         // algorithm
         vector<vector<AbacusCell>> cells_per_row(rows.size());
         vector<vector<AbacusCluster>> clusters_per_row(rows.size());
@@ -612,8 +622,17 @@ namespace tut {
 
             auto loop_body = [&](int row_i) -> bool {
                 Rect row = rows[row_i];
+
+                // todo: delete
+                auto start = high_resolution_clock::now();
+
                 vector<AbacusCell> cells_in_row = cells_per_row[row_i];
                 vector<AbacusCluster> clusters_in_row = clusters_per_row[row_i];
+
+                // todo: delete
+                auto end = high_resolution_clock::now();
+
+                copy_time += duration_cast<nanoseconds>(end - start).count();
 
                 AbacusCell cell = {cell_i, global_pos, weights[cell_i]};
                 cells_in_row.push_back(cell);
@@ -626,8 +645,8 @@ namespace tut {
                 )) return true;
 
                 AbacusCluster const& cluster = clusters_in_row.back();
-                int new_x = cluster.x + cluster.width - cell.global_pos.dx();
-                int new_y = rows[row_i].yMin();
+                int new_x = cluster.x + cluster.width - global_pos.dx();
+                int new_y = row.yMin();
 
                 double sqrt_x_cost = new_x - global_pos.xMin();
                 double x_cost = sqrt_x_cost*sqrt_x_cost;
@@ -687,6 +706,15 @@ namespace tut {
             }
         }
 
+        // todo: delete
+        auto algorithm_end = high_resolution_clock::now();
+
+        unsigned long long total_time = duration_cast<nanoseconds>(algorithm_end - algorithm_start).count();
+
+        printf("total time = %llu\n", total_time);
+        printf("copy time  = %llu\n", copy_time);
+        printf("copy time ratio = %.2lf\n", (double)copy_time / total_time);
+        printf("\n");
         printf("max_loop_iter = %d\n", max_loop_iter);
         printf("max_clusters = %d\n", max_clusters);
         printf("rows size = %lu\n", rows.size());
