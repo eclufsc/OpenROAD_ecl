@@ -42,6 +42,11 @@ class Tutorial {
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
 
     void abacus();
+    void abacus(int x1, int y1, int x2, int y2);
+    void abacus(
+        std::vector<std::pair<odb::Rect, int>> rows_and_sites,
+        std::vector<std::pair<odb::Rect, odb::dbInst*>> cells_and_insts
+    );
 
     // attributes
     utl::Logger* logger;
@@ -82,8 +87,8 @@ class Tutorial {
     );
 
     struct AbacusCluster {
-        double weight;
         double q;
+        double weight;
         int width;
         int x;
         int last_cell;
@@ -98,9 +103,14 @@ class Tutorial {
     bool abacus_try_add_cell(
         odb::Rect row, int site_width,
         AbacusCell const& cell,
-        std::vector<AbacusCluster>* clusters
+        std::vector<AbacusCluster> const& clusters,
+        AbacusCluster* new_cluster, int* previous_i
     );
-    bool abacus_try_place_and_collapse(std::vector<AbacusCluster>* clusters, odb::Rect row, int site_width);
+    bool abacus_try_place_and_collapse(
+        std::vector<AbacusCluster> const& clusters,
+        odb::Rect row, int site_width,
+        AbacusCluster* new_cluster, int* previous_i
+    );
 
     // todo: delete
     static int max_clusters;

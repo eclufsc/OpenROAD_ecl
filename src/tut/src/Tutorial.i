@@ -45,6 +45,12 @@ void abacus() {
   tutorial->abacus();
 }
 
+void abacus(int x1, int y1, int x2, int y2) {
+  Tutorial* tutorial = getTutorial();
+  tutorial->abacus(x1, y1, x2, y2);
+}
+
+
 void is_legalized() {
   Tutorial* tutorial = getTutorial();
   auto [ok, reason] = tutorial->is_legalized();
