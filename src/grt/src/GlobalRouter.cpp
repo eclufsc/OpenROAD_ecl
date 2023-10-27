@@ -2058,15 +2058,15 @@ void GlobalRouter::checkPinPlacement()
   }
 }
 
-int GlobalRouter::computeNetWirelength(odb::dbNet* db_net)
+int GlobalRouter::computeNetWirelength(odb::dbNet* db_net)//////////////////////////
 {
-  auto iter = routes_.find(db_net);
-  if (iter == routes_.end()) {
+  auto iter = routes_.find(db_net); //get the net
+  if (iter == routes_.end()) { //verify if end of map
     return 0;
   }
   const GRoute& route = iter->second;
   int net_wl = 0;
-  for (const GSegment& segment : route) {
+  for (const GSegment& segment : route) { // wl = sum of the net segments
     const int segment_wl = std::abs(segment.final_x - segment.init_x)
                            + std::abs(segment.final_y - segment.init_y);
     if (segment_wl > 0) {

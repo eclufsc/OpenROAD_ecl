@@ -261,6 +261,8 @@ class GlobalRouter : public ant::GlobalRouteSource
   odb::dbDatabase* db() const { return db_; }
   FastRouteCore* fastroute() const { return fastroute_; }
 
+  int computeNetWirelength(odb::dbNet* db_net); /////make it public temporarily
+
  private:
   // Net functions
   Net* addNet(odb::dbNet* db_net);
@@ -293,7 +295,7 @@ class GlobalRouter : public ant::GlobalRouteSource
   void computePinOffsetAdjustments();
   void applyObstructionAdjustment(const odb::Rect& obstruction,
                                   odb::dbTechLayer* tech_layer);
-  int computeNetWirelength(odb::dbNet* db_net);
+  //int computeNetWirelength(odb::dbNet* db_net);////////////////////
   void computeWirelength();
   std::vector<Pin*> getAllPorts();
   void computeTrackConsumption(const Net* net,
