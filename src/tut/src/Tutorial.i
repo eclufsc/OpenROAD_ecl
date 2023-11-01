@@ -109,6 +109,26 @@ void tetris(int area_x1, int area_y1, int area_x2, int area_y2) {
   tutorial->tetris(area_x1, area_y1, area_x2, area_y2);
 }
 
+void save() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->save();
+}
+
+void load() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->load();
+}
+
+void save_to_file(const char* path) {
+  Tutorial* tutorial = getTutorial();
+  tutorial->save_to_file(path);
+}
+
+void load_from_file(const char* path) {
+  Tutorial* tutorial = getTutorial();
+  tutorial->load_from_file(path);
+}
+
 } // namespace
 
 %} // inline

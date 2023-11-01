@@ -1328,5 +1328,90 @@ namespace tut {
         int int_max = numeric_limits<int>::max();
         return std::make_pair(Rect(0, y_min, int_max, int_max), 0);
     }
+
+    void Tutorial::save() {
+        saved_pos.clear();
+
+        dbBlock* block = get_block();
+        if (!block) {
+            std::string reason = error_message_from_get_block();
+            return;
+        }
+
+        dbSet<dbInst> insts = block->getInsts();
+
+        for (dbInst* inst : insts) {
+            if (!inst->isFixed()) {
+                Rect cell = inst->getBBox()->getBox();
+                saved_pos.emplace_back(cell, inst);
+            }
+        }
+    }
+
+    void Tutorial::load() {
+        for (auto const& [cell, inst] : saved_pos) {
+            set_pos(inst, cell.xMin(), cell.yMin());
+        }
+    }
+
+    void Tutorial::save_to_file(string path) {
+        save();
+
+        std::ofstream file(path);
+        for (auto const& [cell, inst] : saved_pos) {
+            file << inst->getName() << " " << cell.xMin() << " " << cell.yMin() << "\n";
+        }
+    }
+
+    void Tutorial::load_from_file(string path) {
+        saved_pos.clear();
+
+        std::ifstream file(path);
+        if (!file) {
+            fprintf(stderr, "File not found\n");
+            return;
+        }
+
+        vector<pair<string, dbInst*>> names;
+        {
+            dbBlock* block = get_block();
+            if (!block) {
+                std::string reason = error_message_from_get_block();
+                return;
+            }
+
+            dbSet<dbInst> insts = block->getInsts();
+
+            for (dbInst* inst : insts) {
+                if (!inst->isFixed()) {
+                    names.emplace_back(inst->getName(), inst);
+                }
+            }
+            std::sort(names.begin(), names.end());
+        }
+
+        while (true) {
+            string name;
+            int x, y;
+            file >> name >> x >> y;
+
+            if (!file) break;
+
+            pair<string, dbInst*> dummy_pair = std::make_pair(name, (dbInst*)0);
+            auto iter = std::lower_bound(names.begin(), names.end(), dummy_pair);
+
+            if (iter != names.end() && iter->first == name) {
+                dbInst* inst = iter->second;
+                Rect pos = inst->getBBox()->getBox();
+
+                pos.moveTo(x, y);
+                saved_pos.emplace_back(pos, inst);
+            } else {
+                fprintf(stderr, "The cell %s does not exist\n", name.c_str());
+            }
+        }
+
+        load();
+    }
 }
 
