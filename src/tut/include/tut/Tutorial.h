@@ -30,8 +30,12 @@ class Tutorial {
     // exclude from verification the cells that are in the border, colliding by less than half of its dimension in at least one of the axis
     std::pair<bool, std::string> is_legalized_excluding_border(int x1, int y1, int x2, int y2);
 
-    void tetris(bool show_progress = false);
-    void tetris(int area_x1, int area_y1, int area_x2, int area_y2, bool show_progress);
+    void tetris();
+    void tetris(int area_x1, int area_y1, int area_x2, int area_y2);
+    void tetris(
+        std::vector<std::pair<odb::Rect, int>> rows,
+        std::vector<std::pair<odb::Rect, odb::dbInst*>> cells
+    );
 
     void test();
     void dump_lowest_costs(std::string file_path);
@@ -63,28 +67,36 @@ class Tutorial {
         int max_site_iter_site;
         std::vector<int> max_site_iter_last_placed_site;
         std::string max_site_iter_cell;
+        std::string curr_cell_name;
 
         std::vector<double> lowest_costs;
     };
+
+    void split_rows_and_sites(
+        std::vector<std::pair<odb::Rect, int>>* rows_and_sites,
+        std::vector<odb::Rect> const& fixed_cells
+    );
+
+    std::vector<std::pair<odb::Rect, int>> get_rows(int x1, int y1, int x2, int y2);
+    std::vector<odb::dbInst*> get_all_cells(int x1, int y1, int x2, int y2);
+    std::vector<odb::dbInst*> get_all_cells_excluding_border(int x1, int y1, int x2, int y2);
+
+    std::pair<bool, std::string> is_legalized(
+        std::vector<std::pair<odb::Rect, int>> rows_and_sites,
+        std::vector<std::pair<odb::Rect, odb::dbInst*>> const& cells
+    );
 
     // methods
     const char* error_message_from_get_block();
     odb::dbBlock* get_block();
 
     int tetris_try_to_place_in_row(
-        odb::dbRow* row, odb::dbInst* cell,
-        int target_x,
-        std::vector<odb::dbInst*> const& fixed_cells,
-        std::deque<odb::dbInst*> const& last_placed
+        odb::Rect const& row, int site_width,
+        odb::Rect const& cell, int target_x,
+        std::deque<odb::Rect> const& last_placed
     );
 
-    int tetris_try_to_place_in_row(
-        odb::dbRow* row, int row_x_min, int row_x_max,
-        odb::dbInst* cell,
-        int target_x,
-        std::vector<odb::dbInst*> const& fixed_cells,
-        std::deque<odb::dbInst*> const& last_placed
-    );
+    std::pair<odb::Rect, int> dummy_row_and_site(int y_min);
 
     struct AbacusCluster {
         double q;

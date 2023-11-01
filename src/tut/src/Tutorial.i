@@ -101,12 +101,12 @@ void disturb() {
 
 void tetris() {
   Tutorial* tutorial = getTutorial();
-  tutorial->tetris(true);
+  tutorial->tetris();
 }
 
 void tetris(int area_x1, int area_y1, int area_x2, int area_y2) {
   Tutorial* tutorial = getTutorial();
-  tutorial->tetris(area_x1, area_y1, area_x2, area_y2, true);
+  tutorial->tetris(area_x1, area_y1, area_x2, area_y2);
 }
 
 } // namespace
