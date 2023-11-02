@@ -1,0 +1,526 @@
+This file represents changes to is_legalized. It's implementation is unfinished (it doesn't check collision between cells)
+The older version is working but kind of slow.
+I think it would be better to change the original is_legalized with minimal changes for the only sake of speedup
+77,87c77,85
+<     // conditions:
+<     // fixed cells are already legalized
+<     // fixed cells can occupy many rows
+<     // non-fixed cells occupy only one row
+<     // rows cannot have the same y
+<     std::pair<bool, std::string> Tutorial::is_legalized() {
+<         dbBlock* block = get_block();
+<         if (!block) {
+<             std::string reason = error_message_from_get_block();
+<             return {false, reason};
+<         }
+---
+>     void Tutorial::split_rows_and_sites(
+>         vector<pair<Rect, int>>* rows_and_sites,
+>         vector<Rect> const& fixed_cells
+>     ) {
+>         sort(rows_and_sites->begin(), rows_and_sites->end(),
+>             [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+>                 return a.first.yMin() < b.first.yMin();
+>             }
+>         );
+89,92c87,94
+<         int x_min = numeric_limits<int>::min();
+<         int y_min = numeric_limits<int>::min();
+<         int x_max = numeric_limits<int>::max();
+<         int y_max = numeric_limits<int>::max();
+---
+>         // split rows colliding with fixed cells
+>         for (Rect fixed_cell : fixed_cells) {
+>             int row_start = std::lower_bound(rows_and_sites->begin(), rows_and_sites->end(), dummy_row_and_site(fixed_cell.yMin()),
+>                 [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+>                     return a.first.yMin() < b.first.yMin();
+>                 }
+>             )
+>                 - rows_and_sites->begin();
+94c96,131
+<         return is_legalized(x_min, y_min, x_max, y_max);
+---
+>             int row_end_exc = std::lower_bound(rows_and_sites->begin(), rows_and_sites->end(), dummy_row_and_site(fixed_cell.yMax()),
+>                 [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+>                     return a.first.yMin() < b.first.yMin();
+>                 }
+>             )
+>                 - rows_and_sites->begin();
+> 
+>             int i = row_start;
+>             for (int count = row_start; count < row_end_exc; count++) {
+>                 auto [row, site_width] = (*rows_and_sites)[i];
+>                 if (collide(fixed_cell.xMin(), fixed_cell.xMax(), row.xMin(), row.xMax())) {
+>                     rows_and_sites->erase(rows_and_sites->begin() + i);
+> 
+>                     if (row.xMin() < fixed_cell.xMin()) {
+>                         Rect row_left(
+>                             row.xMin(), row.yMin(),
+>                             fixed_cell.xMin(), row.yMax()
+>                         );
+>                         rows_and_sites->insert(rows_and_sites->begin() + i, {row_left, site_width});
+> 
+>                         i += 1;
+>                     }
+>                     if (fixed_cell.xMax() < row.xMax()) {
+>                         Rect row_right(
+>                             fixed_cell.xMax(), row.yMin(),
+>                             row.xMax(), row.yMax()
+>                         );
+>                         rows_and_sites->insert(rows_and_sites->begin() + i, {row_right, site_width});
+> 
+>                         i += 1;
+>                     }
+>                 } else {
+>                     i += 1;
+>                 }
+>             }
+>         }
+97,98c134,135
+<     std::pair<bool, std::string> Tutorial::is_legalized(int x1, int y1, int x2, int y2) {
+<         int area_x_min, area_x_max;
+---
+>     vector<pair<Rect, int>> Tutorial::get_rows(int x1, int y1, int x2, int y2) {
+>         int area_x_min, area_x_max, area_y_min, area_y_max;
+103d139
+<             area_x_min = x2;
+104a141
+>             area_x_min = x2;
+106,107d142
+< 
+<         int area_y_min, area_y_max;
+112d146
+<             area_y_min = y2;
+113a148
+>             area_y_min = y2;
+118,119c153,154
+<             std::string reason = error_message_from_get_block();
+<             return {false, reason};
+---
+>             fprintf(stderr, "%s\n", error_message_from_get_block());
+>             return {};
+122,132c157,165
+<         // rows
+<         vector<dbRow*> rows;
+<         dbSet<dbRow> rows_set = block->getRows();
+<         for (dbRow* row : rows_set) {
+<             rows.push_back(row);
+<         }
+<         std::sort(rows.begin(), rows.end(),
+<             [&](dbRow* a, dbRow* b) {
+<                 return row_to_y(a) < row_to_y(b);
+<             }
+<         );
+---
+>         vector<pair<Rect, int>> rows_and_sites;
+>         {
+>             dbSet<dbRow> rows_set = block->getRows();
+>             for (dbRow* row : rows_set) {
+>                 Rect rect = row->getBBox();
+>                 if (collide(area_x_min, area_x_max, rect.xMin(), rect.xMax())
+>                     && collide(area_y_min, area_y_max, rect.yMin(), rect.yMax())
+>                 ) {
+>                     int site_width = row->getSite()->getWidth();
+134,137c167,168
+<         vector<int> rows_y_min(rows.size());
+<         for (size_t i = 0; i < rows.size(); i++) {
+<             rows_y_min[i] = row_to_y(rows[i]);
+<         }
+---
+>                     int site_x_min = (area_x_min - rect.xMin()) / site_width * site_width + rect.xMin();
+>                     int site_x_max = (area_x_max - rect.xMin()) / site_width * site_width + rect.xMin();
+139,149c170,172
+<         // cells
+<         vector<pair<Rect, dbInst*>> cells_and_insts;
+<         {
+<             dbSet<dbInst> cells_set = block->getInsts();
+<             for (dbInst* cell : cells_set) {
+<                 Rect rect = cell->getBBox()->getBox();
+<                 cells_and_insts.push_back({rect, cell});
+<             }
+<             std::sort(cells_and_insts.begin(), cells_and_insts.end(),
+<                 [&](pair<Rect, dbInst*> const& a, pair<Rect, dbInst*> const& b) {
+<                     return a.first.xMin() < b.first.xMin();
+---
+>                     rect.set_xlo(std::max(site_x_min, rect.xMin()));
+>                     rect.set_xhi(std::min(site_x_max, rect.xMax()));
+>                     rows_and_sites.push_back({rect, site_width});
+151c174
+<             );
+---
+>             }
+154,204c177,178
+<         vector<dbInst*> block_cells(cells_and_insts.size());
+<         for (int i = 0; i < cells_and_insts.size(); i++) {
+<             auto [cell, p_cell] = cells_and_insts[i];
+<             block_cells[i] = p_cell;
+<         }
+< 
+<         // algorithm
+<         vector<vector<dbInst*>> cells_per_row(rows.size());
+< 
+<         // filter cells in area and check row and site
+<         for (dbInst* cell : block_cells) {
+<             int x_min = cell->getBBox()->xMin();
+<             int x_max = cell->getBBox()->xMax();
+<             int y_min = cell->getBBox()->yMin();
+<             int y_max = cell->getBBox()->yMax();
+<             //
+<             // check if it collides with area
+<             if (collide(x_min, x_max, area_x_min, area_x_max)
+<                 && collide(y_min, y_max, area_y_min, area_y_max)
+<             ) {
+<                 int lower_row_i = std::lower_bound(
+<                         rows_y_min.begin(), rows_y_min.end(), y_min
+<                     )
+<                     - rows_y_min.begin();
+< 
+<                 if (cell->isFixed()) {
+<                     int upper_row_i_exc = std::lower_bound(
+<                             rows_y_min.begin(), rows_y_min.end(), y_max
+<                         )
+<                         - rows_y_min.begin();
+< 
+<                     for (int i = lower_row_i; i < upper_row_i_exc; i++) {
+<                         cells_per_row[i].push_back(cell);
+<                     }
+<                 } else {
+<                     // check row
+<                     if (lower_row_i == rows.size() || rows_y_min[lower_row_i] != y_min) {
+<                         std::string reason = cell->getName() + " is not aligned with a row";
+<                         return {false, reason};
+<                     }
+< 
+<                     dbRow* row = rows[lower_row_i];
+< 
+<                     // check row limits
+<                     int row_x_min = row->getBBox().xMin();
+<                     int row_x_max = row->getBBox().xMax();
+< 
+<                     if (!(row_x_min <= x_min && x_max <= row_x_max)) {
+<                         std::string reason = cell->getName() + " is not totally within a row";
+<                         return {false, reason};
+<                     }
+---
+>         return rows_and_sites;
+>     }
+206,211c180,195
+<                     // check site
+<                     int site_width = row->getSite()->getWidth();
+<                     if ((x_min - row_x_min) % site_width != 0) {
+<                         std::string reason = cell->getName() + " is not aligned with a site";
+<                         return {false, reason};
+<                     }
+---
+>     vector<dbInst*> Tutorial::get_all_cells(int x1, int y1, int x2, int y2) {
+>         int area_x_min, area_x_max, area_y_min, area_y_max;
+>         if (x1 < x2) {
+>             area_x_min = x1;
+>             area_x_max = x2;
+>         } else {
+>             area_x_max = x1;
+>             area_x_min = x2;
+>         }
+>         if (y1 < y2) {
+>             area_y_min = y1;
+>             area_y_max = y2;
+>         } else {
+>             area_y_max = y1;
+>             area_y_min = y2;
+>         }
+213,215c197,200
+<                     cells_per_row[lower_row_i].push_back(cell);
+<                 }
+<             }
+---
+>         dbBlock* block = get_block();
+>         if (!block) {
+>             fprintf(stderr, "%s\n", error_message_from_get_block());
+>             return {};
+218,231c203,212
+<         for (int row_i = 0; row_i < rows.size(); row_i++) {
+<             std::vector<dbInst*> const& curr_cells = cells_per_row[row_i];
+<             for (int i = 1; i < curr_cells.size(); i++) {
+<                 dbInst* last_cell = curr_cells[i-1];
+<                 dbInst* cell = curr_cells[i];
+< 
+<                 int x1_min = last_cell->getBBox()->xMin();
+<                 int x1_max = last_cell->getBBox()->xMax();
+<                 int x2_min = cell->getBBox()->xMin();
+<                 int x2_max = cell->getBBox()->xMax();
+< 
+<                 if (collide(x1_min, x1_max, x2_min, x2_max)) {
+<                     std::string reason = last_cell->getName() + " is colliding with " + cell->getName();
+<                     return {false, reason};
+---
+>         vector<dbInst*> cells;
+>         {
+>             dbSet<dbInst> cells_set = block->getInsts();
+>             for (dbInst* cell : cells_set) {
+>                 Rect rect = cell->getBBox()->getBox();
+> 
+>                 if (collide(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
+>                     && collide(rect.yMin(), rect.yMax(), area_y_min, area_y_max)
+>                 ) {
+>                     cells.push_back(cell);
+236c217
+<         return {true, ""};
+---
+>         return cells;
+239,240c220,221
+<     std::pair<bool, std::string> Tutorial::is_legalized_excluding_border(int x1, int y1, int x2, int y2) {
+<         int area_x_min, area_x_max;
+---
+>     vector<dbInst*> Tutorial::get_all_cells_excluding_border(int x1, int y1, int x2, int y2) {
+>         int area_x_min, area_x_max, area_y_min, area_y_max;
+245d225
+<             area_x_min = x2;
+246a227
+>             area_x_min = x2;
+248,249d228
+< 
+<         int area_y_min, area_y_max;
+254d232
+<             area_y_min = y2;
+255a234
+>             area_y_min = y2;
+259a239,271
+>             fprintf(stderr, "%s\n", error_message_from_get_block());
+>             return {};
+>         }
+> 
+>         vector<dbInst*> all_cells;
+>         dbSet<dbInst> cells_set = block->getInsts();
+>         for (dbInst* p_cell : cells_set) {
+>             Rect rect = p_cell->getBBox()->getBox();
+> 
+>             int x2_min = area_x_min + rect.dx()/2 - 1;
+>             int x2_max = area_x_max - rect.dx()/2 + 1;
+>             int y2_min = area_y_min + rect.dy()/2 - 1;
+>             int y2_max = area_y_max - rect.dy()/2 + 1;
+> 
+>             if (collide(rect.xMin(), rect.xMax(), x2_min, x2_max)
+>                 && collide(rect.yMin(), rect.yMax(), y2_min, y2_max)
+>             ) {
+>                 all_cells.push_back(p_cell);
+>             }
+>         }
+> 
+>         return all_cells;
+>     }
+> 
+>     // todo: organize this
+>     // conditions:
+>     // fixed cells are already legalized
+>     // fixed cells can occupy many rows
+>     // non-fixed cells occupy only one row
+>     // rows cannot have the same y
+>     std::pair<bool, std::string> Tutorial::is_legalized() {
+>         dbBlock* block = get_block();
+>         if (!block) {
+264,272c276,282
+<         // rows
+<         vector<dbRow*> rows;
+<         dbSet<dbRow> rows_set = block->getRows();
+<         for (dbRow* row : rows_set) {
+<             rows.push_back(row);
+<         }
+<         std::sort(rows.begin(), rows.end(),
+<             [&](dbRow* a, dbRow* b) {
+<                 return row_to_y(a) < row_to_y(b);
+---
+>         vector<pair<Rect, int>> rows_and_sites;
+>         {
+>             dbSet<dbRow> rows_set = block->getRows();
+>             for (dbRow* p_row : rows_set) {
+>                 Rect rect = p_row->getBBox();
+>                 int site_width = p_row->getSite()->getWidth();
+>                 rows_and_sites.push_back({rect, site_width});
+274c284
+<         );
+---
+>         }
+276,278c286,294
+<         vector<int> rows_y_min(rows.size());
+<         for (size_t i = 0; i < rows.size(); i++) {
+<             rows_y_min[i] = row_to_y(rows[i]);
+---
+>         vector<pair<Rect, dbInst*>> cells;
+>         vector<Rect> fixed_cells;
+>         {
+>             dbSet<dbInst> cells_set = block->getInsts();
+>             for (dbInst* p_cell : cells_set) {
+>                 Rect rect = p_cell->getBBox()->getBox();
+>                 if (p_cell->isFixed()) fixed_cells.push_back(rect);
+>                 else                   cells.push_back({rect, p_cell});
+>             }
+281,285c297,311
+<         // cells
+<         vector<dbInst*> block_cells;
+<         dbSet<dbInst> cells_set = block->getInsts();
+<         for (dbInst* cell : cells_set) {
+<             block_cells.push_back(cell);
+---
+>         split_rows_and_sites(&rows_and_sites, fixed_cells);
+> 
+>         return is_legalized(move(rows_and_sites), move(cells));
+>     }
+> 
+>     std::pair<bool, std::string> Tutorial::is_legalized(int x1, int y1, int x2, int y2) {
+>         vector<pair<Rect, int>> rows = get_rows(x1, y1, x2, y2);
+>         vector<dbInst*> all_cells = get_all_cells(x1, y1, x2, y2);
+> 
+>         vector<Rect> fixed_cells;
+>         vector<pair<Rect, dbInst*>> cells;
+>         for (dbInst* inst : all_cells) {
+>             Rect rect = inst->getBBox()->getBox();
+>             if (inst->isFixed()) fixed_cells.push_back(rect);
+>             else                 cells.push_back({rect, inst});
+287,293d312
+<         std::sort(block_cells.begin(), block_cells.end(),
+<             [&](dbInst* a, dbInst* b) {
+<                 int x1 = a->getBBox()->xMin();
+<                 int x2 = b->getBBox()->xMin();
+<                 return x1 < x2;
+<             }
+<         );
+295,296c314
+<         // algorithm
+<         vector<vector<dbInst*>> cells_per_row(rows.size());
+---
+>         split_rows_and_sites(&rows, fixed_cells);
+298,313c316,317
+<         // filter cells in area and check row and site
+<         for (dbInst* cell : block_cells) {
+<             int x_min = cell->getBBox()->xMin();
+<             int x_max = cell->getBBox()->xMax();
+<             int y_min = cell->getBBox()->yMin();
+<             int y_max = cell->getBBox()->yMax();
+< 
+<             // check if it collides with area
+< 
+<             int half_width = (x_max - x_min)/2;
+<             int half_height = (y_max - y_min)/2;
+< 
+<             int x2_min = area_x_min + half_width;
+<             int x2_max = area_x_max - half_width;
+<             int y2_min = area_y_min + half_height;
+<             int y2_max = area_y_max - half_height;
+---
+>         return is_legalized(move(rows), move(cells));
+>     }
+315,327c319,321
+<             if (collide(x_min, x_max, x2_min, x2_max)
+<                 && collide(y_min, y_max, y2_min, y2_max)
+<             ) {
+<                 int lower_row_i = std::lower_bound(
+<                         rows_y_min.begin(), rows_y_min.end(), y_min
+<                     )
+<                     - rows_y_min.begin();
+< 
+<                 if (cell->isFixed()) {
+<                     int upper_row_i_exc = std::lower_bound(
+<                             rows_y_min.begin(), rows_y_min.end(), y_max
+<                         )
+<                         - rows_y_min.begin();
+---
+>     std::pair<bool, std::string> Tutorial::is_legalized_excluding_border(int x1, int y1, int x2, int y2) {
+>         vector<pair<Rect, int>> rows = get_rows(x1, y1, x2, y2);
+>         vector<dbInst*> all_cells = get_all_cells_excluding_border(x1, y1, x2, y2);
+329,337c323,329
+<                     for (int i = lower_row_i; i < upper_row_i_exc; i++) {
+<                         cells_per_row[i].push_back(cell);
+<                     }
+<                 } else {
+<                     // check row
+<                     if (lower_row_i == rows.size() || rows_y_min[lower_row_i] != y_min) {
+<                         std::string reason = cell->getName() + " is not aligned with a row";
+<                         return {false, reason};
+<                     }
+---
+>         vector<Rect> fixed_cells;
+>         vector<pair<Rect, dbInst*>> cells;
+>         for (dbInst* inst : all_cells) {
+>             Rect rect = inst->getBBox()->getBox();
+>             if (inst->isFixed()) fixed_cells.push_back(rect);
+>             else                 cells.push_back({rect, inst});
+>         }
+339c331
+<                     dbRow* row = rows[lower_row_i];
+---
+>         split_rows_and_sites(&rows, fixed_cells);
+341,348c333,334
+<                     // check row limits
+<                     int row_x_min = row->getBBox().xMin();
+<                     int row_x_max = row->getBBox().xMax();
+< 
+<                     if (!(row_x_min <= x_min && x_max <= row_x_max)) {
+<                         std::string reason = cell->getName() + " is not totally within a row";
+<                         return {false, reason};
+<                     }
+---
+>         return is_legalized(move(rows), move(cells));
+>     }
+350,355c336,345
+<                     // check site
+<                     int site_width = row->getSite()->getWidth();
+<                     if ((x_min - row_x_min) % site_width != 0) {
+<                         std::string reason = cell->getName() + " is not aligned with a site";
+<                         return {false, reason};
+<                     }
+---
+>     // todo: agora nao considera mais colisoes entre celulas, burro
+>     pair<bool, string> Tutorial::is_legalized(
+>         vector<pair<Rect, int>> rows,
+>         vector<pair<Rect, dbInst*>> const& cells
+>     ) {
+>         std::sort(rows.begin(), rows.end(),
+>             [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+>                 return a.first.yMin() < b.first.yMin();
+>             }
+>         );
+357c347,352
+<                     cells_per_row[lower_row_i].push_back(cell);
+---
+>         for (auto const& [cell, inst] : cells) {
+>             int row_i = std::lower_bound(
+>                 rows.begin(), rows.end(),
+>                 dummy_row_and_site(cell.yMin()),
+>                 [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+>                     return a.first.yMin() < b.first.yMin();
+358a354,361
+>             )
+>                 - rows.begin();
+> 
+>             auto const& [row, site_width] = rows[row_i];
+> 
+>             if (row_i == rows.size() || cell.yMin() != row.yMin()) {
+>                 std::string reason = inst->getName() + " is not aligned with a row";
+>                 return {false, reason};
+360d362
+<         }
+362,376c364,371
+<         for (int row_i = 0; row_i < rows.size(); row_i++) {
+<             std::vector<dbInst*> const& curr_cells = cells_per_row[row_i];
+<             for (int i = 1; i < curr_cells.size(); i++) {
+<                 dbInst* last_cell = curr_cells[i-1];
+<                 dbInst* cell = curr_cells[i];
+< 
+<                 int x1_min = last_cell->getBBox()->xMin();
+<                 int x1_max = last_cell->getBBox()->xMax();
+<                 int x2_min = cell->getBBox()->xMin();
+<                 int x2_max = cell->getBBox()->xMax();
+< 
+<                 if (collide(x1_min, x1_max, x2_min, x2_max)) {
+<                     std::string reason = last_cell->getName() + " is colliding with " + cell->getName();
+<                     return {false, reason};
+<                 }
+---
+>             if (!(row.xMin() <= cell.xMin() && cell.xMax() <= row.xMax())) {
+>                 std::string reason = inst->getName() + " is not totally within a row / is colliding with a fixed cell";
+>                 return {false, reason};
+>             }
+> 
+>             if ((cell.xMin() - row.xMin()) % site_width != 0) {
+>                 std::string reason = inst->getName() + " is not aligned with a site";
+>                 return {false, reason};
