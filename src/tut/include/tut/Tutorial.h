@@ -52,10 +52,11 @@ class Tutorial {
         std::vector<std::pair<odb::Rect, odb::dbInst*>> cells_and_insts
     );
 
-    void save();
-    void load();
-    void save_to_file(std::string path);
-    void load_from_file(std::string path);
+    void save_pos();
+    void load_pos();
+    void save_pos_to_file(std::string path);
+    void load_pos_from_file(std::string path);
+    void save_costs_to_file(std::string path);
 
     // attributes
     utl::Logger* logger;
@@ -151,6 +152,7 @@ class Tutorial {
     odb::dbDatabase* db;
 
     std::vector<std::pair<odb::Rect, odb::dbInst*>> saved_pos;
+    std::vector<std::pair<double, odb::dbInst*>> saved_costs;
 
     DebugData debug_data;
   };

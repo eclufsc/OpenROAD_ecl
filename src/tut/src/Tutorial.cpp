@@ -535,6 +535,7 @@ namespace tut {
             }
         }
 
+        double total_area = 0;
         vector<pair<Rect, dbInst*>> cells;
         {
             dbSet<dbInst> cells_set = block->getInsts();
@@ -555,6 +556,7 @@ namespace tut {
                     && collide(y_min, y_max, y2_min, y2_max)
                 ) {
                     cells.push_back({rect, cell});
+                    total_area += rect.dx() * rect.dy();
                 }
             }
         }
@@ -566,8 +568,11 @@ namespace tut {
         vector<pair<Rect, int>> rows_and_sites,
         vector<pair<Rect, dbInst*>> cells_and_insts
     ) {
+        saved_costs.clear();
+
         // todo: delete
-        setbuf(stdout, 0);
+        using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
+        auto start = high_resolution_clock::now();
 
         // cells
         vector<Rect> cells;
@@ -688,7 +693,7 @@ namespace tut {
             double best_cost = std::numeric_limits<double>::max();
             int best_row_i = -1;
             AbacusCluster best_new_cluster;
-            int best_previous_i;
+            int best_previous_i = 0;
 
             auto loop_body = [&](int row_i) -> bool {
                 Rect row = rows[row_i];
@@ -749,6 +754,8 @@ namespace tut {
                 fail_counter++;
                 fprintf(stderr, "ERROR: could not place cell\n");
             } else {
+                saved_costs.emplace_back(dbu_to_microns(sqrt(best_cost)), p_cells[cell_i]);
+
                 cells_per_row[best_row_i].push_back(cell_i);
 
                 clusters_per_row[best_row_i].resize(best_previous_i+1);
@@ -761,6 +768,21 @@ namespace tut {
                 last_percentage = curr_percentage;
             }
 
+        }
+
+        // todo: delete
+        auto end = high_resolution_clock::now();
+        logger->report("Time spent (ms): " + std::to_string(duration_cast<milliseconds>(end - start).count()));
+        
+        // checking whether the cells preserved relative ordering
+        for (vector<int> const& row : cells_per_row) {
+            int last_i = -1;
+            for (int cell_i : row) {
+                if (cell_i < last_i) {
+                    logger->report("Order changed");
+                }
+                last_i = cell_i;
+            }
         }
 
         for (int row_i = 0; row_i < cells_per_row.size(); row_i++) {
@@ -1037,6 +1059,12 @@ namespace tut {
         vector<pair<Rect, dbInst*>> cells_and_insts
     ) {
         // todo: delete
+        using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
+        auto start = high_resolution_clock::now();
+
+        saved_costs.clear();
+
+        // todo: delete
         setbuf(stdout, 0);
 
         using std::deque;
@@ -1169,10 +1197,12 @@ namespace tut {
 
             if (lowest_cost == std::numeric_limits<double>::max()) {
                 not_placed_n++;
-                // todo: uncomment
-//                fprintf(stderr, "ERROR: could not place cell\n");
+
+                fprintf(stderr, "ERROR: could not place cell\n");
                 continue;
             }
+
+            saved_costs.emplace_back(dbu_to_microns(sqrt(lowest_cost)), cells_and_insts[cell_i].second);
 
             int new_x = winning_site_x;
             int new_y = rows_and_sites[winning_row].first.yMin();
@@ -1207,6 +1237,10 @@ namespace tut {
                 debug_data.max_row_iter = debug_data.row_iter;
             }
         }
+
+        // todo: delete
+        auto end = high_resolution_clock::now();
+        logger->report(std::to_string(duration_cast<milliseconds>(end - start).count()));
 
         for (auto const& [rect, p_cell] : cells_and_insts) {
             set_pos(p_cell, rect.xMin(), rect.yMin());
@@ -1329,7 +1363,7 @@ namespace tut {
         return std::make_pair(Rect(0, y_min, int_max, int_max), 0);
     }
 
-    void Tutorial::save() {
+    void Tutorial::save_pos() {
         saved_pos.clear();
 
         dbBlock* block = get_block();
@@ -1348,14 +1382,14 @@ namespace tut {
         }
     }
 
-    void Tutorial::load() {
+    void Tutorial::load_pos() {
         for (auto const& [cell, inst] : saved_pos) {
             set_pos(inst, cell.xMin(), cell.yMin());
         }
     }
 
-    void Tutorial::save_to_file(string path) {
-        save();
+    void Tutorial::save_pos_to_file(string path) {
+        save_pos();
 
         std::ofstream file(path);
         for (auto const& [cell, inst] : saved_pos) {
@@ -1363,7 +1397,7 @@ namespace tut {
         }
     }
 
-    void Tutorial::load_from_file(string path) {
+    void Tutorial::load_pos_from_file(string path) {
         saved_pos.clear();
 
         std::ifstream file(path);
@@ -1411,7 +1445,15 @@ namespace tut {
             }
         }
 
-        load();
+        load_pos();
+    }
+
+    void Tutorial::save_costs_to_file(string path) {
+        std::ofstream file(path);
+
+        for (auto const& [cost, inst] : saved_costs) {
+            file << cost << "\n";
+        }
     }
 }
 
