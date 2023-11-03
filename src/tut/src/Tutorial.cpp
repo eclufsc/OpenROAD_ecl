@@ -14,6 +14,10 @@
 
 // todo: create function to highlight area in openroad (maybe create a dummy cell and add it to a group?
 
+// todo: is it better for tetris to split rows or check fixed_cells?
+
+// todo: make is_legalized faster
+
 namespace tut {
     using namespace odb;
     using std::vector, std::pair, std::sort, std::lower_bound, std::upper_bound, std::move, std::string, std::make_pair;
@@ -377,6 +381,7 @@ namespace tut {
         return {true, ""};
     }
 
+    // todo: this function may cause crashes because the dbInst::destroy function invalidates the pointer, which could be stored in one of the attributes
     void Tutorial::destroy_cells_with_name_prefix(std::string prefix) {
         dbBlock* block = get_block();
         if (!block) {
@@ -426,21 +431,11 @@ namespace tut {
             if (inst->isFixed()) continue;
 
             Rect cell = inst->getBBox()->getBox();
-            
-            while (true) {
-                cell.moveTo(
-                    core.xMin() + rand() % core.dx(),
-                    core.yMin() + rand() % core.dy()
-                );
 
-                if (cell.xMax() <= core.xMax()
-                    && cell.yMax() <= core.yMax()
-                ) {
-                    break;
-                }
-            }
+            int new_x = core.xMin() + rand() % (core.dx() - cell.dx());
+            int new_y = core.yMin() + rand() % (core.dy() - cell.dy());
 
-            set_pos(inst, cell.xMin(), cell.yMin(), false);
+            set_pos(inst, new_x, new_y, false);
         }
     }
 
@@ -457,209 +452,37 @@ namespace tut {
     int Tutorial::max_clusters = 0;
 
     void Tutorial::abacus() {
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        vector<pair<Rect, dbInst*>> cells;
-        {
-            dbSet<dbInst> cells_set = block->getInsts();
-            for (dbInst* cell : cells_set) {
-                Rect rect = cell->getBBox()->getBox();
-                cells.push_back({rect, cell});
-            }
-        }
-
-        vector<pair<Rect, int>> rows;
-        {
-            dbSet<dbRow> rows_set = block->getRows();
-            for (dbRow* row : rows_set) {
-                Rect rect = row->getBBox();
-                int site_width = row->getSite()->getWidth();
-                rows.push_back({rect, site_width});
-            }
-        }
-
+        auto [rows, cells] = get_splited_rows_and_cells();
         abacus(move(rows), move(cells));
     }
 
-    void Tutorial::abacus(int x1, int y1, int x2, int y2) {
-        int area_x_min, area_x_max, area_y_min, area_y_max;
-        if (x1 < x2) {
-            area_x_min = x1;
-            area_x_max = x2;
-        } else {
-            area_x_max = x1;
-            area_x_min = x2;
-        }
-        if (y1 < y2) {
-            area_y_min = y1;
-            area_y_max = y2;
-        } else {
-            area_y_max = y1;
-            area_y_min = y2;
-        }
-
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        vector<pair<Rect, int>> rows;
-        {
-            dbSet<dbRow> rows_set = block->getRows();
-            for (dbRow* row : rows_set) {
-                Rect rect = row->getBBox();
-                if (collide(area_x_min, area_x_max, rect.xMin(), rect.xMax())
-                    && collide(area_y_min, area_y_max, rect.yMin(), rect.yMax())
-                ) {
-                    int site_width = row->getSite()->getWidth();
-
-                    int site_x_min = (area_x_min - rect.xMin()) / site_width * site_width + rect.xMin();
-                    int site_x_max = (area_x_max - rect.xMin()) / site_width * site_width + rect.xMin();
-
-                    rect.set_xlo(std::max(site_x_min, rect.xMin()));
-                    rect.set_xhi(std::min(site_x_max, rect.xMax()));
-                    rows.push_back({rect, site_width});
-                }
-            }
-        }
-
-        double total_area = 0;
-        vector<pair<Rect, dbInst*>> cells;
-        {
-            dbSet<dbInst> cells_set = block->getInsts();
-            for (dbInst* cell : cells_set) {
-                Rect rect = cell->getBBox()->getBox();
-
-                int x_min = rect.xMin();
-                int x_max = rect.xMax();
-                int y_min = rect.yMin();
-                int y_max = rect.yMax();
-
-                int x2_min = area_x_min + rect.dx()/2;
-                int x2_max = area_x_max - rect.dx()/2;
-                int y2_min = area_y_min + rect.dy()/2;
-                int y2_max = area_y_max - rect.dy()/2;
-
-                if (collide(x_min, x_max, x2_min, x2_max)
-                    && collide(y_min, y_max, y2_min, y2_max)
-                ) {
-                    cells.push_back({rect, cell});
-                    total_area += rect.dx() * rect.dy();
-                }
-            }
-        }
-
+    void Tutorial::abacus(int x1, int y1, int x2, int y2, bool include_boundary) {
+        auto [rows, cells] = get_splited_rows_and_cells(x1, y1, x2, y2, include_boundary);
         abacus(move(rows), move(cells));
     }
 
     void Tutorial::abacus(
-        vector<pair<Rect, int>> rows_and_sites,
-        vector<pair<Rect, dbInst*>> cells_and_insts
+        vector<pair<Rect, int>> rows,
+        vector<pair<Rect, dbInst*>> cells
     ) {
         last_costs.clear();
+
+        std::sort(
+            cells.begin(), cells.end(),
+            [&](pair<Rect, dbInst*> const& a, pair<Rect, dbInst*> const& b) {
+                return a.first.xMin() < b.first.xMin();
+            }
+        );
+
+        sort(rows.begin(), rows.end(),
+            [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                return a.first.yMin() < b.first.yMin();
+            }
+        );
 
         // todo: delete
         using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
         auto start = high_resolution_clock::now();
-
-        // cells
-        vector<Rect> cells;
-        vector<Rect> fixed_cells;
-        vector<dbInst*> p_cells;
-        {
-            std::sort(
-                cells_and_insts.begin(), cells_and_insts.end(),
-                [&](pair<Rect, dbInst*> const& a, pair<Rect, dbInst*> const& b) {
-                    return a.first.xMin() < b.first.xMin();
-                }
-            );
-
-            for (int i = 0; i < cells_and_insts.size(); i++) {
-                auto [cell, p_cell] = cells_and_insts[i];
-
-                if (p_cell->isFixed()) {
-                    fixed_cells.push_back(cell);
-                } else {
-                    cells.push_back(cell);
-                    p_cells.push_back(p_cell);
-                }
-            }
-        }
-
-        // rows
-        vector<Rect> rows(rows_and_sites.size());
-        vector<int> sites_width(rows_and_sites.size());
-        vector<int> rows_y(rows_and_sites.size());
-        {
-            sort(rows_and_sites.begin(), rows_and_sites.end(),
-                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
-                    return a.first.yMin() < b.first.yMin();
-                }
-            );
-
-            for (int i = 0; i < rows_and_sites.size(); i++) {
-                Rect rect = rows_and_sites[i].first;
-                int site_width = rows_and_sites[i].second;
-                rows[i] = rect;
-                sites_width[i] = site_width;
-                rows_y[i] = rect.yMin();
-            }
-
-            // split rows colliding with fixed cells
-            for (Rect fixed_cell : fixed_cells) {
-                int row_start = std::lower_bound(rows_y.begin(), rows_y.end(), fixed_cell.yMin())
-                    - rows_y.begin();
-
-                int row_end_exc = std::lower_bound(rows_y.begin(), rows_y.end(), fixed_cell.yMax())
-                    - rows_y.begin();
-
-                int i = row_start;
-                for (int count = row_start; count < row_end_exc; count++) {
-                    Rect row = rows[i];
-                    if (collide(fixed_cell.xMin(), fixed_cell.xMax(), row.xMin(), row.xMax())) {
-                        Rect old_row = rows[i];
-                        int site_width = sites_width[i];
-                        int row_y = rows_y[i];
-
-                        rows.erase(rows.begin() + i);
-                        sites_width.erase(sites_width.begin() + i);
-                        rows_y.erase(rows_y.begin() + i);
-
-                        if (fixed_cell.xMax() < old_row.xMax()) {
-                            Rect row_right(
-                                fixed_cell.xMax(), old_row.yMin(),
-                                row.xMax(), old_row.yMax()
-                            );
-
-                            rows.insert(rows.begin() + i, row_right);
-                            sites_width.insert(sites_width.begin() + i, site_width);
-                            rows_y.insert(rows_y.begin() + i, row_y);
-
-                            i += 1;
-                        }
-                        if (old_row.xMin() < fixed_cell.xMin()) {
-                            Rect row_left(
-                                old_row.xMin(), old_row.yMin(),
-                                fixed_cell.xMin(), old_row.yMax()
-                            );
-
-                            rows.insert(rows.begin() + i, row_left);
-                            sites_width.insert(sites_width.begin() + i, site_width);
-                            rows_y.insert(rows_y.begin() + i, row_y);
-
-                            i += 1;
-                        }
-                    } else {
-                        i += 1;
-                    }
-                }
-            }
-        }
 
         // algorithm
         vector<vector<int>> cells_per_row(rows.size());
@@ -674,12 +497,14 @@ namespace tut {
         int fail_counter = 0;
 
         for (int cell_i = 0; cell_i < cells.size(); cell_i++) {
-            Rect global_pos = cells[cell_i];
+            auto const& [global_pos, inst] = cells[cell_i];
 
             int approx_row = std::lower_bound(
-                rows_y.begin(), rows_y.end(), global_pos.yMin()
-            )
-            - rows_y.begin();
+                rows.begin(), rows.end(), dummy_row_and_site(global_pos.yMin()),
+                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                    return a.first.yMin() < b.first.yMin();
+                }
+            ) - rows.begin();
 
             if (approx_row == rows.size()) approx_row -= 1;
 
@@ -689,7 +514,7 @@ namespace tut {
             int best_previous_i = 0;
 
             auto loop_body = [&](int row_i) -> bool {
-                Rect row = rows[row_i];
+                auto const& [row, site_width] = rows[row_i];
 
                 double weight = global_pos.dx()*global_pos.dy();
                 AbacusCell cell = {cell_i, global_pos, weight};
@@ -697,7 +522,6 @@ namespace tut {
                 AbacusCluster new_cluster;
                 int previous_i;
 
-                int site_width = sites_width[row_i];
                 if (!abacus_try_add_cell(
                     row, site_width,
                     cell,
@@ -747,7 +571,7 @@ namespace tut {
                 fail_counter++;
                 fprintf(stderr, "ERROR: could not place cell\n");
             } else {
-                last_costs.emplace_back(dbu_to_microns(sqrt(best_cost)), p_cells[cell_i]);
+                last_costs.emplace_back(dbu_to_microns(sqrt(best_cost)), inst);
 
                 cells_per_row[best_row_i].push_back(cell_i);
 
@@ -789,8 +613,12 @@ namespace tut {
                 int x = cluster.x;
                 while (cell_i <= cluster.last_cell) {
                     int p_cell_i = cells_in_row[cell_i];
-                    set_pos(p_cells[p_cell_i], x, rows[row_i].yMin(), true);
-                    x += cells[p_cell_i].dx();
+                    auto const& [cell, inst] = cells[p_cell_i];
+
+                    Rect const& row = rows[row_i].first;
+
+                    set_pos(cells[p_cell_i].second, x, row.yMin(), true);
+                    x += cell.dx();
 
                     cell_i++;
                 }
@@ -892,126 +720,12 @@ namespace tut {
     }
 
     void Tutorial::tetris() {
-        // todo: delete
-        setbuf(stdout, 0);
-
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        vector<pair<Rect, dbInst*>> cells;
-        vector<Rect> fixed_cells;
-        {
-            dbSet<dbInst> cells_set = block->getInsts();
-            for (dbInst* inst : cells_set) {
-                Rect rect = inst->getBBox()->getBox();
-                if (inst->isFixed()
-                    || cells_legalized.find(inst) != cells_legalized.end()
-                ) {
-                    fixed_cells.push_back(rect);
-                } else {
-                    cells.push_back({rect, inst});
-                }
-            }
-        }
-
-        vector<pair<Rect, int>> rows;
-        {
-            dbSet<dbRow> rows_set = block->getRows();
-            for (dbRow* row : rows_set) {
-                Rect rect = row->getBBox();
-                int site_width = row->getSite()->getWidth();
-                rows.push_back({rect, site_width});
-            }
-
-            sort_and_split_rows(&rows, fixed_cells);
-        }
-
+        auto [rows, cells] = get_splited_rows_and_cells();
         tetris(move(rows), move(cells));
     }
 
     void Tutorial::tetris(int x1, int y1, int x2, int y2, bool include_boundary) {
-        int area_x_min, area_x_max, area_y_min, area_y_max;
-        if (x1 < x2) {
-            area_x_min = x1;
-            area_x_max = x2;
-        } else {
-            area_x_max = x1;
-            area_x_min = x2;
-        }
-        if (y1 < y2) {
-            area_y_min = y1;
-            area_y_max = y2;
-        } else {
-            area_y_max = y1;
-            area_y_min = y2;
-        }
-
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        vector<pair<Rect, dbInst*>> cells;
-        vector<Rect> fixed_cells;
-        {
-            dbSet<dbInst> insts = block->getInsts();
-            
-            for (dbInst* inst : insts) {
-                Rect rect = inst->getBBox()->getBox();
-
-                if (!collide(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
-                    || !collide(rect.yMin(), rect.yMax(), area_y_min, area_y_max)) {
-                    continue;
-                }
-
-                int cx = rect.xMin() + rect.dx()/2;
-                int cy = rect.yMin() + rect.dy()/2;
-
-                bool center_inside;
-                if (include_boundary) {
-                    center_inside = area_x_min <= cx && cx <= area_x_max
-                                 && area_y_min <= cy && cy <= area_y_max;
-                } else {
-                    center_inside = area_x_min < cx && cx < area_x_max
-                                 && area_y_min < cy && cy < area_y_max;
-                }
-
-                if (center_inside && !inst->isFixed()) {
-                    cells.push_back({rect, inst});
-                } else {
-                    if (cells_legalized.find(inst) != cells_legalized.end()) {
-                        fixed_cells.push_back(rect);
-                    }
-                }
-            }
-        }
-
-        vector<pair<Rect, int>> rows;
-        {
-            dbSet<dbRow> rows_set = block->getRows();
-            for (dbRow* row : rows_set) {
-                Rect rect = row->getBBox();
-                if (collide(area_x_min, area_x_max, rect.xMin(), rect.xMax())
-                    && collide(area_y_min, area_y_max, rect.yMin(), rect.yMax())
-                ) {
-                    int site_width = row->getSite()->getWidth();
-
-                    int site_x_min = (area_x_min - rect.xMin()) / site_width * site_width + rect.xMin();
-                    int site_x_max = (area_x_max - rect.xMin()) / site_width * site_width + rect.xMin();
-
-                    rect.set_xlo(std::max(site_x_min, rect.xMin()));
-                    rect.set_xhi(std::min(site_x_max, rect.xMax()));
-                    rows.push_back({rect, site_width});
-                }
-            }
-
-            sort_and_split_rows(&rows, fixed_cells);
-        }
-
+        auto [rows, cells] = get_splited_rows_and_cells(x1, y1, x2, y2, include_boundary);
         tetris(move(rows), move(cells));
     }
 
@@ -1019,23 +733,15 @@ namespace tut {
         vector<pair<Rect, int>> rows_and_sites,
         vector<pair<Rect, dbInst*>> cells_and_insts
     ) {
-        // todo: delete
-        using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
-        auto start = high_resolution_clock::now();
+        if (cells_and_insts.size() == 0) return;
 
         last_costs.clear();
-
-        // todo: delete
-        setbuf(stdout, 0);
-
-        using std::deque;
 
         // todo: move this to a struct (or receive in the arguments)
         float left_factor = 1.0; 
         float width_factor = 0.5;
         float x_to_y_priority_ratio = 1.0f;
 
-        // sort cells_and_insts by x
         auto effective_x = [&](Rect const& cell) -> double {
             // +width -> +priority
             return cell.xMin() - cell.dx() * width_factor;
@@ -1046,14 +752,16 @@ namespace tut {
             }
         );
 
-        // sort rows_and_sites by y
         std::sort(rows_and_sites.begin(), rows_and_sites.end(),
             [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
                 return a.first.yMin() < b.first.yMin();
             }
         );
 
-        // max_width
+        // todo: delete
+        using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
+        auto start = high_resolution_clock::now();
+
         int max_width = (*std::max_element(cells_and_insts.begin(), cells_and_insts.end(),
             [&](pair<Rect, dbInst*> cell1, pair<Rect, dbInst*> cell2) {
                 return cell1.first.dx() < cell2.first.dx();
@@ -1061,14 +769,15 @@ namespace tut {
         ))
             .first.dx();
 
+        using std::deque;
+
         // initialize last_placed_per_row
         // note: using deque instead of queue because queue doesnt support iteration
-        // note: it is possible to substitute the queue for a vector with two indexes (WindowVector). All cells_and_insts in the current row would be added beforehand. The pop_front would increment the start index; the push_back would increment the end index. I believe this is a better alternative due to its simplicity. Maybe it's possible to merge last_placed_per_row and fixed_per_row in a single data structure
+        // todo: it is possible to substitute the queue for a vector with two indexes (WindowVector). All cells_and_insts in the current row would be added beforehand. The pop_front would increment the start index; the push_back would increment the end index. I believe this is a better alternative due to its simplicity. Maybe it's possible to merge last_placed_per_row and fixed_per_row in a single data structure
         vector<deque<Rect>> last_placed_per_row(rows_and_sites.size());
 
         int not_placed_n = 0;
 
-        // debug_data
         debug_data.max_deque_size = 0;
         debug_data.max_row_iter = 0;
         debug_data.max_site_iter = 0;
@@ -1081,7 +790,7 @@ namespace tut {
 
         debug_data.lowest_costs.resize(cells_and_insts.size());
 
-        // note: cells_and_insts cannot move too much (like tetris). The left factor determines the fall speed
+        // note: cells_and_insts cannot move too much (like tetris). According to the analogy, the left factor determines the fall speed
         int delta_x = -left_factor * max_width;
         int last_percentage = 0;
         for (int cell_i = 0; cell_i < cells_and_insts.size(); cell_i++) {
@@ -1150,7 +859,7 @@ namespace tut {
 
             int curr_percentage = ((cell_i+1)*10 / (int)cells_and_insts.size())*10;
             if (curr_percentage > last_percentage) {
-                logger->report(std::to_string(curr_percentage) + "% of the cells_and_insts processed");
+                logger->report(std::to_string(curr_percentage) + "% of the cells processed");
                 last_percentage = curr_percentage;
             }
 
@@ -1201,16 +910,16 @@ namespace tut {
 
         // todo: delete
         auto end = high_resolution_clock::now();
-        logger->report(std::to_string(duration_cast<milliseconds>(end - start).count()));
+        logger->report("Time spent (ms): " + std::to_string(duration_cast<milliseconds>(end - start).count()));
 
         for (auto const& [rect, p_cell] : cells_and_insts) {
             set_pos(p_cell, rect.xMin(), rect.yMin(), true);
         }
 
         if (not_placed_n == 0) {
-            logger->report("Placed all cells_and_insts");
+            logger->report("Placed all cells");
         } else {
-            logger->report("Could not place " + std::to_string(not_placed_n) + " cells_and_insts");
+            logger->report("Could not place " + std::to_string(not_placed_n) + " cells");
         }
     }
 
@@ -1466,6 +1175,141 @@ namespace tut {
                 }
             }
         }
+    }
+
+    pair<vector<pair<Rect, int>>, vector<pair<Rect, dbInst*>>>
+    Tutorial::get_splited_rows_and_cells() {
+        dbBlock* block = get_block();
+        if (!block) {
+            fprintf(stderr, "%s\n", error_message_from_get_block());
+            return {};
+        }
+
+        vector<pair<Rect, dbInst*>> cells;
+        vector<Rect> fixed_cells;
+        {
+            dbSet<dbInst> cells_set = block->getInsts();
+            for (dbInst* inst : cells_set) {
+                Rect rect = inst->getBBox()->getBox();
+                if (inst->isFixed()
+//                    || cells_legalized.find(inst) != cells_legalized.end()
+                ) {
+                    fixed_cells.push_back(rect);
+                } else {
+                    cells.push_back({rect, inst});
+                }
+            }
+        }
+
+        vector<pair<Rect, int>> rows;
+        {
+            dbSet<dbRow> rows_set = block->getRows();
+            for (dbRow* row : rows_set) {
+                Rect rect = row->getBBox();
+                int site_width = row->getSite()->getWidth();
+                rows.push_back({rect, site_width});
+            }
+
+            sort_and_split_rows(&rows, fixed_cells);
+        }
+
+        return {rows, cells};
+    }
+
+    pair<vector<pair<Rect, int>>, vector<pair<Rect, dbInst*>>>
+    Tutorial::get_splited_rows_and_cells(int x1, int y1, int x2, int y2, bool include_boundary) {
+        int area_x_min, area_x_max, area_y_min, area_y_max;
+        if (x1 < x2) {
+            area_x_min = x1;
+            area_x_max = x2;
+        } else {
+            area_x_max = x1;
+            area_x_min = x2;
+        }
+        if (y1 < y2) {
+            area_y_min = y1;
+            area_y_max = y2;
+        } else {
+            area_y_max = y1;
+            area_y_min = y2;
+        }
+
+        dbBlock* block = get_block();
+        if (!block) {
+            fprintf(stderr, "%s\n", error_message_from_get_block());
+            return {};
+        }
+
+        double cell_total_area = 0;
+        vector<pair<Rect, dbInst*>> cells;
+        vector<Rect> fixed_cells;
+        {
+            dbSet<dbInst> insts = block->getInsts();
+            
+            for (dbInst* inst : insts) {
+                Rect rect = inst->getBBox()->getBox();
+
+                if (!collide(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
+                    || !collide(rect.yMin(), rect.yMax(), area_y_min, area_y_max)) {
+                    continue;
+                }
+
+                int cx = rect.xMin() + rect.dx()/2;
+                int cy = rect.yMin() + rect.dy()/2;
+
+                bool center_inside;
+                if (include_boundary) {
+                    center_inside = area_x_min <= cx && cx <= area_x_max
+                                 && area_y_min <= cy && cy <= area_y_max;
+                } else {
+                    center_inside = area_x_min < cx && cx < area_x_max
+                                 && area_y_min < cy && cy < area_y_max;
+                }
+
+                if (center_inside && !inst->isFixed()) {
+                    cells.push_back({rect, inst});
+                    cell_total_area += rect.dx() * rect.dy();
+                } else {
+                    if (cells_legalized.find(inst) != cells_legalized.end()) {
+                        fixed_cells.push_back(rect);
+                    }
+                }
+            }
+        }
+
+        vector<pair<Rect, int>> rows;
+        {
+            dbSet<dbRow> rows_set = block->getRows();
+            for (dbRow* row : rows_set) {
+                Rect rect = row->getBBox();
+                if (collide(area_x_min, area_x_max, rect.xMin(), rect.xMax())
+                    && collide(area_y_min, area_y_max, rect.yMin(), rect.yMax())
+                ) {
+                    int site_width = row->getSite()->getWidth();
+
+                    int site_x_min = (area_x_min - rect.xMin()) / site_width * site_width + rect.xMin();
+                    int site_x_max = (area_x_max - rect.xMin()) / site_width * site_width + rect.xMin();
+
+                    rect.set_xlo(std::max(site_x_min, rect.xMin()));
+                    rect.set_xhi(std::min(site_x_max, rect.xMax()));
+                    rows.push_back({rect, site_width});
+                }
+            }
+
+            sort_and_split_rows(&rows, fixed_cells);
+        }
+
+        double row_total_area = 0;
+        for (int i = 0; i < rows.size(); i++) {
+            Rect const& rect = rows[i].first;
+            row_total_area += rect.dx() * rect.dy();
+        }
+        
+        if (cell_total_area > row_total_area) {
+            logger->report("Impossible to legalize: cells total area is bigger than rows total area");
+        }
+
+        return {rows, cells};
     }
 }
 

@@ -51,7 +51,7 @@ class Tutorial {
     int64_t microns_to_dbu(double microns);
 
     void abacus();
-    void abacus(int x1, int y1, int x2, int y2);
+    void abacus(int x1, int y1, int x2, int y2, bool include_boundary = true);
     void abacus(
         std::vector<std::pair<odb::Rect, int>> rows_and_sites,
         std::vector<std::pair<odb::Rect, odb::dbInst*>> cells_and_insts
@@ -85,10 +85,6 @@ class Tutorial {
 
         std::vector<double> lowest_costs;
     };
-
-    std::vector<std::pair<odb::Rect, int>> get_rows(int x1, int y1, int x2, int y2);
-    std::vector<odb::dbInst*> get_all_cells(int x1, int y1, int x2, int y2);
-    std::vector<odb::dbInst*> get_all_cells_excluding_border(int x1, int y1, int x2, int y2);
 
     std::pair<bool, std::string> is_legalized(
         std::vector<std::pair<odb::Rect, int>> rows_and_sites,
@@ -150,6 +146,12 @@ class Tutorial {
         std::vector<std::pair<odb::Rect, int>>* rows,
         std::vector<odb::Rect> const& fixed_cells
     );
+
+    std::pair<std::vector<std::pair<odb::Rect, int>>, std::vector<std::pair<odb::Rect, odb::dbInst*>>>
+    get_splited_rows_and_cells();
+
+    std::pair<std::vector<std::pair<odb::Rect, int>>, std::vector<std::pair<odb::Rect, odb::dbInst*>>>
+    get_splited_rows_and_cells(int x1, int y1, int x2, int y2, bool include_boundary);
 
     // attributes
     odb::dbDatabase* db;
