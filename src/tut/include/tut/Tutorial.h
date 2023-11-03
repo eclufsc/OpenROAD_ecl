@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <deque>
+#include <set>
 #include <stdint.h>
 
 #include "odb/db.h"
@@ -31,7 +32,10 @@ class Tutorial {
     std::pair<bool, std::string> is_legalized_excluding_border(int x1, int y1, int x2, int y2);
 
     void tetris();
-    void tetris(int area_x1, int area_y1, int area_x2, int area_y2);
+    void tetris(
+        int area_x1, int area_y1, int area_x2, int area_y2,
+        bool include_boundary = true
+    );
     void tetris(
         std::vector<std::pair<odb::Rect, int>> rows,
         std::vector<std::pair<odb::Rect, odb::dbInst*>> cells
@@ -44,6 +48,7 @@ class Tutorial {
     void shuffle();
     void disturb();
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
+    int64_t microns_to_dbu(double microns);
 
     void abacus();
     void abacus(int x1, int y1, int x2, int y2);
@@ -52,11 +57,14 @@ class Tutorial {
         std::vector<std::pair<odb::Rect, odb::dbInst*>> cells_and_insts
     );
 
-    void save_pos();
-    void load_pos();
+    void save_state();
+    void load_state();
     void save_pos_to_file(std::string path);
     void load_pos_from_file(std::string path);
     void save_costs_to_file(std::string path);
+
+    // todo: delete
+    void show_legalized_vector();
 
     // attributes
     utl::Logger* logger;
@@ -77,11 +85,6 @@ class Tutorial {
 
         std::vector<double> lowest_costs;
     };
-
-    void split_rows_and_sites(
-        std::vector<std::pair<odb::Rect, int>>* rows_and_sites,
-        std::vector<odb::Rect> const& fixed_cells
-    );
 
     std::vector<std::pair<odb::Rect, int>> get_rows(int x1, int y1, int x2, int y2);
     std::vector<odb::dbInst*> get_all_cells(int x1, int y1, int x2, int y2);
@@ -134,25 +137,32 @@ class Tutorial {
     static int max_clusters;
     
     double dbu_to_microns(int64_t dbu);
-    double microns_to_dbu(double microns);
 
     std::pair<double, double> xy_dbu_to_microns(int x, int y);
 
-    int get_width(odb::dbInst* cell);
-    int get_height(odb::dbInst* cell);
-
-    void set_pos(odb::dbInst* cell, int x, int y);
+    void set_pos(odb::dbInst* cell, int x, int y, bool legalizing);
 
     int row_to_y(odb::dbRow* row);
-    int x_to_site(odb::dbRow* row, int x);
 
     bool collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max);
+
+    void sort_and_split_rows(
+        std::vector<std::pair<odb::Rect, int>>* rows,
+        std::vector<odb::Rect> const& fixed_cells
+    );
 
     // attributes
     odb::dbDatabase* db;
 
-    std::vector<std::pair<odb::Rect, odb::dbInst*>> saved_pos;
-    std::vector<std::pair<double, odb::dbInst*>> saved_costs;
+    std::vector<std::pair<double, odb::dbInst*>> last_costs;
+    std::set<odb::dbInst*> cells_legalized;
+
+    struct SavedState {
+        std::vector<std::pair<odb::Rect, odb::dbInst*>> pos;
+        std::set<odb::dbInst*> cells_legalized;
+    };
+
+    SavedState saved_state;
 
     DebugData debug_data;
   };

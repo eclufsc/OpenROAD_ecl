@@ -14,12 +14,9 @@
 
 // todo: create function to highlight area in openroad (maybe create a dummy cell and add it to a group?
 
-// todo: maybe remove row_to_y(?) and x_to_site
-// todo: maybe change collide definition to receive pos1_min, pos1_max, pos2_min, pos2_max
-
 namespace tut {
     using namespace odb;
-    using std::vector, std::pair, std::sort, std::lower_bound, std::upper_bound, std::move, std::string;
+    using std::vector, std::pair, std::sort, std::lower_bound, std::upper_bound, std::move, std::string, std::make_pair;
     using std::numeric_limits;
 
     Tutorial::Tutorial() :
@@ -69,12 +66,12 @@ namespace tut {
 
         int x = cell->getBBox()->xMin();
         int y = cell->getBBox()->yMin();
-        cell->setLocation(x + delta_x, y);
+        set_pos(cell, x + delta_x, y, false);
 
         return true;
     }
 
-    // conditions:
+    // note: conditions:
     // fixed cells are already legalized
     // fixed cells can occupy many rows
     // non-fixed cells occupy only one row
@@ -402,17 +399,16 @@ namespace tut {
             return;
         }
 
-        dbSet<dbInst> cells = block->getInsts();
-        for (dbInst* cell : cells) {
-            if (cell->isFixed()) continue;
+        dbSet<dbInst> insts = block->getInsts();
+        for (dbInst* inst : insts) {
+            if (inst->isFixed()) continue;
 
-            int x = cell->getBBox()->xMin();
-            int y = cell->getBBox()->yMin();
+            Rect rect = inst->getBBox()->getBox();
 
-            int new_x = x + (rand() % get_width(cell) - get_width(cell)/2);
-            int new_y = y + (rand() % get_height(cell) - get_height(cell)/2);
+            int new_x = rect.xMin() + (rand() % rect.dx() - rect.dx()/2);
+            int new_y = rect.yMin() + (rand() % rect.dy() - rect.dy()/2);
 
-            set_pos(cell, new_x, new_y);
+            set_pos(inst, new_x, new_y, false);
         }
     }
 
@@ -423,31 +419,28 @@ namespace tut {
             return;
         }
 
-        Rect rect = block->getCoreArea();
-        int min_x = rect.xMin();
-        int max_x = rect.xMax();
-        int min_y = rect.yMin();
-        int max_y = rect.yMax();
+        Rect core = block->getCoreArea();
 
-        dbSet<dbInst> cells = block->getInsts();
-        for (dbInst* cell : cells) {
-            if (cell->isFixed()) continue;
+        dbSet<dbInst> insts = block->getInsts();
+        for (dbInst* inst : insts) {
+            if (inst->isFixed()) continue;
 
-            int x;
-            int y;
+            Rect cell = inst->getBBox()->getBox();
             
             while (true) {
-                x = rand()%(max_x-min_x) + min_x;
-                y = rand()%(max_y-min_y) + min_y;
+                cell.moveTo(
+                    core.xMin() + rand() % core.dx(),
+                    core.yMin() + rand() % core.dy()
+                );
 
-                if (x + get_width(cell) <= max_x
-                    && y + get_height(cell) <= max_y
+                if (cell.xMax() <= core.xMax()
+                    && cell.yMax() <= core.yMax()
                 ) {
                     break;
                 }
             }
 
-            cell->setLocation(x, y);
+            set_pos(inst, cell.xMin(), cell.yMin(), false);
         }
     }
 
@@ -470,6 +463,15 @@ namespace tut {
             return;
         }
 
+        vector<pair<Rect, dbInst*>> cells;
+        {
+            dbSet<dbInst> cells_set = block->getInsts();
+            for (dbInst* cell : cells_set) {
+                Rect rect = cell->getBBox()->getBox();
+                cells.push_back({rect, cell});
+            }
+        }
+
         vector<pair<Rect, int>> rows;
         {
             dbSet<dbRow> rows_set = block->getRows();
@@ -477,15 +479,6 @@ namespace tut {
                 Rect rect = row->getBBox();
                 int site_width = row->getSite()->getWidth();
                 rows.push_back({rect, site_width});
-            }
-        }
-
-        vector<pair<Rect, dbInst*>> cells;
-        {
-            dbSet<dbInst> cells_set = block->getInsts();
-            for (dbInst* cell : cells_set) {
-                Rect rect = cell->getBBox()->getBox();
-                cells.push_back({rect, cell});
             }
         }
 
@@ -568,7 +561,7 @@ namespace tut {
         vector<pair<Rect, int>> rows_and_sites,
         vector<pair<Rect, dbInst*>> cells_and_insts
     ) {
-        saved_costs.clear();
+        last_costs.clear();
 
         // todo: delete
         using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
@@ -754,7 +747,7 @@ namespace tut {
                 fail_counter++;
                 fprintf(stderr, "ERROR: could not place cell\n");
             } else {
-                saved_costs.emplace_back(dbu_to_microns(sqrt(best_cost)), p_cells[cell_i]);
+                last_costs.emplace_back(dbu_to_microns(sqrt(best_cost)), p_cells[cell_i]);
 
                 cells_per_row[best_row_i].push_back(cell_i);
 
@@ -796,7 +789,7 @@ namespace tut {
                 int x = cluster.x;
                 while (cell_i <= cluster.last_cell) {
                     int p_cell_i = cells_in_row[cell_i];
-                    set_pos(p_cells[p_cell_i], x, rows[row_i].yMin());
+                    set_pos(p_cells[p_cell_i], x, rows[row_i].yMin(), true);
                     x += cells[p_cell_i].dx();
 
                     cell_i++;
@@ -908,83 +901,38 @@ namespace tut {
             return;
         }
 
-        // separate fixed from non-fixed
-        vector<Rect> fixed_cells;
         vector<pair<Rect, dbInst*>> cells;
-        dbSet<dbInst> cells_set = block->getInsts();
-        for (dbInst* p_cell : cells_set) {
-            Rect rect = p_cell->getBBox()->getBox();
-            if (p_cell->isFixed()) fixed_cells.push_back(rect);
-            else                   cells.push_back({rect, p_cell});
+        vector<Rect> fixed_cells;
+        {
+            dbSet<dbInst> cells_set = block->getInsts();
+            for (dbInst* inst : cells_set) {
+                Rect rect = inst->getBBox()->getBox();
+                if (inst->isFixed()
+                    || cells_legalized.find(inst) != cells_legalized.end()
+                ) {
+                    fixed_cells.push_back(rect);
+                } else {
+                    cells.push_back({rect, inst});
+                }
+            }
         }
 
-        // get rows
-        vector<pair<Rect, int>> rows_and_sites;
+        vector<pair<Rect, int>> rows;
         {
             dbSet<dbRow> rows_set = block->getRows();
             for (dbRow* row : rows_set) {
                 Rect rect = row->getBBox();
                 int site_width = row->getSite()->getWidth();
-                rows_and_sites.push_back({rect, site_width});
+                rows.push_back({rect, site_width});
             }
 
-            sort(rows_and_sites.begin(), rows_and_sites.end(),
-                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
-                    return a.first.yMin() < b.first.yMin();
-                }
-            );
-
-            // split rows colliding with fixed cells
-            for (Rect fixed_cell : fixed_cells) {
-                int row_start = std::lower_bound(rows_and_sites.begin(), rows_and_sites.end(), dummy_row_and_site(fixed_cell.yMin()),
-                    [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
-                        return a.first.yMin() < b.first.yMin();
-                    }
-                )
-                    - rows_and_sites.begin();
-
-                int row_end_exc = std::lower_bound(rows_and_sites.begin(), rows_and_sites.end(), dummy_row_and_site(fixed_cell.yMax()),
-                    [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
-                        return a.first.yMin() < b.first.yMin();
-                    }
-                )
-                    - rows_and_sites.begin();
-
-                int i = row_start;
-                for (int count = row_start; count < row_end_exc; count++) {
-                    auto [row, site_width] = rows_and_sites[i];
-                    if (collide(fixed_cell.xMin(), fixed_cell.xMax(), row.xMin(), row.xMax())) {
-                        rows_and_sites.erase(rows_and_sites.begin() + i);
-
-                        if (row.xMin() < fixed_cell.xMin()) {
-                            Rect row_left(
-                                row.xMin(), row.yMin(),
-                                fixed_cell.xMin(), row.yMax()
-                            );
-                            rows_and_sites.insert(rows_and_sites.begin() + i, {row_left, site_width});
-
-                            i += 1;
-                        }
-                        if (fixed_cell.xMax() < row.xMax()) {
-                            Rect row_right(
-                                fixed_cell.xMax(), row.yMin(),
-                                row.xMax(), row.yMax()
-                            );
-                            rows_and_sites.insert(rows_and_sites.begin() + i, {row_right, site_width});
-
-                            i += 1;
-                        }
-                    } else {
-                        i += 1;
-                    }
-                }
-            }
+            sort_and_split_rows(&rows, fixed_cells);
         }
 
-        tetris(move(rows_and_sites), move(cells));
+        tetris(move(rows), move(cells));
     }
 
-    void Tutorial::tetris(int x1, int y1, int x2, int y2) {
+    void Tutorial::tetris(int x1, int y1, int x2, int y2, bool include_boundary) {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
             area_x_min = x1;
@@ -1007,6 +955,41 @@ namespace tut {
             return;
         }
 
+        vector<pair<Rect, dbInst*>> cells;
+        vector<Rect> fixed_cells;
+        {
+            dbSet<dbInst> insts = block->getInsts();
+            
+            for (dbInst* inst : insts) {
+                Rect rect = inst->getBBox()->getBox();
+
+                if (!collide(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
+                    || !collide(rect.yMin(), rect.yMax(), area_y_min, area_y_max)) {
+                    continue;
+                }
+
+                int cx = rect.xMin() + rect.dx()/2;
+                int cy = rect.yMin() + rect.dy()/2;
+
+                bool center_inside;
+                if (include_boundary) {
+                    center_inside = area_x_min <= cx && cx <= area_x_max
+                                 && area_y_min <= cy && cy <= area_y_max;
+                } else {
+                    center_inside = area_x_min < cx && cx < area_x_max
+                                 && area_y_min < cy && cy < area_y_max;
+                }
+
+                if (center_inside && !inst->isFixed()) {
+                    cells.push_back({rect, inst});
+                } else {
+                    if (cells_legalized.find(inst) != cells_legalized.end()) {
+                        fixed_cells.push_back(rect);
+                    }
+                }
+            }
+        }
+
         vector<pair<Rect, int>> rows;
         {
             dbSet<dbRow> rows_set = block->getRows();
@@ -1025,30 +1008,8 @@ namespace tut {
                     rows.push_back({rect, site_width});
                 }
             }
-        }
 
-        vector<pair<Rect, dbInst*>> cells;
-        {
-            dbSet<dbInst> cells_set = block->getInsts();
-            for (dbInst* cell : cells_set) {
-                Rect rect = cell->getBBox()->getBox();
-
-                int x_min = rect.xMin();
-                int x_max = rect.xMax();
-                int y_min = rect.yMin();
-                int y_max = rect.yMax();
-
-                int x2_min = area_x_min + rect.dx()/2;
-                int x2_max = area_x_max - rect.dx()/2;
-                int y2_min = area_y_min + rect.dy()/2;
-                int y2_max = area_y_max - rect.dy()/2;
-
-                if (collide(x_min, x_max, x2_min, x2_max)
-                    && collide(y_min, y_max, y2_min, y2_max)
-                ) {
-                    cells.push_back({rect, cell});
-                }
-            }
+            sort_and_split_rows(&rows, fixed_cells);
         }
 
         tetris(move(rows), move(cells));
@@ -1062,7 +1023,7 @@ namespace tut {
         using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
         auto start = high_resolution_clock::now();
 
-        saved_costs.clear();
+        last_costs.clear();
 
         // todo: delete
         setbuf(stdout, 0);
@@ -1202,7 +1163,7 @@ namespace tut {
                 continue;
             }
 
-            saved_costs.emplace_back(dbu_to_microns(sqrt(lowest_cost)), cells_and_insts[cell_i].second);
+            last_costs.emplace_back(dbu_to_microns(sqrt(lowest_cost)), cells_and_insts[cell_i].second);
 
             int new_x = winning_site_x;
             int new_y = rows_and_sites[winning_row].first.yMin();
@@ -1243,7 +1204,7 @@ namespace tut {
         logger->report(std::to_string(duration_cast<milliseconds>(end - start).count()));
 
         for (auto const& [rect, p_cell] : cells_and_insts) {
-            set_pos(p_cell, rect.xMin(), rect.yMin());
+            set_pos(p_cell, rect.xMin(), rect.yMin(), true);
         }
 
         if (not_placed_n == 0) {
@@ -1310,7 +1271,7 @@ namespace tut {
         return (double) dbu / block->getDbUnitsPerMicron();
     };
 
-    double Tutorial::microns_to_dbu(double microns) {
+    int64_t Tutorial::microns_to_dbu(double microns) {
         dbBlock* block = get_block();
         if (!block) {
             fprintf(stderr, "%s\n", error_message_from_get_block());
@@ -1328,17 +1289,10 @@ namespace tut {
         return {microns_to_dbu(x), microns_to_dbu(y)};
     };
 
-    int Tutorial::get_width(dbInst* cell) {
-        dbBox* box = cell->getBBox();
-        return box->xMax() - box->xMin();
-    };
+    void Tutorial::set_pos(dbInst* cell, int x, int y, bool legalizing) {
+        if (legalizing) cells_legalized.insert(cell);
+        else            cells_legalized.erase(cell);
 
-    int Tutorial::get_height(dbInst* cell) {
-        dbBox* box = cell->getBBox();
-        return box->yMax() - box->yMin();
-    };
-
-    void Tutorial::set_pos(dbInst* cell, int x, int y) {
         cell->setLocation(x, y);
     };
 
@@ -1347,12 +1301,6 @@ namespace tut {
         row->getOrigin(x, y);
         return y;
     };
-
-    int Tutorial::x_to_site(dbRow* row, int x) {
-        int row_start = row->getBBox().xMin();
-        int site_width = row->getSite()->getWidth();
-        return (x - row_start)/site_width;
-    }
 
     bool Tutorial::collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max) {
         return pos1_min < pos2_max && pos2_min < pos1_max;
@@ -1363,42 +1311,46 @@ namespace tut {
         return std::make_pair(Rect(0, y_min, int_max, int_max), 0);
     }
 
-    void Tutorial::save_pos() {
-        saved_pos.clear();
+    void Tutorial::save_state() {
+        {
+            saved_state.pos.clear();
 
-        dbBlock* block = get_block();
-        if (!block) {
-            std::string reason = error_message_from_get_block();
-            return;
-        }
+            dbBlock* block = get_block();
+            if (!block) {
+                std::string reason = error_message_from_get_block();
+                return;
+            }
 
-        dbSet<dbInst> insts = block->getInsts();
+            dbSet<dbInst> insts = block->getInsts();
 
-        for (dbInst* inst : insts) {
-            if (!inst->isFixed()) {
-                Rect cell = inst->getBBox()->getBox();
-                saved_pos.emplace_back(cell, inst);
+            for (dbInst* inst : insts) {
+                if (!inst->isFixed()) {
+                    Rect cell = inst->getBBox()->getBox();
+                    saved_state.pos.emplace_back(cell, inst);
+                }
             }
         }
+        saved_state.cells_legalized = cells_legalized;
     }
 
-    void Tutorial::load_pos() {
-        for (auto const& [cell, inst] : saved_pos) {
-            set_pos(inst, cell.xMin(), cell.yMin());
+    void Tutorial::load_state() {
+        for (auto const& [cell, inst] : saved_state.pos) {
+            set_pos(inst, cell.xMin(), cell.yMin(), false);
         }
+        cells_legalized = saved_state.cells_legalized;
     }
 
     void Tutorial::save_pos_to_file(string path) {
-        save_pos();
+        save_state();
 
         std::ofstream file(path);
-        for (auto const& [cell, inst] : saved_pos) {
+        for (auto const& [cell, inst] : saved_state.pos) {
             file << inst->getName() << " " << cell.xMin() << " " << cell.yMin() << "\n";
         }
     }
 
     void Tutorial::load_pos_from_file(string path) {
-        saved_pos.clear();
+        saved_state.pos.clear();
 
         std::ifstream file(path);
         if (!file) {
@@ -1439,20 +1391,80 @@ namespace tut {
                 Rect pos = inst->getBBox()->getBox();
 
                 pos.moveTo(x, y);
-                saved_pos.emplace_back(pos, inst);
+                saved_state.pos.emplace_back(pos, inst);
             } else {
                 fprintf(stderr, "The cell %s does not exist\n", name.c_str());
             }
         }
 
-        load_pos();
+        load_state();
     }
 
     void Tutorial::save_costs_to_file(string path) {
         std::ofstream file(path);
 
-        for (auto const& [cost, inst] : saved_costs) {
+        for (auto const& [cost, inst] : last_costs) {
             file << cost << "\n";
+        }
+    }
+
+    void Tutorial::show_legalized_vector() {
+        int count = 0;
+        for (dbInst* inst : cells_legalized) {
+            logger->report(inst->getName());
+            count++;
+        }
+        logger->report(std::to_string(count) + " cells legalized");
+    }
+
+    void Tutorial::sort_and_split_rows(vector<pair<Rect, int>>* rows, vector<Rect> const& fixed_cells) {
+        sort(rows->begin(), rows->end(),
+            [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                return a.first.yMin() < b.first.yMin();
+            }
+        );
+
+        for (Rect const& fixed_cell : fixed_cells) {
+            int row_start = std::lower_bound(rows->begin(), rows->end(), dummy_row_and_site(fixed_cell.yMin()),
+                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                    return a.first.yMin() < b.first.yMin();
+                }
+            ) - rows->begin();
+
+            int row_end_exc = std::lower_bound(rows->begin(), rows->end(), dummy_row_and_site(fixed_cell.yMax()),
+                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                    return a.first.yMin() < b.first.yMin();
+                }
+            ) - rows->begin();
+
+            int i = row_start;
+            for (int count = row_start; count < row_end_exc; count++) {
+                auto [row, site_width] = (*rows)[i];
+                if (collide(fixed_cell.xMin(), fixed_cell.xMax(), row.xMin(), row.xMax())) {
+                    rows->erase(rows->begin() + i);
+
+                    if (row.xMin() < fixed_cell.xMin()) {
+                        Rect row_left(
+                            row.xMin(), row.yMin(),
+                            fixed_cell.xMin(), row.yMax()
+                        );
+                        rows->insert(rows->begin() + i, {row_left, site_width});
+
+                        i += 1;
+                    }
+                    if (fixed_cell.xMax() < row.xMax()) {
+                        Rect row_right(
+                            fixed_cell.xMax(), row.yMin(),
+                            row.xMax(), row.yMax()
+                        );
+                        rows->insert(rows->begin() + i, {row_right, site_width});
+
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
         }
     }
 }

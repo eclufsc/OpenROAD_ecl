@@ -45,8 +45,14 @@ void abacus() {
   tutorial->abacus();
 }
 
-void abacus(int x1, int y1, int x2, int y2) {
+void abacus_mi(double mi_x1, double mi_y1, double mi_x2, double mi_y2) {
   Tutorial* tutorial = getTutorial();
+
+  int x1 = tutorial->microns_to_dbu(mi_x1);
+  int y1 = tutorial->microns_to_dbu(mi_y1);
+  int x2 = tutorial->microns_to_dbu(mi_x2);
+  int y2 = tutorial->microns_to_dbu(mi_y2);
+
   tutorial->abacus(x1, y1, x2, y2);
 }
 
@@ -62,8 +68,14 @@ void is_legalized() {
   }
 }
 
-void is_legalized(int x1, int y1, int x2, int y2) {
+void is_legalized_mi(double mi_x1, double mi_y1, double mi_x2, double mi_y2) {
   Tutorial* tutorial = getTutorial();
+
+  int x1 = tutorial->microns_to_dbu(mi_x1);
+  int y1 = tutorial->microns_to_dbu(mi_y1);
+  int x2 = tutorial->microns_to_dbu(mi_x2);
+  int y2 = tutorial->microns_to_dbu(mi_y2);
+
   auto [ok, reason] = tutorial->is_legalized(x1, y1, x2, y2);
 
   if (ok) {
@@ -73,8 +85,14 @@ void is_legalized(int x1, int y1, int x2, int y2) {
   }
 }
 
-void is_legalized_excluding_border(int x1, int y1, int x2, int y2) {
+void is_legalized_excluding_border_mi(double mi_x1, double mi_y1, double mi_x2, double mi_y2) {
   Tutorial* tutorial = getTutorial();
+
+  int x1 = tutorial->microns_to_dbu(mi_x1);
+  int y1 = tutorial->microns_to_dbu(mi_y1);
+  int x2 = tutorial->microns_to_dbu(mi_x2);
+  int y2 = tutorial->microns_to_dbu(mi_y2);
+
   auto [ok, reason] = tutorial->is_legalized_excluding_border(x1, y1, x2, y2);
 
   if (ok) {
@@ -104,19 +122,25 @@ void tetris() {
   tutorial->tetris();
 }
 
-void tetris(int area_x1, int area_y1, int area_x2, int area_y2) {
+void tetris_mi(double mi_x1, double mi_y1, double mi_x2, double mi_y2) {
   Tutorial* tutorial = getTutorial();
-  tutorial->tetris(area_x1, area_y1, area_x2, area_y2);
+
+  int x1 = tutorial->microns_to_dbu(mi_x1);
+  int y1 = tutorial->microns_to_dbu(mi_y1);
+  int x2 = tutorial->microns_to_dbu(mi_x2);
+  int y2 = tutorial->microns_to_dbu(mi_y2);
+
+  tutorial->tetris(x1, y1, x2, y2);
 }
 
-void save_pos() {
+void save_state() {
   Tutorial* tutorial = getTutorial();
-  tutorial->save_pos();
+  tutorial->save_state();
 }
 
-void load_pos() {
+void load_state() {
   Tutorial* tutorial = getTutorial();
-  tutorial->load_pos();
+  tutorial->load_state();
 }
 
 void save_pos_to_file(const char* path) {
@@ -132,6 +156,11 @@ void load_pos_from_file(const char* path) {
 void save_costs_to_file(const char* path) {
   Tutorial* tutorial = getTutorial();
   tutorial->save_costs_to_file(path);
+}
+
+void show_legalized_vector() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->show_legalized_vector();
 }
 
 } // namespace
