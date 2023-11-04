@@ -20,7 +20,7 @@
 
 namespace tut {
     using namespace odb;
-    using std::vector, std::pair, std::sort, std::lower_bound, std::upper_bound, std::move, std::string, std::make_pair;
+    using std::vector, std::pair, std::sort, std::lower_bound, std::upper_bound, std::move, std::string, std::make_pair, std::tuple;
     using std::numeric_limits;
 
     Tutorial::Tutorial() :
@@ -452,69 +452,63 @@ namespace tut {
     int Tutorial::max_clusters = 0;
 
     void Tutorial::abacus() {
-        auto [rows, cells] = get_splited_rows_and_cells();
-        abacus(move(rows), move(cells));
+        auto [rows, splits_per_rows, cells] = get_sorted_rows_splits_and_cells();
+        abacus(move(rows), move(splits_per_rows), move(cells));
     }
 
     void Tutorial::abacus(int x1, int y1, int x2, int y2, bool include_boundary) {
-        auto [rows, cells] = get_splited_rows_and_cells(x1, y1, x2, y2, include_boundary);
-        abacus(move(rows), move(cells));
+        auto [rows, splits_per_rows, cells] =
+            get_sorted_rows_splits_and_cells(
+                x1, y1, x2, y2, include_boundary
+            );
+        abacus(move(rows), move(splits_per_rows), move(cells));
     }
 
+    // todo: change && to const& for consistency (and because rows and cells should not be changed in this function
+    // todo: check loop_x, loop_y and evaluate and change clusters and cells_per_row to consider split (solution: create new vector for row indices)
     void Tutorial::abacus(
-        vector<Row> rows,
-        vector<Cell> cells
+        vector<Row>&& rows,
+        vector<vector<Split>>&& splits_per_row,
+        vector<Cell>&& cells
     ) {
+        // todo: delete
+        setbuf(stdout, 0);
+
         last_costs.clear();
-
-        std::sort(
-            cells.begin(), cells.end(),
-            [&](Cell const& a, Cell const& b) {
-                return a.first.xMin() < b.first.xMin();
-            }
-        );
-
-        sort(rows.begin(), rows.end(),
-            [&](Row const& a, Row const& b) {
-                return a.first.yMin() < b.first.yMin();
-            }
-        );
 
         // todo: delete
         using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
         auto start = high_resolution_clock::now();
 
         // algorithm
-        vector<vector<int>> cells_per_row(rows.size());
-        vector<vector<AbacusCluster>> clusters_per_row(rows.size());
+        vector<int> row_to_start_split(rows.size());
+        int total_splits = 0;
+        for (int row_i = 0; row_i < rows.size(); row_i++) {
+            row_to_start_split[row_i] = total_splits;
+            total_splits += splits_per_row[row_i].size();
+        }
+
+        vector<vector<int>> cells_per_accum_split(total_splits);
+        vector<vector<AbacusCluster>> clusters_per_accum_split(total_splits);
 
         // todo: delete
         int last_percentage = 0;
-
-        // todo: delete
-        int max_loop_iter = 0;
 
         int fail_counter = 0;
 
         for (int cell_i = 0; cell_i < cells.size(); cell_i++) {
             auto const& [global_pos, inst] = cells[cell_i];
 
-            int approx_row = std::lower_bound(
-                rows.begin(), rows.end(), dummy_row_and_site(global_pos.yMin()),
-                [&](Row const& a, Row const& b) {
-                    return a.first.yMin() < b.first.yMin();
-                }
-            ) - rows.begin();
-
-            if (approx_row == rows.size()) approx_row -= 1;
-
             double best_cost = std::numeric_limits<double>::max();
             int best_row_i = -1;
+            int best_split_i = -1;
             AbacusCluster best_new_cluster;
             int best_previous_i = 0;
 
-            auto loop_body = [&](int row_i) -> bool {
-                auto const& [row, site_width] = rows[row_i];
+            auto evaluate = [&](int row_i, double y_cost, int split_i) {
+                auto const& [whole_row, site_width] = rows[row_i];
+                auto [x_min, x_max] = splits_per_row[row_i][split_i];
+                Rect row(x_min, whole_row.yMin(), x_max, whole_row.yMax());
 
                 double weight = global_pos.dx()*global_pos.dy();
                 AbacusCell cell = {cell_i, global_pos, weight};
@@ -522,50 +516,90 @@ namespace tut {
                 AbacusCluster new_cluster;
                 int previous_i;
 
+                int accum_split_i = row_to_start_split[row_i] + split_i;
                 if (!abacus_try_add_cell(
                     row, site_width,
                     cell,
-                    clusters_per_row[row_i],
+                    clusters_per_accum_split[accum_split_i],
                     &new_cluster, &previous_i
                 )) {
-                    return true;
+                    return;
                 }
 
                 int new_x = new_cluster.x + new_cluster.width - global_pos.dx();
-                int new_y = row.yMin();
-
                 double sqrt_x_cost = new_x - global_pos.xMin();
                 double x_cost = sqrt_x_cost*sqrt_x_cost;
-                double sqrt_y_cost = new_y - global_pos.yMin();
-                double y_cost = sqrt_y_cost*sqrt_y_cost;
-
-                if (y_cost > best_cost) return false;
 
                 double curr_cost = x_cost + y_cost;
 
                 if (curr_cost < best_cost) {
                     best_cost = curr_cost;
                     best_row_i = row_i;
+                    best_split_i = split_i;
                     best_new_cluster = new_cluster;
                     best_previous_i = previous_i;
+                }
+            };
+
+            auto loop_y = [&](int row_i) -> bool {
+                Rect const& row_rect = rows[row_i].first;
+                double sqrt_y_cost = row_rect.yMin() - global_pos.yMin();
+                double y_cost = sqrt_y_cost*sqrt_y_cost;
+                if (y_cost > best_cost) return false;
+
+                vector<Split> const& splits = splits_per_row[row_i];
+
+                auto loop_x = [&](int split_i, bool new_row, int comp_x) {
+                    if (!new_row) {
+                        double sqrt_x_cost = comp_x - global_pos.xMin();
+                        double x_cost = sqrt_x_cost*sqrt_x_cost;
+                        if (x_cost > best_cost) return false;
+                    }
+
+                    evaluate(row_i, y_cost, split_i);
+
+                    return true;
+                };
+
+                int approx_split = std::lower_bound(splits.begin(), splits.end(),
+                    make_pair(0, global_pos.xMin()),
+                    [&](Split const& a, Split const& b) {
+                        return a.second < b.second;
+                    }
+                ) - splits.begin();
+
+                bool new_row = true;
+                for (int split_i = approx_split; split_i < splits.size(); split_i++) {
+                    int x_min = splits[split_i].first;
+                    if (!loop_x(split_i, new_row, x_min)) break;
+                    new_row = false;
+                }
+                for (int split_i = approx_split-1; split_i >= 0; split_i--) {
+                    int x_max = splits[split_i].second;
+                    if (!loop_x(split_i, new_row, x_max - global_pos.dx())) break;
+                    new_row = false;
                 }
 
                 return true;
             };
 
-            // todo: delete
-            int curr_iter = 0;
+            Rect dummy_rect = Rect(
+                0, global_pos.yMin()-1,  // min
+                1, global_pos.yMin()     // max
+            );
+            int approx_row = std::lower_bound(
+                rows.begin(), rows.end(), make_pair(dummy_rect, 0),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMax() < b.first.yMax();
+                }
+            ) - rows.begin();
 
             for (int row_i = approx_row; row_i < rows.size(); row_i++) {
-                if (!loop_body(row_i)) break;
-                curr_iter++;
+                if (!loop_y(row_i)) break;;
             }
             for (int row_i = approx_row-1; row_i >= 0; row_i--) {
-                if (!loop_body(row_i)) break;
-                curr_iter++;
+                if (!loop_y(row_i)) break;
             }
-
-            if (curr_iter > max_loop_iter) max_loop_iter = curr_iter;
 
             if (best_row_i == -1) {
                 fail_counter++;
@@ -573,10 +607,14 @@ namespace tut {
             } else {
                 last_costs.emplace_back(dbu_to_microns(sqrt(best_cost)), inst);
 
-                cells_per_row[best_row_i].push_back(cell_i);
-
-                clusters_per_row[best_row_i].resize(best_previous_i+1);
-                clusters_per_row[best_row_i].push_back(best_new_cluster);
+                int accum_split_i =
+                    row_to_start_split[best_row_i] + best_split_i;
+                cells_per_accum_split[accum_split_i]
+                    .push_back(cell_i);
+                clusters_per_accum_split[accum_split_i]
+                    .resize(best_previous_i+1);
+                clusters_per_accum_split[accum_split_i]
+                    .push_back(best_new_cluster);
             }
 
             int curr_percentage = ((cell_i+1)*10 / (int)cells.size())*10;
@@ -592,35 +630,64 @@ namespace tut {
         logger->report("Time spent (ms): " + std::to_string(duration_cast<milliseconds>(end - start).count()));
         
         // checking whether the cells preserved relative ordering
-        for (vector<int> const& row : cells_per_row) {
-            int last_i = -1;
-            for (int cell_i : row) {
-                if (cell_i < last_i) {
-                    logger->report("Order changed");
+        {
+            int order_changed_n = 0;
+            int accum_split_i = 0;
+            for (int row_i = 0; row_i < rows.size(); row_i++) {
+                int last_cell_i = -1;
+                for (
+                    int split_i = 0;
+                    split_i < splits_per_row[row_i].size();
+                    split_i++
+                ) {
+                    for (int cell_i : cells_per_accum_split[accum_split_i]) {
+                        if (cell_i < last_cell_i) {
+                            if (order_changed_n == 0) {
+                                printf("\nOrder changed:\n");
+                                char const* name1 = cells[last_cell_i].second->getName().c_str();
+                                char const* name2 = cells[cell_i].second->getName().c_str();
+                                printf("%s and %s\n", name1, name2);
+                            }
+                            order_changed_n++;
+                        }
+                        last_cell_i = cell_i;
+                    }
+                    accum_split_i += 1;
                 }
-                last_i = cell_i;
+            }
+
+            if (order_changed_n) {
+                logger->report("Order changed of " + std::to_string(order_changed_n) + " cells");
             }
         }
 
-        for (int row_i = 0; row_i < cells_per_row.size(); row_i++) {
-            vector<int> const& cells_in_row = cells_per_row[row_i];
-            vector<AbacusCluster> const& clusters_in_row = clusters_per_row[row_i];
+        {
+            int accum_split_i = 0;
+            for (int row_i = 0; row_i < rows.size(); row_i++) {
+                vector<Split> const& splits = splits_per_row[row_i];
+                for (int split_i = 0; split_i < splits.size(); split_i++) {
+                    vector<int> const& cells_in_row
+                        = cells_per_accum_split[accum_split_i];
+                    vector<AbacusCluster> const& clusters
+                        = clusters_per_accum_split[accum_split_i];
 
-            int cell_i = 0;
-            for (int cluster_i = 0; cluster_i < clusters_in_row.size(); cluster_i++) {
-                AbacusCluster const& cluster = clusters_in_row[cluster_i];
+                    int split_cell_i = 0;
+                    for (AbacusCluster const& cluster : clusters) {
+                        int x = cluster.x;
+                        while (split_cell_i <= cluster.last_cell) {
+                            int cell_i = cells_in_row[split_cell_i];
+                            auto const& [cell, inst] = cells[cell_i];
 
-                int x = cluster.x;
-                while (cell_i <= cluster.last_cell) {
-                    int p_cell_i = cells_in_row[cell_i];
-                    auto const& [cell, inst] = cells[p_cell_i];
+                            Rect const& row = rows[row_i].first;
 
-                    Rect const& row = rows[row_i].first;
+                            set_pos(inst, x, row.yMin(), true);
 
-                    set_pos(cells[p_cell_i].second, x, row.yMin(), true);
-                    x += cell.dx();
+                            x += cell.dx();
+                            split_cell_i++;
+                        }
+                    }
 
-                    cell_i++;
+                    accum_split_i += 1;
                 }
             }
         }
@@ -631,7 +698,6 @@ namespace tut {
             logger->report("Could not place " + std::to_string(fail_counter) + " cells");
         }
 
-        printf("max_loop_iter = %d\n", max_loop_iter);
         printf("max_clusters = %d\n", max_clusters);
         printf("rows size = %lu\n", rows.size());
         printf("cells size = %lu\n", cells.size());
@@ -719,19 +785,20 @@ namespace tut {
         return true;
     }
 
+    // todo: add splits_per_row to tetris
     void Tutorial::tetris() {
-        auto [rows, cells] = get_splited_rows_and_cells();
+        auto [rows, splits_per_row, cells] = get_sorted_rows_splits_and_cells();
         tetris(move(rows), move(cells));
     }
 
     void Tutorial::tetris(int x1, int y1, int x2, int y2, bool include_boundary) {
-        auto [rows, cells] = get_splited_rows_and_cells(x1, y1, x2, y2, include_boundary);
+        auto [rows, splits_per_row, cells] = get_sorted_rows_splits_and_cells(x1, y1, x2, y2, include_boundary);
         tetris(move(rows), move(cells));
     }
 
     void Tutorial::tetris(
-        vector<Row> rows_and_sites,
-        vector<Cell> cells_and_insts
+        vector<Row>&& rows_and_sites,
+        vector<Cell>&& cells_and_insts
     ) {
         if (cells_and_insts.size() == 0) return;
 
@@ -1126,15 +1193,26 @@ namespace tut {
         logger->report(std::to_string(count) + " cells legalized");
     }
 
-    void Tutorial::sort_and_split_rows(vector<Row>* rows, vector<Rect> const& fixed_cells) {
+    auto Tutorial::sort_and_get_splits(
+        vector<Row>* rows,
+        vector<Rect> const& fixed_cells
+    ) -> vector<vector<Split>> {
         sort(rows->begin(), rows->end(),
             [&](Row const& a, Row const& b) {
                 return a.first.yMin() < b.first.yMin();
             }
         );
 
+        // todo: maybe vector<set<Split>> and when returning converting to vector<vector<Split>> is faster? Because vector::erase is O(n)
+        vector<vector<Split>> splits_per_row(rows->size());
+        for (int row_i = 0; row_i < rows->size(); row_i++) {
+            Rect const& rect = (*rows)[row_i].first;
+            splits_per_row[row_i].emplace_back(rect.xMin(), rect.xMax());
+        }
+
         for (Rect const& fixed_cell : fixed_cells) {
-            int row_start = std::lower_bound(rows->begin(), rows->end(), dummy_row_and_site(fixed_cell.yMin()),
+            int row_start = std::lower_bound(rows->begin(), rows->end(),
+                dummy_row_and_site(fixed_cell.yMin()),
                 [&](Row const& a, Row const& b) {
                     return a.first.yMin() < b.first.yMin();
                 }
@@ -1146,39 +1224,37 @@ namespace tut {
                 }
             ) - rows->begin();
 
-            int i = row_start;
-            for (int count = row_start; count < row_end_exc; count++) {
-                auto [row, site_width] = (*rows)[i];
-                if (collide(fixed_cell.xMin(), fixed_cell.xMax(), row.xMin(), row.xMax())) {
-                    rows->erase(rows->begin() + i);
+            for (int row_i = row_start; row_i < row_end_exc; row_i++) {
+                vector<Split>* splits = &splits_per_row[row_i];
 
-                    if (row.xMin() < fixed_cell.xMin()) {
-                        Rect row_left(
-                            row.xMin(), row.yMin(),
-                            fixed_cell.xMin(), row.yMax()
-                        );
-                        rows->insert(rows->begin() + i, {row_left, site_width});
-
-                        i += 1;
+                auto split = lower_bound(splits->begin(), splits->end(),
+                    make_pair(0, fixed_cell.xMin()),
+                    [&](Split const& a, Split const& b) {
+                        return a.second < b.second;
                     }
-                    if (fixed_cell.xMax() < row.xMax()) {
-                        Rect row_right(
-                            fixed_cell.xMax(), row.yMin(),
-                            row.xMax(), row.yMax()
-                        );
-                        rows->insert(rows->begin() + i, {row_right, site_width});
+                );
+                if (split == splits->end()) continue;
 
-                        i += 1;
-                    }
-                } else {
-                    i += 1;
+                auto [row_x_min, row_x_max] = *split;
+                if (fixed_cell.xMax() <= row_x_min) continue;
+                if (row_x_max <= fixed_cell.xMin()) continue;
+
+                splits->erase(split);
+
+                if (fixed_cell.xMax() < row_x_max) {
+                    splits->insert(split, make_pair(fixed_cell.xMax(), row_x_max));
+                }
+                if (row_x_min < fixed_cell.xMin()) {
+                    splits->insert(split, make_pair(row_x_min, fixed_cell.xMin()));
                 }
             }
         }
+
+        return splits_per_row;
     }
 
-    auto Tutorial::get_splited_rows_and_cells()
-        -> pair<vector<Row>, vector<Cell>>
+    auto Tutorial::get_sorted_rows_splits_and_cells()
+        -> tuple<vector<Row>, vector<vector<Split>>, vector<Cell>>
     {
         dbBlock* block = get_block();
         if (!block) {
@@ -1196,13 +1272,21 @@ namespace tut {
 //                    || cells_legalized.find(inst) != cells_legalized.end()
                 ) {
                     fixed_cells.push_back(rect);
+                    fixed_names.push_back(inst->getName());
                 } else {
                     cells.push_back({rect, inst});
                 }
             }
+
+            sort(cells.begin(), cells.end(),
+                [&](Cell const& a, Cell const& b) {
+                    return a.first.xMin() < b.first.xMin();
+                }
+            );
         }
 
         vector<Row> rows;
+        vector<vector<Split>> splits_per_row;
         {
             dbSet<dbRow> rows_set = block->getRows();
             for (dbRow* row : rows_set) {
@@ -1211,14 +1295,14 @@ namespace tut {
                 rows.push_back({rect, site_width});
             }
 
-            sort_and_split_rows(&rows, fixed_cells);
+            splits_per_row = sort_and_get_splits(&rows, fixed_cells);
         }
 
-        return {rows, cells};
+        return {rows, splits_per_row, cells};
     }
 
-    auto Tutorial::get_splited_rows_and_cells(int x1, int y1, int x2, int y2, bool include_boundary)
-        -> pair<vector<Row>, vector<Cell>>
+    auto Tutorial::get_sorted_rows_splits_and_cells(int x1, int y1, int x2, int y2, bool include_boundary)
+        -> tuple<vector<Row>, vector<vector<Split>>, vector<Cell>>
     {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
@@ -1280,6 +1364,7 @@ namespace tut {
         }
 
         vector<Row> rows;
+        vector<vector<Split>> splits_per_row;
         {
             dbSet<dbRow> rows_set = block->getRows();
             for (dbRow* row : rows_set) {
@@ -1298,7 +1383,7 @@ namespace tut {
                 }
             }
 
-            sort_and_split_rows(&rows, fixed_cells);
+            splits_per_row = sort_and_get_splits(&rows, fixed_cells);
         }
 
         double row_total_area = 0;
@@ -1311,7 +1396,7 @@ namespace tut {
             logger->report("Impossible to legalize: cells total area is bigger than rows total area");
         }
 
-        return {rows, cells};
+        return {rows, splits_per_row, cells};
     }
 }
 

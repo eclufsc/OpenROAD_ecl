@@ -4,6 +4,7 @@
 #include <deque>
 #include <set>
 #include <stdint.h>
+#include <tuple>
 
 #include "odb/db.h"
 
@@ -21,6 +22,7 @@ namespace tut {
 class Tutorial {
     using Cell = std::pair<odb::Rect, odb::dbInst*>;
     using Row = std::pair<odb::Rect, int>;
+    using Split = std::pair<int, int>;
 
   public:
     // methods
@@ -40,8 +42,8 @@ class Tutorial {
         bool include_boundary = true
     );
     void tetris(
-        std::vector<std::pair<odb::Rect, int>> rows,
-        std::vector<std::pair<odb::Rect, odb::dbInst*>> cells
+        std::vector<Row>&& rows,
+        std::vector<Cell>&& cells
     );
 
     void test();
@@ -56,8 +58,9 @@ class Tutorial {
     void abacus();
     void abacus(int x1, int y1, int x2, int y2, bool include_boundary = true);
     void abacus(
-        std::vector<std::pair<odb::Rect, int>> rows_and_sites,
-        std::vector<std::pair<odb::Rect, odb::dbInst*>> cells_and_insts
+        std::vector<Row>&& rows,
+        std::vector<std::vector<Split>>&& splits_per_row,
+        std::vector<Cell>&& cells
     );
 
     void save_state();
@@ -145,19 +148,23 @@ class Tutorial {
 
     bool collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max);
 
-    void sort_and_split_rows(
-        std::vector<std::pair<odb::Rect, int>>* rows,
+    auto sort_and_get_splits(
+        std::vector<Row>* rows,
         std::vector<odb::Rect> const& fixed_cells
-    );
+    ) -> std::vector<std::vector<Split>>;
 
-    std::pair<std::vector<std::pair<odb::Rect, int>>, std::vector<std::pair<odb::Rect, odb::dbInst*>>>
-    get_splited_rows_and_cells();
+    auto get_sorted_rows_splits_and_cells()
+        -> std::tuple<std::vector<Row>, std::vector<std::vector<Split>>, std::vector<Cell>>;
 
-    std::pair<std::vector<std::pair<odb::Rect, int>>, std::vector<std::pair<odb::Rect, odb::dbInst*>>>
-    get_splited_rows_and_cells(int x1, int y1, int x2, int y2, bool include_boundary);
+    auto get_sorted_rows_splits_and_cells(
+        int x1, int y1, int x2, int y2, bool include_boundary
+    ) -> std::tuple<std::vector<Row>, std::vector<std::vector<Split>>, std::vector<Cell>>;
 
     // attributes
     odb::dbDatabase* db;
+
+    // todo: delete
+    std::vector<std::string> fixed_names;
 
     std::vector<std::pair<double, odb::dbInst*>> last_costs;
     std::set<odb::dbInst*> cells_legalized;
