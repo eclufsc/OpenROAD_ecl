@@ -138,7 +138,7 @@ namespace tut {
         }
 
         // cells
-        vector<pair<Rect, dbInst*>> cells_and_insts;
+        vector<Cell> cells_and_insts;
         {
             dbSet<dbInst> cells_set = block->getInsts();
             for (dbInst* cell : cells_set) {
@@ -146,7 +146,7 @@ namespace tut {
                 cells_and_insts.push_back({rect, cell});
             }
             std::sort(cells_and_insts.begin(), cells_and_insts.end(),
-                [&](pair<Rect, dbInst*> const& a, pair<Rect, dbInst*> const& b) {
+                [&](Cell const& a, Cell const& b) {
                     return a.first.xMin() < b.first.xMin();
                 }
             );
@@ -462,20 +462,20 @@ namespace tut {
     }
 
     void Tutorial::abacus(
-        vector<pair<Rect, int>> rows,
-        vector<pair<Rect, dbInst*>> cells
+        vector<Row> rows,
+        vector<Cell> cells
     ) {
         last_costs.clear();
 
         std::sort(
             cells.begin(), cells.end(),
-            [&](pair<Rect, dbInst*> const& a, pair<Rect, dbInst*> const& b) {
+            [&](Cell const& a, Cell const& b) {
                 return a.first.xMin() < b.first.xMin();
             }
         );
 
         sort(rows.begin(), rows.end(),
-            [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+            [&](Row const& a, Row const& b) {
                 return a.first.yMin() < b.first.yMin();
             }
         );
@@ -501,7 +501,7 @@ namespace tut {
 
             int approx_row = std::lower_bound(
                 rows.begin(), rows.end(), dummy_row_and_site(global_pos.yMin()),
-                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                [&](Row const& a, Row const& b) {
                     return a.first.yMin() < b.first.yMin();
                 }
             ) - rows.begin();
@@ -730,8 +730,8 @@ namespace tut {
     }
 
     void Tutorial::tetris(
-        vector<pair<Rect, int>> rows_and_sites,
-        vector<pair<Rect, dbInst*>> cells_and_insts
+        vector<Row> rows_and_sites,
+        vector<Cell> cells_and_insts
     ) {
         if (cells_and_insts.size() == 0) return;
 
@@ -747,13 +747,13 @@ namespace tut {
             return cell.xMin() - cell.dx() * width_factor;
         };
         std::sort(cells_and_insts.begin(), cells_and_insts.end(), 
-            [&](pair<Rect, dbInst*> const& cell1, pair<Rect, dbInst*> const& cell2){
+            [&](Cell const& cell1, Cell const& cell2){
                 return effective_x(cell1.first) < effective_x(cell2.first);
             }
         );
 
         std::sort(rows_and_sites.begin(), rows_and_sites.end(),
-            [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+            [&](Row const& a, Row const& b) {
                 return a.first.yMin() < b.first.yMin();
             }
         );
@@ -763,7 +763,7 @@ namespace tut {
         auto start = high_resolution_clock::now();
 
         int max_width = (*std::max_element(cells_and_insts.begin(), cells_and_insts.end(),
-            [&](pair<Rect, dbInst*> cell1, pair<Rect, dbInst*> cell2) {
+            [&](Cell cell1, Cell cell2) {
                 return cell1.first.dx() < cell2.first.dx();
             }
         ))
@@ -842,7 +842,7 @@ namespace tut {
             };
 
             int approx_row = std::lower_bound(rows_and_sites.begin(), rows_and_sites.end(), dummy_row_and_site(target_y),
-                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                [&](Row const& a, Row const& b) {
                     return a.first.yMin() < b.first.yMin();
                 }
             )
@@ -1015,7 +1015,7 @@ namespace tut {
         return pos1_min < pos2_max && pos2_min < pos1_max;
     };
 
-    std::pair<Rect, int> Tutorial::dummy_row_and_site(int y_min) {
+    auto Tutorial::dummy_row_and_site(int y_min) -> Row {
         int int_max = numeric_limits<int>::max();
         return std::make_pair(Rect(0, y_min, int_max, int_max), 0);
     }
@@ -1126,22 +1126,22 @@ namespace tut {
         logger->report(std::to_string(count) + " cells legalized");
     }
 
-    void Tutorial::sort_and_split_rows(vector<pair<Rect, int>>* rows, vector<Rect> const& fixed_cells) {
+    void Tutorial::sort_and_split_rows(vector<Row>* rows, vector<Rect> const& fixed_cells) {
         sort(rows->begin(), rows->end(),
-            [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+            [&](Row const& a, Row const& b) {
                 return a.first.yMin() < b.first.yMin();
             }
         );
 
         for (Rect const& fixed_cell : fixed_cells) {
             int row_start = std::lower_bound(rows->begin(), rows->end(), dummy_row_and_site(fixed_cell.yMin()),
-                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                [&](Row const& a, Row const& b) {
                     return a.first.yMin() < b.first.yMin();
                 }
             ) - rows->begin();
 
             int row_end_exc = std::lower_bound(rows->begin(), rows->end(), dummy_row_and_site(fixed_cell.yMax()),
-                [&](pair<Rect, int> const& a, pair<Rect, int> const& b) {
+                [&](Row const& a, Row const& b) {
                     return a.first.yMin() < b.first.yMin();
                 }
             ) - rows->begin();
@@ -1177,15 +1177,16 @@ namespace tut {
         }
     }
 
-    pair<vector<pair<Rect, int>>, vector<pair<Rect, dbInst*>>>
-    Tutorial::get_splited_rows_and_cells() {
+    auto Tutorial::get_splited_rows_and_cells()
+        -> pair<vector<Row>, vector<Cell>>
+    {
         dbBlock* block = get_block();
         if (!block) {
             fprintf(stderr, "%s\n", error_message_from_get_block());
             return {};
         }
 
-        vector<pair<Rect, dbInst*>> cells;
+        vector<Cell> cells;
         vector<Rect> fixed_cells;
         {
             dbSet<dbInst> cells_set = block->getInsts();
@@ -1201,7 +1202,7 @@ namespace tut {
             }
         }
 
-        vector<pair<Rect, int>> rows;
+        vector<Row> rows;
         {
             dbSet<dbRow> rows_set = block->getRows();
             for (dbRow* row : rows_set) {
@@ -1216,8 +1217,9 @@ namespace tut {
         return {rows, cells};
     }
 
-    pair<vector<pair<Rect, int>>, vector<pair<Rect, dbInst*>>>
-    Tutorial::get_splited_rows_and_cells(int x1, int y1, int x2, int y2, bool include_boundary) {
+    auto Tutorial::get_splited_rows_and_cells(int x1, int y1, int x2, int y2, bool include_boundary)
+        -> pair<vector<Row>, vector<Cell>>
+    {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
             area_x_min = x1;
@@ -1241,7 +1243,7 @@ namespace tut {
         }
 
         double cell_total_area = 0;
-        vector<pair<Rect, dbInst*>> cells;
+        vector<Cell> cells;
         vector<Rect> fixed_cells;
         {
             dbSet<dbInst> insts = block->getInsts();
@@ -1277,7 +1279,7 @@ namespace tut {
             }
         }
 
-        vector<pair<Rect, int>> rows;
+        vector<Row> rows;
         {
             dbSet<dbRow> rows_set = block->getRows();
             for (dbRow* row : rows_set) {

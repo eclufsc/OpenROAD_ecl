@@ -19,6 +19,9 @@ namespace utl {
 namespace tut {
 
 class Tutorial {
+    using Cell = std::pair<odb::Rect, odb::dbInst*>;
+    using Row = std::pair<odb::Rect, int>;
+
   public:
     // methods
     Tutorial();
