@@ -25,8 +25,7 @@ namespace tut {
 
     Tutorial::Tutorial() :
         logger{ord::OpenRoad::openRoad()->getLogger()},
-        db{ord::OpenRoad::openRoad()->getDb()},
-        debug_data{}
+        db{ord::OpenRoad::openRoad()->getDb()}
         {}
 
     Tutorial::~Tutorial() {}
@@ -425,6 +424,33 @@ namespace tut {
         }
 
         Rect core = block->getCoreArea();
+        shuffle(core.xMin(), core.yMin(), core.xMax(), core.yMax());
+    }
+
+    void Tutorial::shuffle(int x1, int y1, int x2, int y2) {
+        int x_min, x_max, y_min, y_max;
+        if (x1 < x2) {
+            x_min = x1;
+            x_max = x2;
+        } else {
+            x_min = x2;
+            x_max = x1;
+        }
+        if (y1 < y2) {
+            y_min = y1;
+            y_max = y2;
+        } else {
+            y_min = y2;
+            y_max = y1;
+        }
+        int dx = x_max - x_min;
+        int dy = y_max - y_min;
+
+        dbBlock* block = get_block();
+        if (!block) {
+            fprintf(stderr, "%s\n", error_message_from_get_block());
+            return;
+        }
 
         dbSet<dbInst> insts = block->getInsts();
         for (dbInst* inst : insts) {
@@ -432,20 +458,10 @@ namespace tut {
 
             Rect cell = inst->getBBox()->getBox();
 
-            int new_x = core.xMin() + rand() % (core.dx() - cell.dx());
-            int new_y = core.yMin() + rand() % (core.dy() - cell.dy());
+            int new_x = x_min + rand() % (dx - cell.dx());
+            int new_y = y_min + rand() % (dy - cell.dy());
 
             set_pos(inst, new_x, new_y, false);
-        }
-    }
-
-    void Tutorial::dump_lowest_costs(std::string file_path) {
-        std::ofstream file(file_path);
-
-        file << debug_data.lowest_costs.size() << "\n";
-        for (double cost : debug_data.lowest_costs) {
-            if (abs(cost) < 1e-10) cost = 0;
-            file << cost << " ";
         }
     }
 
@@ -788,16 +804,17 @@ namespace tut {
     // todo: add splits_per_row to tetris
     void Tutorial::tetris() {
         auto [rows, splits_per_row, cells] = get_sorted_rows_splits_and_cells();
-        tetris(move(rows), move(cells));
+        tetris(move(rows), move(splits_per_row), move(cells));
     }
 
     void Tutorial::tetris(int x1, int y1, int x2, int y2, bool include_boundary) {
         auto [rows, splits_per_row, cells] = get_sorted_rows_splits_and_cells(x1, y1, x2, y2, include_boundary);
-        tetris(move(rows), move(cells));
+        tetris(move(rows), move(splits_per_row), move(cells));
     }
 
     void Tutorial::tetris(
         vector<Row>&& rows_and_sites,
+        vector<vector<Split>>&& splits_per_row,
         vector<Cell>&& cells_and_insts
     ) {
         if (cells_and_insts.size() == 0) return;
@@ -819,12 +836,6 @@ namespace tut {
             }
         );
 
-        std::sort(rows_and_sites.begin(), rows_and_sites.end(),
-            [&](Row const& a, Row const& b) {
-                return a.first.yMin() < b.first.yMin();
-            }
-        );
-
         // todo: delete
         using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
         auto start = high_resolution_clock::now();
@@ -838,24 +849,26 @@ namespace tut {
 
         using std::deque;
 
-        // initialize last_placed_per_row
+        vector<int> row_to_start_split(rows_and_sites.size());
+        int total_splits = 0;
+        for (int row_i = 0; row_i < rows_and_sites.size(); row_i++) {
+            row_to_start_split[row_i] = total_splits;
+            total_splits += splits_per_row[row_i].size();
+        }
+
         // note: using deque instead of queue because queue doesnt support iteration
-        // todo: it is possible to substitute the queue for a vector with two indexes (WindowVector). All cells_and_insts in the current row would be added beforehand. The pop_front would increment the start index; the push_back would increment the end index. I believe this is a better alternative due to its simplicity. Maybe it's possible to merge last_placed_per_row and fixed_per_row in a single data structure
-        vector<deque<Rect>> last_placed_per_row(rows_and_sites.size());
+        // todo: it is possible to substitute the queue for a vector with two indexes (WindowVector). All cells_and_insts in the current accum split would be added beforehand. The pop_front would increment the start index; the push_back would increment the end index. I believe this is a better alternative due to its simplicity
+        vector<deque<Rect>> last_placed_per_accum_split(total_splits);
+
+        int max_row_iter = 0;
+        int max_split_iter = 0;
+        int max_last_placed_size = 0;
+
+        double total_row_iter = 0;
+        double total_split_iter = 0;
+        double total_last_placed_size = 0;
 
         int not_placed_n = 0;
-
-        debug_data.max_deque_size = 0;
-        debug_data.max_row_iter = 0;
-        debug_data.max_site_iter = 0;
-
-        debug_data.cell_iter = 0;
-
-        debug_data.max_site_iter_site = 0;
-        debug_data.max_site_iter_last_placed_site = vector<int>();
-        debug_data.max_site_iter_cell.clear();
-
-        debug_data.lowest_costs.resize(cells_and_insts.size());
 
         // note: cells_and_insts cannot move too much (like tetris). According to the analogy, the left factor determines the fall speed
         int delta_x = -left_factor * max_width;
@@ -863,74 +876,106 @@ namespace tut {
         for (int cell_i = 0; cell_i < cells_and_insts.size(); cell_i++) {
             Rect& cell = cells_and_insts[cell_i].first;
 
-            debug_data.curr_cell_name = cells_and_insts[cell_i].second->getName();
-
-            debug_data.cell_iter++;
-            debug_data.row_iter = 0;
-
             int orig_x = cell.xMin();
             int orig_y = cell.yMin();
             int target_x = orig_x + delta_x;
             int target_y = orig_y;
 
             double lowest_cost = std::numeric_limits<double>::max();
-
             int winning_row = 0;
+            int winning_split = 0;
             int winning_site_x = 0;
 
-            auto loop_iter = [&](int row_i) -> bool {
-                auto const& row_and_site = rows_and_sites[row_i];
-                Rect const& row = row_and_site.first;
-                int site_width = row_and_site.second;
-
-                double sqrt_cost_y = row.yMin() - target_y;
+            auto loop_y = [&](int row_i) -> bool {
+                auto const& [whole_row, site_width] = rows_and_sites[row_i];
+                double sqrt_cost_y = whole_row.yMin() - target_y;
                 double cost_y = sqrt_cost_y*sqrt_cost_y;
-
                 if (cost_y > lowest_cost) return false;
 
-                int site_x = tetris_try_to_place_in_row(
-                    row, site_width,
-                    cell, target_x,
-                    last_placed_per_row[row_i]
-                );
+                vector<Split> const& splits = splits_per_row[row_i];
 
-                if (site_x == row.xMax()) return true;
+                int approx_split = std::lower_bound(splits.begin(), splits.end(),
+                    make_pair(0, target_x),
+                    [&](Split const& a, Split const& b) {
+                        return a.second < b.second;
+                    }
+                ) - splits.begin();
 
-                double sqrt_cost_x = site_x - target_x;
-                double cost_x = sqrt_cost_x*sqrt_cost_x;
-                double cost = cost_x + x_to_y_priority_ratio * cost_y;
-                if (cost < lowest_cost) {
-                    lowest_cost = cost;
-                    winning_row = row_i;
-                    winning_site_x = site_x;
+                bool first_split = true;
+
+                int split_iter = 0;
+                for (int split_i = approx_split; split_i < splits.size(); split_i++) {
+                    split_iter++;
+
+                    auto [x_min, x_max] = splits[split_i];
+
+                    if (!first_split) {
+                        double sqrt_x_cost = x_min - target_x;
+                        double x_cost = sqrt_x_cost*sqrt_x_cost;
+                        if (x_cost > lowest_cost) break;
+                    }
+                    first_split = false;
+
+                    Rect row(x_min, whole_row.yMin(), x_max, whole_row.yMax());
+
+                    int accum_split_i = row_to_start_split[row_i] + split_i;
+
+                    int site_x = tetris_try_to_place_in_row(
+                        row, site_width,
+                        cell, target_x,
+                        last_placed_per_accum_split[accum_split_i]
+                    );
+
+                    if (site_x == row.xMax()) continue;
+
+                    double sqrt_cost_x = site_x - target_x;
+                    double cost_x = sqrt_cost_x*sqrt_cost_x;
+                    double cost = cost_x + x_to_y_priority_ratio * cost_y;
+                    if (cost < lowest_cost) {
+                        lowest_cost = cost;
+                        winning_row = row_i;
+                        winning_split = split_i;
+                        winning_site_x = site_x;
+                    }
+
+                    break;
                 }
+
+                if (split_iter > max_split_iter) max_split_iter = split_iter;
+                total_split_iter += split_iter;
 
                 return true;
             };
 
-            int approx_row = std::lower_bound(rows_and_sites.begin(), rows_and_sites.end(), dummy_row_and_site(target_y),
+            Rect dummy_rect = Rect(
+                0, target_y-1,
+                1, target_y
+            );
+            int approx_row = std::lower_bound(rows_and_sites.begin(), rows_and_sites.end(), make_pair(dummy_rect, 0),
                 [&](Row const& a, Row const& b) {
-                    return a.first.yMin() < b.first.yMin();
+                    return a.first.yMax() < b.first.yMax();
                 }
             )
                 - rows_and_sites.begin();
 
-            if (approx_row == rows_and_sites.size()) approx_row--;
-
+            int row_iter = 0;
             for (int row_i = approx_row; row_i < rows_and_sites.size(); row_i++) {
-                if (!loop_iter(row_i)) break;
+                row_iter++;
+                if (!loop_y(row_i)) break;
             }
             for (int row_i = approx_row-1; row_i >= 0; row_i--) {
-                if (!loop_iter(row_i)) break;
+                row_iter++;
+                if (!loop_y(row_i)) break;
             }
+
+            if (row_iter > max_row_iter) max_row_iter = row_iter;
+            total_row_iter += row_iter;
 
             int curr_percentage = ((cell_i+1)*10 / (int)cells_and_insts.size())*10;
             if (curr_percentage > last_percentage) {
                 logger->report(std::to_string(curr_percentage) + "% of the cells processed");
                 last_percentage = curr_percentage;
             }
-
-            debug_data.lowest_costs[cell_i] = dbu_to_microns(sqrt(lowest_cost));
 
             if (lowest_cost == std::numeric_limits<double>::max()) {
                 not_placed_n++;
@@ -945,7 +990,8 @@ namespace tut {
             int new_y = rows_and_sites[winning_row].first.yMin();
             cell.moveTo(new_x, new_y);
 
-            deque<Rect>* last_placed = &last_placed_per_row[winning_row];
+            int accum_split_i = row_to_start_split[winning_row] + winning_split;
+            deque<Rect>* last_placed = &last_placed_per_accum_split[accum_split_i];
             while (true) {
                 if (last_placed->size() == 0) break;
 
@@ -967,12 +1013,8 @@ namespace tut {
             }
             last_placed->push_back(cell);
 
-            if (last_placed->size() > debug_data.max_deque_size) {
-                debug_data.max_deque_size = last_placed->size();
-            }
-            if (debug_data.row_iter > debug_data.max_row_iter) {
-                debug_data.max_row_iter = debug_data.row_iter;
-            }
+            if (last_placed->size() > max_last_placed_size) max_last_placed_size = last_placed->size();
+            total_last_placed_size += last_placed->size();
         }
 
         // todo: delete
@@ -988,6 +1030,14 @@ namespace tut {
         } else {
             logger->report("Could not place " + std::to_string(not_placed_n) + " cells");
         }
+
+        printf("max_row_iter = %d\n", max_row_iter);
+        printf("max_split_iter = %d\n", max_split_iter);
+        printf("max_last_placed_size = %d\n", max_last_placed_size);
+        printf("average_row_iter = %lf\n", total_row_iter / (int)cells_and_insts.size());
+        printf("average_split_iter = %lf\n", total_split_iter / (int)total_row_iter);
+        printf("average_last_placed_size = %lf\n", total_last_placed_size / (int)cells_and_insts.size());
+        printf("\n");
     }
 
     int Tutorial::tetris_try_to_place_in_row(
@@ -995,15 +1045,10 @@ namespace tut {
         Rect const& cell, int target_x,
         std::deque<Rect> const& last_placed
     ) {
-        debug_data.row_iter++;
-        debug_data.site_iter = 0; 
-
         int site_x = (target_x - row.xMin()) / site_width * site_width + row.xMin();
         if (site_x < row.xMin()) site_x = row.xMin();
 
         while (true) {
-            debug_data.site_iter++;
-
             Rect new_cell(site_x, row.yMin(), site_x + cell.dx(), row.yMax());
 
             if (new_cell.xMax() > row.xMax()) return row.xMax();
@@ -1019,19 +1064,6 @@ namespace tut {
             }
 
             if (collided) continue;
-
-            if (debug_data.site_iter > debug_data.max_site_iter) {
-                debug_data.max_site_iter = debug_data.site_iter;
-                debug_data.max_site_iter_site = (target_x - row.xMin()) / site_width;
-                debug_data.max_site_iter_cell = debug_data.curr_cell_name;
-
-                debug_data.max_site_iter_last_placed_site.clear();
-                for (Rect const& curr_cell : last_placed) {
-                    int x = curr_cell.xMax();
-                    int curr_site_x = (x - row.xMin()) / site_width;
-                    debug_data.max_site_iter_last_placed_site.push_back(curr_site_x);
-                }
-            }
 
             return site_x;
         }

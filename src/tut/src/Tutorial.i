@@ -22,11 +22,6 @@ void destroy_cells_with_name_prefix(const char* prefix) {
   tutorial->destroy_cells_with_name_prefix(prefix);
 }
 
-void dump_lowest_costs(const char* file_path) {
-  Tutorial* tutorial = getTutorial();
-  tutorial->dump_lowest_costs(file_path);
-}
-
 void move_x(const char* cell_name, int delta_x) {
   Tutorial* tutorial = getTutorial();
   if (!tutorial->move_x(cell_name, delta_x)) {
@@ -111,6 +106,18 @@ void shuffle() {
   Tutorial* tutorial = getTutorial();
   tutorial->shuffle();
 }
+
+void shuffle_mi(double mi_x1, double mi_y1, double mi_x2, double mi_y2) {
+  Tutorial* tutorial = getTutorial();
+  
+  int x1 = tutorial->microns_to_dbu(mi_x1);
+  int y1 = tutorial->microns_to_dbu(mi_y1);
+  int x2 = tutorial->microns_to_dbu(mi_x2);
+  int y2 = tutorial->microns_to_dbu(mi_y2);
+
+  tutorial->shuffle(x1, y1, x2, y2);
+}
+
 
 void disturb() {
   Tutorial* tutorial = getTutorial();

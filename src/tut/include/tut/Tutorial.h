@@ -43,6 +43,7 @@ class Tutorial {
     );
     void tetris(
         std::vector<Row>&& rows,
+        std::vector<std::vector<Split>>&& splits_per_row,
         std::vector<Cell>&& cells
     );
 
@@ -51,6 +52,7 @@ class Tutorial {
     bool move_x(std::string cell_name, int delta_x);
 
     void shuffle();
+    void shuffle(int x1, int y1, int x2, int y2);
     void disturb();
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
     int64_t microns_to_dbu(double microns);
@@ -74,24 +76,8 @@ class Tutorial {
 
     // attributes
     utl::Logger* logger;
+
   private:
-    struct DebugData {
-        int max_deque_size;
-        int max_row_iter;
-        int max_site_iter;
-
-        int row_iter;
-        int site_iter; 
-        int cell_iter;
-
-        int max_site_iter_site;
-        std::vector<int> max_site_iter_last_placed_site;
-        std::string max_site_iter_cell;
-        std::string curr_cell_name;
-
-        std::vector<double> lowest_costs;
-    };
-
     std::pair<bool, std::string> is_legalized(
         std::vector<std::pair<odb::Rect, int>> rows_and_sites,
         std::vector<std::pair<odb::Rect, odb::dbInst*>> const& cells
@@ -175,8 +161,6 @@ class Tutorial {
     };
 
     SavedState saved_state;
-
-    DebugData debug_data;
   };
 }
 
