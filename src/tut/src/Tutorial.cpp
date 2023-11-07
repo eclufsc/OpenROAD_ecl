@@ -22,6 +22,7 @@ namespace tut {
     using namespace odb;
     using std::vector, std::pair, std::sort, std::lower_bound, std::upper_bound, std::move, std::string, std::make_pair, std::tuple;
     using std::numeric_limits;
+    using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds, std::chrono::nanoseconds;
 
     Tutorial::Tutorial() :
         logger{ord::OpenRoad::openRoad()->getLogger()},
@@ -488,12 +489,22 @@ namespace tut {
         vector<Cell>&& cells
     ) {
         // todo: delete
+        sort(cells.begin(), cells.end(),
+            [&](Cell const& a, Cell const& b) {
+                return a.first.xMin() < b.first.xMin();
+            }
+        );
+
+        // todo: delete
         setbuf(stdout, 0);
 
         last_costs.clear();
 
+        test_count = 0;
         // todo: delete
-        using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds;
+        int total_recursion_count = 0;
+
+        // todo: delete
         auto start = high_resolution_clock::now();
 
         // algorithm
@@ -510,9 +521,19 @@ namespace tut {
         // todo: delete
         int last_percentage = 0;
 
+        // todo: delete
+        int max_row_iter = 0;
+
         int fail_counter = 0;
 
+        clust_size.resize(100000);
+
+        // todo: delete
+        vector<int> recursion_counts(cells.size());
+
         for (int cell_i = 0; cell_i < cells.size(); cell_i++) {
+            cell_index = cell_i;
+
             auto const& [global_pos, inst] = cells[cell_i];
 
             double best_cost = std::numeric_limits<double>::max();
@@ -520,6 +541,9 @@ namespace tut {
             int best_split_i = -1;
             AbacusCluster best_new_cluster;
             int best_previous_i = 0;
+
+            // todo: delete
+            bool first_time = true;
 
             auto evaluate = [&](int row_i, double y_cost, int split_i) {
                 auto const& [whole_row, site_width] = rows[row_i];
@@ -532,6 +556,10 @@ namespace tut {
                 AbacusCluster new_cluster;
                 int previous_i;
 
+                recursion_count = 0;
+
+                test_start = high_resolution_clock::now();
+
                 int accum_split_i = row_to_start_split[row_i] + split_i;
                 if (!abacus_try_add_cell(
                     row, site_width,
@@ -539,7 +567,15 @@ namespace tut {
                     clusters_per_accum_split[accum_split_i],
                     &new_cluster, &previous_i
                 )) {
+                    test_end = high_resolution_clock::now();
+                    test_count += duration_cast<nanoseconds>(test_end - test_start).count();
                     return;
+                }
+                test_end = high_resolution_clock::now();
+                test_count += duration_cast<nanoseconds>(test_end - test_start).count();
+
+                if (first_time && cell_index < 100000) {
+                    clust_size[cell_index] = clusters_per_accum_split[accum_split_i].size();
                 }
 
                 int new_x = new_cluster.x + new_cluster.width - global_pos.dx();
@@ -554,6 +590,11 @@ namespace tut {
                     best_split_i = split_i;
                     best_new_cluster = new_cluster;
                     best_previous_i = previous_i;
+                }
+
+                if (first_time) {
+                    total_recursion_count += recursion_count;
+                    first_time = false;
                 }
             };
 
@@ -603,19 +644,24 @@ namespace tut {
                 0, global_pos.yMin()-1,  // min
                 1, global_pos.yMin()     // max
             );
-            int approx_row = std::lower_bound(
+            int approx_row = std::upper_bound(
                 rows.begin(), rows.end(), make_pair(dummy_rect, 0),
                 [&](Row const& a, Row const& b) {
                     return a.first.yMax() < b.first.yMax();
                 }
             ) - rows.begin();
 
+            int row_iter = 0;
             for (int row_i = approx_row; row_i < rows.size(); row_i++) {
+                row_iter++;
                 if (!loop_y(row_i)) break;;
             }
             for (int row_i = approx_row-1; row_i >= 0; row_i--) {
+                row_iter++;
                 if (!loop_y(row_i)) break;
             }
+
+            if (row_iter > max_row_iter) max_row_iter = row_iter;
 
             if (best_row_i == -1) {
                 fail_counter++;
@@ -639,11 +685,13 @@ namespace tut {
                 last_percentage = curr_percentage;
             }
 
+            recursion_counts[cell_i] = recursion_count;
         }
 
         // todo: delete
         auto end = high_resolution_clock::now();
         logger->report("Time spent (ms): " + std::to_string(duration_cast<milliseconds>(end - start).count()));
+        logger->report("Test time (ms): " + std::to_string((int)test_count / 1000000));
         
         // checking whether the cells preserved relative ordering
         {
@@ -714,6 +762,21 @@ namespace tut {
             logger->report("Could not place " + std::to_string(fail_counter) + " cells");
         }
 
+        {
+            std::ofstream file("/home/felipe/ufsc/eda/temp/debug/recursion_counts.csv");
+            for (int rec : recursion_counts) {
+                file << rec << "\n";
+            }
+        }
+        {
+            std::ofstream file("/home/felipe/ufsc/eda/temp/debug/clust_size.csv");
+            for (int c : clust_size) {
+                file << c << "\n";
+            }
+        }
+
+        printf("max_row_iter = %d\n", max_row_iter);
+        printf("recursion_count = %d\n", total_recursion_count);
         printf("max_clusters = %d\n", max_clusters);
         printf("rows size = %lu\n", rows.size());
         printf("cells size = %lu\n", cells.size());
@@ -727,7 +790,7 @@ namespace tut {
         AbacusCluster* new_cluster, int* previous_i
     ) {
         if (clusters.size() == 0
-            || clusters.back().x + clusters.back().width <= cell.global_pos.xMin()
+            || clusters.back().x + clusters.back().width < cell.global_pos.xMin()
         ) {
             // note: last_cell is decremented because it is incremented in the "add cell" code
             int last_cell_dec = -1;
@@ -747,6 +810,7 @@ namespace tut {
             new_cluster->width  += cell.global_pos.dx();
             new_cluster->last_cell++;
         }
+
         if (!abacus_try_place_and_collapse(
             clusters,
             row, site_width,
@@ -765,6 +829,8 @@ namespace tut {
         Rect row, int site_width,
         AbacusCluster* new_cluster, int* previous_i
     ) {
+        recursion_count++;
+
         if (new_cluster->width > row.dx()) return false;
 
         new_cluster->x = new_cluster->q / new_cluster->weight;
@@ -948,10 +1014,10 @@ namespace tut {
             };
 
             Rect dummy_rect = Rect(
-                0, target_y-1,
-                1, target_y
+                0, target_y-1,  // min
+                1, target_y     // max
             );
-            int approx_row = std::lower_bound(rows_and_sites.begin(), rows_and_sites.end(), make_pair(dummy_rect, 0),
+            int approx_row = std::upper_bound(rows_and_sites.begin(), rows_and_sites.end(), make_pair(dummy_rect, 0),
                 [&](Row const& a, Row const& b) {
                     return a.first.yMax() < b.first.yMax();
                 }
@@ -1243,14 +1309,25 @@ namespace tut {
         }
 
         for (Rect const& fixed_cell : fixed_cells) {
+            int int_max = numeric_limits<int>::max();
+
+            Rect dummy_row_min = Rect(
+                0, fixed_cell.yMin(),
+                int_max, int_max
+            );
             int row_start = std::lower_bound(rows->begin(), rows->end(),
-                dummy_row_and_site(fixed_cell.yMin()),
+                make_pair(dummy_row_min, 0),
                 [&](Row const& a, Row const& b) {
                     return a.first.yMin() < b.first.yMin();
                 }
             ) - rows->begin();
 
-            int row_end_exc = std::lower_bound(rows->begin(), rows->end(), dummy_row_and_site(fixed_cell.yMax()),
+            Rect dummy_row_max = Rect(
+                0, fixed_cell.yMax(),
+                int_max, int_max
+            );
+            int row_end_exc = std::lower_bound(rows->begin(), rows->end(),
+                make_pair(dummy_row_max, 0),
                 [&](Row const& a, Row const& b) {
                     return a.first.yMin() < b.first.yMin();
                 }

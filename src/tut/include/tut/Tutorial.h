@@ -5,6 +5,7 @@
 #include <set>
 #include <stdint.h>
 #include <tuple>
+#include <chrono>
 
 #include "odb/db.h"
 
@@ -161,6 +162,14 @@ class Tutorial {
     };
 
     SavedState saved_state;
+
+    // todo: delete
+    std::chrono::time_point<std::chrono::high_resolution_clock> test_start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> test_end;
+    unsigned test_count;
+    unsigned recursion_count;
+    int cell_index;
+    std::vector<int> clust_size;
   };
 }
 
