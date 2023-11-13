@@ -5,6 +5,8 @@
 #include "odb/dbTypes.h"
 #include "odb/dbTransform.h"
 
+#include "gui/gui.h"
+
 #include <limits>
 #include <algorithm>
 #include <deque>
@@ -21,6 +23,7 @@
 namespace tut {
     using namespace odb;
     using std::vector, std::pair, std::sort, std::lower_bound, std::upper_bound, std::move, std::string, std::make_pair, std::tuple;
+    using std::to_string;
     using std::numeric_limits;
     using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds, std::chrono::nanoseconds;
 
@@ -41,6 +44,25 @@ namespace tut {
         return "Block not available";
     }
 
+    void Tutorial::draw_rect(int x1, int y1, int x2, int y2) {
+        static int counter = 0;
+        Rect rect(x1, y1, x2, y2);
+        gui::Painter::Color color(0, 255, 0, 100);
+        renderer.drawings.insert({to_string(counter), {rect, color}});
+        renderer.redraw();
+        counter++;
+    }
+
+    void Tutorial::undraw_rect(int id) {
+        renderer.drawings.erase(to_string(id));
+        renderer.redraw();
+    }
+
+    void Tutorial::undraw_all() {
+        renderer.drawings.clear();
+        renderer.redraw();
+    }
+
     // note: both (get/set)(Location/Origin) operate at block coordinate system
     void Tutorial::test() {
         Rect rect(1, 1, 3, 3);
@@ -48,7 +70,7 @@ namespace tut {
         printf("(%d, %d), (%d, %d)\n", rect.xMin(), rect.yMin(), rect.xMax(), rect.yMax());
     }
 
-    bool Tutorial::move_x(std::string cell_name, int delta_x) {
+    bool Tutorial::translate(std::string cell_name, int delta_x, int delta_y) {
         dbBlock* block = get_block();
         if (!block) {
             std::string reason = error_message_from_get_block();
@@ -70,7 +92,7 @@ namespace tut {
 
         int x = cell->getBBox()->xMin();
         int y = cell->getBBox()->yMin();
-        set_pos(cell, x + delta_x, y, false);
+        set_pos(cell, x + delta_x, y + delta_y, false);
 
         return true;
     }
@@ -470,6 +492,9 @@ namespace tut {
 
     void Tutorial::abacus() {
         auto [rows, splits_per_rows, cells] = get_sorted_rows_splits_and_cells();
+        printf("cells.size() = %lu\n", cells.size());
+        printf("cell name = %s\n", cells[0].second->getName().c_str());
+        fflush(stdout);
         abacus(move(rows), move(splits_per_rows), move(cells));
     }
 
@@ -479,6 +504,78 @@ namespace tut {
                 x1, y1, x2, y2, include_boundary
             );
         abacus(move(rows), move(splits_per_rows), move(cells));
+    }
+
+    void Tutorial::abacus_artur(int x1, int y1, int x2, int y2) {
+        int area_x_min, area_x_max, area_y_min, area_y_max;
+        if (x1 < x2) {
+            area_x_min = x1;
+            area_x_max = x2;
+        } else {
+            area_x_max = x1;
+            area_x_min = x2;
+        }
+        if (y1 < y2) {
+            area_y_min = y1;
+            area_y_max = y2;
+        } else {
+            area_y_max = y1;
+            area_y_min = y2;
+        }
+
+        dbBlock* block = get_block();
+        if (!block) {
+            fprintf(stderr, "%s\n", error_message_from_get_block());
+            return;
+        }
+
+        vector<Cell> cells;
+        vector<Rect> fixed_cells;
+        {
+            dbSet<dbInst> insts = block->getInsts();
+            
+            for (dbInst* inst : insts) {
+                Rect rect = inst->getBBox()->getBox();
+
+                if (!collide(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
+                    || !collide(rect.yMin(), rect.yMax(), area_y_min, area_y_max)) {
+                    continue;
+                }
+
+                if (area_x_min <= rect.xMin() && rect.xMax() <= area_x_max
+                    && area_y_min <= rect.yMin() && rect.yMax() <= area_y_max
+                ) {
+                    cells.push_back(make_pair(rect, inst));
+                } else {
+                    fixed_cells.push_back(rect);
+                }
+            }
+        }
+
+        vector<Row> rows;
+        vector<vector<Split>> splits_per_row;
+        {
+            dbSet<dbRow> rows_set = block->getRows();
+            for (dbRow* row : rows_set) {
+                Rect rect = row->getBBox();
+                if (collide(area_x_min, area_x_max, rect.xMin(), rect.xMax())
+                    && collide(area_y_min, area_y_max, rect.yMin(), rect.yMax())
+                ) {
+                    int site_width = row->getSite()->getWidth();
+
+                    int site_x_min = (area_x_min - rect.xMin()) / site_width * site_width + rect.xMin();
+                    int site_x_max = (area_x_max - rect.xMin()) / site_width * site_width + rect.xMin();
+
+                    rect.set_xlo(std::max(site_x_min, rect.xMin()));
+                    rect.set_xhi(std::min(site_x_max, rect.xMax()));
+                    rows.push_back({rect, site_width});
+                }
+            }
+
+            splits_per_row = sort_and_get_splits(&rows, fixed_cells);
+        }
+
+        abacus(move(rows), move(splits_per_row), move(cells));
     }
 
     // todo: change && to const& for consistency (and because rows and cells should not be changed in this function
@@ -760,19 +857,6 @@ namespace tut {
             logger->report("Placed all cells");
         } else {
             logger->report("Could not place " + std::to_string(fail_counter) + " cells");
-        }
-
-        {
-            std::ofstream file("/home/felipe/ufsc/eda/temp/debug/recursion_counts.csv");
-            for (int rec : recursion_counts) {
-                file << rec << "\n";
-            }
-        }
-        {
-            std::ofstream file("/home/felipe/ufsc/eda/temp/debug/clust_size.csv");
-            for (int c : clust_size) {
-                file << c << "\n";
-            }
         }
 
         printf("max_row_iter = %d\n", max_row_iter);
@@ -1309,32 +1393,36 @@ namespace tut {
         }
 
         for (Rect const& fixed_cell : fixed_cells) {
+            int int_min = numeric_limits<int>::min();
             int int_max = numeric_limits<int>::max();
 
-            Rect dummy_row_min = Rect(
-                0, fixed_cell.yMin(),
-                int_max, int_max
+            Rect dummy_row1 = Rect(
+                int_min, int_min,
+                int_max, fixed_cell.yMin()
             );
-            int row_start = std::lower_bound(rows->begin(), rows->end(),
-                make_pair(dummy_row_min, 0),
+            int row_start = std::upper_bound(rows->begin(), rows->end(),
+                make_pair(dummy_row1, 0),
                 [&](Row const& a, Row const& b) {
-                    return a.first.yMin() < b.first.yMin();
+                    return a.first.yMax() < b.first.yMax();
                 }
             ) - rows->begin();
 
-            Rect dummy_row_max = Rect(
-                0, fixed_cell.yMax(),
-                int_max, int_max
+            Rect dummy_row2 = Rect(
+                int_min, int_min,
+                int_max, fixed_cell.yMax()
             );
-            int row_end_exc = std::lower_bound(rows->begin(), rows->end(),
-                make_pair(dummy_row_max, 0),
+            int row_end = std::lower_bound(rows->begin(), rows->end(),
+                make_pair(dummy_row2, 0),
                 [&](Row const& a, Row const& b) {
-                    return a.first.yMin() < b.first.yMin();
+                    return a.first.yMax() < b.first.yMax();
                 }
             ) - rows->begin();
 
-            for (int row_i = row_start; row_i < row_end_exc; row_i++) {
+            if (row_end == rows->size()) row_end--;
+
+            for (int row_i = row_start; row_i <= row_end; row_i++) {
                 vector<Split>* splits = &splits_per_row[row_i];
+                auto const& [row, site_width] = (*rows)[row_i];
 
                 auto split = lower_bound(splits->begin(), splits->end(),
                     make_pair(0, fixed_cell.xMin()),
@@ -1344,17 +1432,26 @@ namespace tut {
                 );
                 if (split == splits->end()) continue;
 
-                auto [row_x_min, row_x_max] = *split;
-                if (fixed_cell.xMax() <= row_x_min) continue;
-                if (row_x_max <= fixed_cell.xMin()) continue;
+                auto [old_x_min, old_x_max] = *split;
+
+                if (!collide(fixed_cell.xMin(), fixed_cell.xMax(), old_x_min, old_x_max)) {
+                    continue;
+                }
+
+                int new_x_min =
+                    (fixed_cell.xMin() - row.xMin())
+                    / site_width * site_width + row.xMin();
+                int new_x_max = 
+                    ((fixed_cell.xMax() - row.xMin()) + site_width-1)
+                    / site_width * site_width + row.xMin();
 
                 splits->erase(split);
 
-                if (fixed_cell.xMax() < row_x_max) {
-                    splits->insert(split, make_pair(fixed_cell.xMax(), row_x_max));
+                if (new_x_max < old_x_max) {
+                    splits->insert(split, make_pair(new_x_max, old_x_max));
                 }
-                if (row_x_min < fixed_cell.xMin()) {
-                    splits->insert(split, make_pair(row_x_min, fixed_cell.xMin()));
+                if (old_x_min < new_x_min) {
+                    splits->insert(split, make_pair(old_x_min, new_x_min));
                 }
             }
         }

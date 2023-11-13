@@ -21,6 +21,7 @@ target_include_directories(tut
 
 target_link_libraries(tut
     utl
+    gui
     odb
     OpenSTA
 )

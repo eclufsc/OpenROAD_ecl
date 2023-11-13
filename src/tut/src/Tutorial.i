@@ -1,5 +1,6 @@
 %{
 #include "odb/db.h"
+#include "gui/gui.h"
 #include "utl/Logger.h"
 #include "ord/OpenRoad.hh"
 #include "tut/Tutorial.h"
@@ -22,9 +23,13 @@ void destroy_cells_with_name_prefix(const char* prefix) {
   tutorial->destroy_cells_with_name_prefix(prefix);
 }
 
-void move_x(const char* cell_name, int delta_x) {
+void translate_mi(const char* cell_name, int delta_x_mi, int delta_y_mi) {
   Tutorial* tutorial = getTutorial();
-  if (!tutorial->move_x(cell_name, delta_x)) {
+
+  int delta_x = tutorial->microns_to_dbu(delta_x_mi);
+  int delta_y = tutorial->microns_to_dbu(delta_y_mi);
+
+  if (!tutorial->translate(cell_name, delta_x, delta_y)) {
     tutorial->logger->report("Failed to move cell");
   }
 }
@@ -51,6 +56,37 @@ void abacus_mi(double mi_x1, double mi_y1, double mi_x2, double mi_y2) {
   tutorial->abacus(x1, y1, x2, y2);
 }
 
+void draw_rect_mi(double mi_x1, double mi_y1, double mi_x2, double mi_y2) {
+  Tutorial* tutorial = getTutorial();
+
+  int x1 = tutorial->microns_to_dbu(mi_x1);
+  int y1 = tutorial->microns_to_dbu(mi_y1);
+  int x2 = tutorial->microns_to_dbu(mi_x2);
+  int y2 = tutorial->microns_to_dbu(mi_y2);
+
+  tutorial->draw_rect(x1, y1, x2, y2);
+}
+
+void undraw_rect(int id) {
+  Tutorial* tutorial = getTutorial();
+  tutorial->undraw_rect(id);
+}
+
+void undraw_all() {
+  Tutorial* tutorial = getTutorial();
+  tutorial->undraw_all();
+}
+
+void abacus_artur_mi(double mi_x1, double mi_y1, double mi_x2, double mi_y2) {
+  Tutorial* tutorial = getTutorial();
+
+  int x1 = tutorial->microns_to_dbu(mi_x1);
+  int y1 = tutorial->microns_to_dbu(mi_y1);
+  int x2 = tutorial->microns_to_dbu(mi_x2);
+  int y2 = tutorial->microns_to_dbu(mi_y2);
+
+  tutorial->abacus_artur(x1, y1, x2, y2);
+}
 
 void is_legalized() {
   Tutorial* tutorial = getTutorial();

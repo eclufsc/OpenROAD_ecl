@@ -8,6 +8,7 @@
 #include <chrono>
 
 #include "odb/db.h"
+#include "gui/gui.h"
 
 namespace odb {
   class dbDatabase;
@@ -20,17 +21,39 @@ namespace utl {
 
 namespace tut {
 
+class MyRenderer : public gui::Renderer {
+public:
+    // attributes
+    std::map<std::string, std::pair<odb::Rect, gui::Painter::Color>> drawings;
+
+    // methods
+    MyRenderer() {
+        gui::Gui::get()->registerRenderer(this);
+    }
+
+    virtual void drawObjects(gui::Painter& painter) override {
+        for (auto const& [key, value] : drawings) {
+            auto const& [rect, color] = value;
+            painter.setBrush(color);
+            painter.drawRect(rect);
+        }
+    }
+};
+
 class Tutorial {
     using Cell = std::pair<odb::Rect, odb::dbInst*>;
     using Row = std::pair<odb::Rect, int>;
     using Split = std::pair<int, int>;
 
-  public:
+public:
     // methods
     Tutorial();
     ~Tutorial();
 
     void destroy_cells_with_name_prefix(std::string prefix);
+    void draw_rect(int x1, int y1, int x2, int y2);
+    void undraw_rect(int id);
+    void undraw_all();
 
     std::pair<bool, std::string> is_legalized();
     std::pair<bool, std::string> is_legalized(int x1, int y1, int x2, int y2);
@@ -50,13 +73,15 @@ class Tutorial {
 
     void test();
     void dump_lowest_costs(std::string file_path);
-    bool move_x(std::string cell_name, int delta_x);
+    bool translate(std::string cell, int delta_x, int delta_y);
 
     void shuffle();
     void shuffle(int x1, int y1, int x2, int y2);
     void disturb();
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
     int64_t microns_to_dbu(double microns);
+
+    void abacus_artur(int x1, int y1, int x2, int y2);
 
     void abacus();
     void abacus(int x1, int y1, int x2, int y2, bool include_boundary = true);
@@ -77,8 +102,9 @@ class Tutorial {
 
     // attributes
     utl::Logger* logger;
+    MyRenderer renderer;
 
-  private:
+private:
     std::pair<bool, std::string> is_legalized(
         std::vector<std::pair<odb::Rect, int>> rows_and_sites,
         std::vector<std::pair<odb::Rect, odb::dbInst*>> const& cells
@@ -170,6 +196,6 @@ class Tutorial {
     unsigned recursion_count;
     int cell_index;
     std::vector<int> clust_size;
-  };
+};
 }
 
