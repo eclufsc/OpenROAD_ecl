@@ -15,6 +15,10 @@ namespace grt {
   struct GSegment;
 }
 
+//namespace stt {
+//class SteinerTreeBuilder;
+//}
+
 namespace tut {
 
 class Tutorial {
@@ -44,6 +48,7 @@ class Tutorial {
     utl::Logger* logger_;
     grt::GlobalRouter *grt_;
     //odb::dbBlock* block_;
+    //stt::SteinerTreeBuilder* stt_builder_;
   };
 }
 
