@@ -2077,7 +2077,7 @@ int GlobalRouter::computeNetWirelength(odb::dbNet* db_net)
   return net_wl;
 }
 
-void GlobalRouter::computeWirelength()
+long GlobalRouter::computeWirelength()
 {
   long total_wirelength = 0;
   for (auto& net_route : routes_) {
@@ -2088,6 +2088,7 @@ void GlobalRouter::computeWirelength()
                   18,
                   "Total wirelength: {} um",
                   total_wirelength / block_->getDefUnits());
+  return total_wirelength / block_->getDefUnits();
 }
 
 void GlobalRouter::mergeSegments(const std::vector<Pin>& pins, GRoute& route)

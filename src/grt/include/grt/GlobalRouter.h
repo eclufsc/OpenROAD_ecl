@@ -207,6 +207,7 @@ class GlobalRouter : public ant::GlobalRouteSource
   // Incremental global routing functions.
   // See class IncrementalGRoute.
   void addDirtyNet(odb::dbNet* net);
+  void clearDirtyNets() { dirty_nets_.clear(); }
   std::set<odb::dbNet*> getDirtyNets() { return dirty_nets_; }
   // check_antennas
   bool haveRoutes() override;
@@ -241,6 +242,8 @@ class GlobalRouter : public ant::GlobalRouteSource
   void updateVias();
 
   // Report wire length
+  int computeNetWirelength(odb::dbNet* db_net);
+  long computeWirelength();
   void reportNetWireLength(odb::dbNet* net,
                            bool global_route,
                            bool detailed_route,
@@ -293,8 +296,6 @@ class GlobalRouter : public ant::GlobalRouteSource
   void computePinOffsetAdjustments();
   void applyObstructionAdjustment(const odb::Rect& obstruction,
                                   odb::dbTechLayer* tech_layer);
-  int computeNetWirelength(odb::dbNet* db_net);
-  void computeWirelength();
   std::vector<Pin*> getAllPorts();
   void computeTrackConsumption(const Net* net,
                                int& track_consumption,

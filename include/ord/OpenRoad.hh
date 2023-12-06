@@ -146,6 +146,10 @@ namespace stt {
 class SteinerTreeBuilder;
 }
 
+namespace rcm {
+class CellMoveRouter;
+}
+
 namespace dft {
 class Dft;
 }
@@ -194,6 +198,7 @@ class OpenRoad
   pad::ICeWall* getICeWall() { return icewall_; }
   dst::Distributed* getDistributed() { return distributer_; }
   stt::SteinerTreeBuilder* getSteinerTreeBuilder() { return stt_builder_; }
+  rcm::CellMoveRouter *getCellMoveRouter() { return cellMoveRouter_; }
   dft::Dft* getDft() { return dft_; }
 
   // Return the bounding box of the db rows.
@@ -279,6 +284,7 @@ class OpenRoad
   pad::ICeWall* icewall_ = nullptr;
   dst::Distributed* distributer_ = nullptr;
   stt::SteinerTreeBuilder* stt_builder_ = nullptr;
+  rcm::CellMoveRouter *cellMoveRouter_;
   dft::Dft* dft_ = nullptr;
 
   std::set<OpenRoadObserver*> observers_;

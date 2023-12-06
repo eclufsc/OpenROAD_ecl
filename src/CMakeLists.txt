@@ -269,6 +269,7 @@ add_subdirectory(upf)
 add_subdirectory(utl)
 add_subdirectory(dst)
 add_subdirectory(pdn)
+add_subdirectory(rcm)
 add_subdirectory(dft)
 
 ################################################################
@@ -330,6 +331,7 @@ target_link_libraries(openroad
   upf
   utl
   pdn
+  rcm
   dft
   ${ABC_LIBRARY}
   ${TCL_LIBRARY}
