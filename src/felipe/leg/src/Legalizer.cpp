@@ -1,4 +1,4 @@
-#include "tut/Tutorial.h"
+#include "leg/Legalizer.h"
 #include "odb/db.h"
 #include "ord/OpenRoad.hh"
 #include "utl/Logger.h"
@@ -20,57 +20,38 @@
 
 // todo: make is_legalized faster
 
-namespace tut {
+namespace leg {
     using namespace odb;
     using std::vector, std::pair, std::sort, std::lower_bound, std::upper_bound, std::move, std::string, std::make_pair, std::tuple;
     using std::to_string;
     using std::numeric_limits;
     using std::chrono::high_resolution_clock, std::chrono::duration, std::chrono::duration_cast, std::chrono::milliseconds, std::chrono::nanoseconds;
 
-    Tutorial::Tutorial() :
+    Legalizer::Legalizer() :
         logger{ord::OpenRoad::openRoad()->getLogger()},
         db{ord::OpenRoad::openRoad()->getDb()}
         {}
 
-    Tutorial::~Tutorial() {}
+    Legalizer::~Legalizer() {}
 
-    dbBlock* Tutorial::get_block() {
+    dbBlock* Legalizer::get_block() {
         dbChip* chip = db->getChip();
         if (chip) return chip->getBlock();
         else      return 0;
     }
 
-    const char* Tutorial::error_message_from_get_block() {
+    const char* Legalizer::error_message_from_get_block() {
         return "Block not available";
     }
 
-    void Tutorial::draw_rect(int x1, int y1, int x2, int y2) {
-        static int counter = 0;
-        Rect rect(x1, y1, x2, y2);
-        gui::Painter::Color color(0, 255, 0, 100);
-        renderer.drawings.insert({to_string(counter), {rect, color}});
-        renderer.redraw();
-        counter++;
-    }
-
-    void Tutorial::undraw_rect(int id) {
-        renderer.drawings.erase(to_string(id));
-        renderer.redraw();
-    }
-
-    void Tutorial::undraw_all() {
-        renderer.drawings.clear();
-        renderer.redraw();
-    }
-
     // note: both (get/set)(Location/Origin) operate at block coordinate system
-    void Tutorial::test() {
+    void Legalizer::test() {
         Rect rect(1, 1, 3, 3);
         rect.moveTo(2, 2);
         printf("(%d, %d), (%d, %d)\n", rect.xMin(), rect.yMin(), rect.xMax(), rect.yMax());
     }
 
-    bool Tutorial::translate(std::string cell_name, int delta_x, int delta_y) {
+    bool Legalizer::translate(std::string cell_name, int delta_x, int delta_y) {
         dbBlock* block = get_block();
         if (!block) {
             std::string reason = error_message_from_get_block();
@@ -102,7 +83,7 @@ namespace tut {
     // fixed cells can occupy many rows
     // non-fixed cells occupy only one row
     // rows cannot have the same y
-    std::pair<bool, std::string> Tutorial::is_legalized() {
+    std::pair<bool, std::string> Legalizer::is_legalized() {
         dbBlock* block = get_block();
         if (!block) {
             std::string reason = error_message_from_get_block();
@@ -117,7 +98,7 @@ namespace tut {
         return is_legalized(x_min, y_min, x_max, y_max);
     }
 
-    std::pair<bool, std::string> Tutorial::is_legalized(int x1, int y1, int x2, int y2) {
+    std::pair<bool, std::string> Legalizer::is_legalized(int x1, int y1, int x2, int y2) {
         int area_x_min, area_x_max;
         if (x1 < x2) {
             area_x_min = x1;
@@ -259,7 +240,7 @@ namespace tut {
         return {true, ""};
     }
 
-    std::pair<bool, std::string> Tutorial::is_legalized_excluding_border(int x1, int y1, int x2, int y2) {
+    std::pair<bool, std::string> Legalizer::is_legalized_excluding_border(int x1, int y1, int x2, int y2) {
         int area_x_min, area_x_max;
         if (x1 < x2) {
             area_x_min = x1;
@@ -404,7 +385,7 @@ namespace tut {
     }
 
     // todo: this function may cause crashes because the dbInst::destroy function invalidates the pointer, which could be stored in one of the attributes
-    void Tutorial::destroy_cells_with_name_prefix(std::string prefix) {
+    void Legalizer::destroy_cells_with_name_prefix(std::string prefix) {
         dbBlock* block = get_block();
         if (!block) {
             fprintf(stderr, "%s\n", error_message_from_get_block());
@@ -419,7 +400,7 @@ namespace tut {
         }
     }
 
-    void Tutorial::disturb() {
+    void Legalizer::disturb() {
         dbBlock* block = get_block();
         if (!block) {
             fprintf(stderr, "%s\n", error_message_from_get_block());
@@ -439,7 +420,7 @@ namespace tut {
         }
     }
 
-    void Tutorial::shuffle() {
+    void Legalizer::shuffle() {
         dbBlock* block = get_block();
         if (!block) {
             fprintf(stderr, "%s\n", error_message_from_get_block());
@@ -450,7 +431,7 @@ namespace tut {
         shuffle(core.xMin(), core.yMin(), core.xMax(), core.yMax());
     }
 
-    void Tutorial::shuffle(int x1, int y1, int x2, int y2) {
+    void Legalizer::shuffle(int x1, int y1, int x2, int y2) {
         int x_min, x_max, y_min, y_max;
         if (x1 < x2) {
             x_min = x1;
@@ -488,9 +469,9 @@ namespace tut {
         }
     }
 
-    int Tutorial::max_clusters = 0;
+    int Legalizer::max_clusters = 0;
 
-    void Tutorial::abacus() {
+    void Legalizer::abacus() {
         auto [rows, splits_per_rows, cells] = get_sorted_rows_splits_and_cells();
         printf("cells.size() = %lu\n", cells.size());
         printf("cell name = %s\n", cells[0].second->getName().c_str());
@@ -498,7 +479,7 @@ namespace tut {
         abacus(move(rows), move(splits_per_rows), move(cells));
     }
 
-    void Tutorial::abacus(int x1, int y1, int x2, int y2, bool include_boundary) {
+    void Legalizer::abacus(int x1, int y1, int x2, int y2, bool include_boundary) {
         auto [rows, splits_per_rows, cells] =
             get_sorted_rows_splits_and_cells(
                 x1, y1, x2, y2, include_boundary
@@ -506,7 +487,7 @@ namespace tut {
         abacus(move(rows), move(splits_per_rows), move(cells));
     }
 
-    void Tutorial::abacus_artur(int x1, int y1, int x2, int y2) {
+    void Legalizer::abacus_artur(int x1, int y1, int x2, int y2) {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
             area_x_min = x1;
@@ -580,7 +561,7 @@ namespace tut {
 
     // todo: change && to const& for consistency (and because rows and cells should not be changed in this function
     // todo: check loop_x, loop_y and evaluate and change clusters and cells_per_row to consider split (solution: create new vector for row indices)
-    void Tutorial::abacus(
+    void Legalizer::abacus(
         vector<Row>&& rows,
         vector<vector<Split>>&& splits_per_row,
         vector<Cell>&& cells
@@ -867,7 +848,7 @@ namespace tut {
         printf("\n");
     }
 
-    bool Tutorial::abacus_try_add_cell(
+    bool Legalizer::abacus_try_add_cell(
         Rect row, int site_width,
         AbacusCell const& cell,
         vector<AbacusCluster> const& clusters,
@@ -908,7 +889,7 @@ namespace tut {
         return true;
     }
 
-    bool Tutorial::abacus_try_place_and_collapse(
+    bool Legalizer::abacus_try_place_and_collapse(
         vector<AbacusCluster> const& clusters,
         Rect row, int site_width,
         AbacusCluster* new_cluster, int* previous_i
@@ -952,17 +933,17 @@ namespace tut {
     }
 
     // todo: add splits_per_row to tetris
-    void Tutorial::tetris() {
+    void Legalizer::tetris() {
         auto [rows, splits_per_row, cells] = get_sorted_rows_splits_and_cells();
         tetris(move(rows), move(splits_per_row), move(cells));
     }
 
-    void Tutorial::tetris(int x1, int y1, int x2, int y2, bool include_boundary) {
+    void Legalizer::tetris(int x1, int y1, int x2, int y2, bool include_boundary) {
         auto [rows, splits_per_row, cells] = get_sorted_rows_splits_and_cells(x1, y1, x2, y2, include_boundary);
         tetris(move(rows), move(splits_per_row), move(cells));
     }
 
-    void Tutorial::tetris(
+    void Legalizer::tetris(
         vector<Row>&& rows_and_sites,
         vector<vector<Split>>&& splits_per_row,
         vector<Cell>&& cells_and_insts
@@ -1190,7 +1171,7 @@ namespace tut {
         printf("\n");
     }
 
-    int Tutorial::tetris_try_to_place_in_row(
+    int Legalizer::tetris_try_to_place_in_row(
         Rect const& row, int site_width,
         Rect const& cell, int target_x,
         std::deque<Rect> const& last_placed
@@ -1219,7 +1200,7 @@ namespace tut {
         }
     }
 
-    double Tutorial::dbu_to_microns(int64_t dbu) {
+    double Legalizer::dbu_to_microns(int64_t dbu) {
         dbBlock* block = get_block();
         if (!block) {
             fprintf(stderr, "%s\n", error_message_from_get_block());
@@ -1229,7 +1210,7 @@ namespace tut {
         return (double) dbu / block->getDbUnitsPerMicron();
     };
 
-    int64_t Tutorial::microns_to_dbu(double microns) {
+    int64_t Legalizer::microns_to_dbu(double microns) {
         dbBlock* block = get_block();
         if (!block) {
             fprintf(stderr, "%s\n", error_message_from_get_block());
@@ -1239,37 +1220,37 @@ namespace tut {
         return microns * block->getDbUnitsPerMicron();
     };
 
-    std::pair<double, double> Tutorial::xy_dbu_to_microns(int x, int y) {
+    std::pair<double, double> Legalizer::xy_dbu_to_microns(int x, int y) {
         return {dbu_to_microns(x), dbu_to_microns(y)};
     };
 
-    std::pair<int, int> Tutorial::xy_microns_to_dbu(double x, double y) {
+    std::pair<int, int> Legalizer::xy_microns_to_dbu(double x, double y) {
         return {microns_to_dbu(x), microns_to_dbu(y)};
     };
 
-    void Tutorial::set_pos(dbInst* cell, int x, int y, bool legalizing) {
+    void Legalizer::set_pos(dbInst* cell, int x, int y, bool legalizing) {
         if (legalizing) cells_legalized.insert(cell);
         else            cells_legalized.erase(cell);
 
         cell->setLocation(x, y);
     };
 
-    int Tutorial::row_to_y(dbRow* row) {
+    int Legalizer::row_to_y(dbRow* row) {
         int x, y;
         row->getOrigin(x, y);
         return y;
     };
 
-    bool Tutorial::collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max) {
+    bool Legalizer::collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max) {
         return pos1_min < pos2_max && pos2_min < pos1_max;
     };
 
-    auto Tutorial::dummy_row_and_site(int y_min) -> Row {
+    auto Legalizer::dummy_row_and_site(int y_min) -> Row {
         int int_max = numeric_limits<int>::max();
         return std::make_pair(Rect(0, y_min, int_max, int_max), 0);
     }
 
-    void Tutorial::save_state() {
+    void Legalizer::save_state() {
         {
             saved_state.pos.clear();
 
@@ -1291,14 +1272,14 @@ namespace tut {
         saved_state.cells_legalized = cells_legalized;
     }
 
-    void Tutorial::load_state() {
+    void Legalizer::load_state() {
         for (auto const& [cell, inst] : saved_state.pos) {
             set_pos(inst, cell.xMin(), cell.yMin(), false);
         }
         cells_legalized = saved_state.cells_legalized;
     }
 
-    void Tutorial::save_pos_to_file(string path) {
+    void Legalizer::save_pos_to_file(string path) {
         save_state();
 
         std::ofstream file(path);
@@ -1307,7 +1288,7 @@ namespace tut {
         }
     }
 
-    void Tutorial::load_pos_from_file(string path) {
+    void Legalizer::load_pos_from_file(string path) {
         saved_state.pos.clear();
 
         std::ifstream file(path);
@@ -1358,7 +1339,7 @@ namespace tut {
         load_state();
     }
 
-    void Tutorial::save_costs_to_file(string path) {
+    void Legalizer::save_costs_to_file(string path) {
         std::ofstream file(path);
 
         for (auto const& [cost, inst] : last_costs) {
@@ -1366,7 +1347,7 @@ namespace tut {
         }
     }
 
-    void Tutorial::show_legalized_vector() {
+    void Legalizer::show_legalized_vector() {
         int count = 0;
         for (dbInst* inst : cells_legalized) {
             logger->report(inst->getName());
@@ -1375,7 +1356,7 @@ namespace tut {
         logger->report(std::to_string(count) + " cells legalized");
     }
 
-    auto Tutorial::sort_and_get_splits(
+    auto Legalizer::sort_and_get_splits(
         vector<Row>* rows,
         vector<Rect> const& fixed_cells
     ) -> vector<vector<Split>> {
@@ -1459,7 +1440,7 @@ namespace tut {
         return splits_per_row;
     }
 
-    auto Tutorial::get_sorted_rows_splits_and_cells()
+    auto Legalizer::get_sorted_rows_splits_and_cells()
         -> tuple<vector<Row>, vector<vector<Split>>, vector<Cell>>
     {
         dbBlock* block = get_block();
@@ -1507,7 +1488,7 @@ namespace tut {
         return {rows, splits_per_row, cells};
     }
 
-    auto Tutorial::get_sorted_rows_splits_and_cells(int x1, int y1, int x2, int y2, bool include_boundary)
+    auto Legalizer::get_sorted_rows_splits_and_cells(int x1, int y1, int x2, int y2, bool include_boundary)
         -> tuple<vector<Row>, vector<vector<Split>>, vector<Cell>>
     {
         int area_x_min, area_x_max, area_y_min, area_y_max;

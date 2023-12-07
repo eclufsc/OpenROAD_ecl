@@ -218,11 +218,25 @@ getICeWall()
   return openroad->getICeWall();
 }
 
-tut::Tutorial*
-getTutorial()
+leg::Legalizer*
+getLegalizer()
 {
   OpenRoad *openroad = getOpenRoad();
-  return openroad->getTutorial();
+  return openroad->getLegalizer();
+}
+
+drw::Drawing*
+getDrawing()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getDrawing();
+}
+
+cng::Congestion*
+getCongestion()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getCongestion();
 }
 
 stt::SteinerTreeBuilder*

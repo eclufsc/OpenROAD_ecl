@@ -80,7 +80,9 @@
 #include "rcx/MakeOpenRCX.h"
 #include "rmp/MakeRestructure.h"
 #include "rsz/MakeResizer.hh"
-#include "tut/MakeTutorial.h"
+#include "leg/MakeLegalizer.h"
+#include "drw/MakeDrawing.h"
+#include "cng/MakeCongestion.h"
 #include "sta/StaMain.hh"
 #include "sta/VerilogWriter.hh"
 #include "stt/MakeSteinerTreeBuilder.h"
@@ -154,7 +156,9 @@ OpenRoad::~OpenRoad()
   deleteICeWall(icewall_);
   deleteDistributed(distributer_);
   deleteSteinerTreeBuilder(stt_builder_);
-  deleteTutorial(tutorial_);
+  deleteLegalizer(legalizer_);
+  deleteDrawing(drawing_);
+  deleteCongestion(congestion_);
   dft::deleteDft(dft_);
   delete logger_;
 }
@@ -211,7 +215,9 @@ void OpenRoad::init(Tcl_Interp* tcl_interp)
 #endif
   pdngen_ = makePdnGen();
   icewall_ = makeICeWall();
-  tutorial_ = makeTutorial();
+  legalizer_ = makeLegalizer();
+  drawing_ = makeDrawing();
+  congestion_ = makeCongestion();
   distributer_ = makeDistributed();
   stt_builder_ = makeSteinerTreeBuilder();
   dft_ = dft::makeDft();
@@ -253,7 +259,9 @@ void OpenRoad::init(Tcl_Interp* tcl_interp)
 #endif
   initPdnGen(this);
   initDistributed(this);
-  initTutorial(this);
+  initLegalizer(this);
+  initDrawing(this);
+  initCongestion(this);
   initSteinerTreeBuilder(this);
   dft::initDft(this);
 

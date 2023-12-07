@@ -266,7 +266,9 @@ add_subdirectory(ant)
 add_subdirectory(gui)
 add_subdirectory(drt)
 add_subdirectory(upf)
-add_subdirectory(tut)
+add_subdirectory(felipe/leg)
+add_subdirectory(felipe/drw)
+add_subdirectory(felipe/cng)
 add_subdirectory(utl)
 add_subdirectory(dst)
 add_subdirectory(pdn)
@@ -329,7 +331,9 @@ target_link_libraries(openroad
   psm
   ant
   upf
-  tut
+  leg
+  drw
+  cng
   utl
   pdn
   dft
