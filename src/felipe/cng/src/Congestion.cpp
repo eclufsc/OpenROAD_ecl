@@ -21,9 +21,6 @@ namespace cng {
         congestion(10, 10),
         heat_map(logger)
     {
-        // todo: delete
-        setbuf(stdout, 0);
-
         for (int i = 0; i < congestion.numRows(); i++) {
             for (int j = 0; j < congestion.numCols(); j++) {
                 congestion(i, j) =
@@ -41,6 +38,7 @@ namespace cng {
 
     Congestion::~Congestion() {}
 
+    // note: adapted from RoutingCongestionDataSource
     bool Congestion::routing() {
         dbBlock* block = db->getChip()->getBlock();
 
@@ -78,7 +76,7 @@ namespace cng {
                     vert_usage = data.vertical_usage;
                 }
 
-                //-1 indicates capacity is not well defined...
+                // -1 indicates capacity is not well defined
                 double hor_congestion, vert_congestion;
                 if (hor_capacity != 0) {
                     hor_congestion = (double)hor_usage / hor_capacity;
@@ -120,6 +118,10 @@ namespace cng {
         heat_map.update();
 
         return true;
+    }
+
+    bool placement() {
+        // todo
     }
 }
 

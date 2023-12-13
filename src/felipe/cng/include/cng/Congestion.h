@@ -104,6 +104,7 @@ public:
     ~Congestion();
 
     bool routing();
+    bool placement();
 
     // attributes
     utl::Logger* logger;
