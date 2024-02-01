@@ -31,7 +31,7 @@ public:
             if (!block || matrix.numRows() == 0) {
                 return HeatMapDataSource::getGridXSize();
             } else {
-                return (block->getDieArea().dx() / 10) / block->getDbUnitsPerMicron();
+                return (double)(block->getDieArea().dx() / 10) / block->getDbUnitsPerMicron();
             }
         } else {
             return (double)x_size / block->getDbUnitsPerMicron();
@@ -44,7 +44,7 @@ public:
             if (!block || matrix.numCols() == 0) {
                 return HeatMapDataSource::getGridXSize();
             } else {
-                return (block->getDieArea().dy() / 10) / block->getDbUnitsPerMicron();
+                return (double)(block->getDieArea().dy() / 10) / block->getDbUnitsPerMicron();
             }
         } else {
             return (double)y_size / block->getDbUnitsPerMicron();
