@@ -16,8 +16,7 @@ using drw::Drawing;
 
 namespace drw {
 
-void log()
-{
+void log() {
     Drawing* drawing = getDrawing();
     drawing->log();
 }
@@ -27,9 +26,14 @@ void draw_rect(int x1, int y1, int x2, int y2) {
   drawing->draw_rect(x1, y1, x2, y2);
 }
 
-void undraw_rect(int id) {
+void draw_line(int x1, int y1, int x2, int y2) {
   Drawing* drawing = getDrawing();
-  drawing->undraw_rect(id);
+  drawing->draw_line(x1, y1, x2, y2);
+}
+
+void undraw(int id) {
+  Drawing* drawing = getDrawing();
+  drawing->undraw(id);
 }
 
 void undraw_all() {

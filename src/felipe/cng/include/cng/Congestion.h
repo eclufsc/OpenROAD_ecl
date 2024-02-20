@@ -2,6 +2,7 @@
 
 #include "odb/db.h"
 #include "gui/heatMap.h"
+#include "drw/Drawing.h"
 
 namespace odb {
   class dbDatabase;
@@ -31,7 +32,10 @@ public:
             if (!block || matrix.numRows() == 0) {
                 return HeatMapDataSource::getGridXSize();
             } else {
-                return (double)(block->getDieArea().dx() / 10) / block->getDbUnitsPerMicron();
+                int n_blocks = 10;
+                return (double)(block->getDieArea().dx())
+                    / block->getDbUnitsPerMicron()
+                    / n_blocks;
             }
         } else {
             return (double)x_size / block->getDbUnitsPerMicron();
@@ -44,7 +48,10 @@ public:
             if (!block || matrix.numCols() == 0) {
                 return HeatMapDataSource::getGridXSize();
             } else {
-                return (double)(block->getDieArea().dy() / 10) / block->getDbUnitsPerMicron();
+                int n_blocks = 10;
+                return (double)(block->getDieArea().dy())
+                    / block->getDbUnitsPerMicron()
+                    / n_blocks;
             }
         } else {
             return (double)y_size / block->getDbUnitsPerMicron();
@@ -103,8 +110,13 @@ public:
     Congestion();
     ~Congestion();
 
-    bool routing();
-    bool placement();
+    bool update_routing_heatmap();
+    void test(std::string name);
+    void undraw();
+
+    std::pair<int, int> nets_Bboxes_median(
+        std::vector<int> Xs, std::vector<int> Ys
+    );
 
     // attributes
     utl::Logger* logger;
@@ -112,6 +124,7 @@ public:
 
     odb::dbMatrix<double> congestion;
     MyHeatMap heat_map;
+    drw::MyRenderer renderer;
 };
 }
 

@@ -24,6 +24,7 @@ target_link_libraries(cng
     gui
     odb
     OpenSTA
+    drw
 )
 
 messages(

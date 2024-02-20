@@ -18,9 +18,19 @@ using cng::Congestion;
 
 namespace cng {
 
-void routing() {
+void update_routing_heatmap() {
     Congestion* congestion = getCongestion();
-    congestion->routing();
+    congestion->update_routing_heatmap();
+}
+
+void test(char const* name) {
+    Congestion* congestion = getCongestion();
+    congestion->test(name);
+}
+
+void undraw() {
+    Congestion* congestion = getCongestion();
+    congestion->undraw();
 }
 
 } // namespace
