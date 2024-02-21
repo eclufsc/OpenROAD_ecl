@@ -225,6 +225,13 @@ getLegalizer()
   return openroad->getLegalizer();
 }
 
+misc::Misc*
+getMisc()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getMisc();
+}
+
 drw::Drawing*
 getDrawing()
 {

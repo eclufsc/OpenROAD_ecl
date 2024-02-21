@@ -139,6 +139,10 @@ namespace leg {
 class Legalizer;
 }
 
+namespace misc {
+class Misc;
+}
+
 namespace drw {
 class Drawing;
 }
@@ -205,6 +209,7 @@ class OpenRoad
   pdn::PdnGen* getPdnGen() { return pdngen_; }
   pad::ICeWall* getICeWall() { return icewall_; }
   leg::Legalizer* getLegalizer() { return legalizer_; }
+  misc::Misc* getMisc() { return misc_; }
   drw::Drawing* getDrawing() { return drawing_; }
   cng::Congestion* getCongestion() { return congestion_; }
   dst::Distributed* getDistributed() { return distributer_; }
@@ -293,6 +298,7 @@ class OpenRoad
   pdn::PdnGen* pdngen_ = nullptr;
   pad::ICeWall* icewall_ = nullptr;
   leg::Legalizer *legalizer_ = nullptr;
+  misc::Misc *misc_ = nullptr;
   drw::Drawing *drawing_ = nullptr;
   cng::Congestion *congestion_ = nullptr;
   dst::Distributed* distributer_ = nullptr;

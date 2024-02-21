@@ -30,8 +30,6 @@ public:
     Legalizer();
     ~Legalizer();
 
-    void destroy_cells_with_name_prefix(std::string prefix);
-
     std::pair<bool, std::string> is_legalized();
     std::pair<bool, std::string> is_legalized(int x1, int y1, int x2, int y2);
     // exclude from verification the cells that are in the border, colliding by less than half of its dimension in at least one of the axis
@@ -48,13 +46,9 @@ public:
         std::vector<Cell>&& cells
     );
 
-    void test();
     void dump_lowest_costs(std::string file_path);
     bool translate(std::string cell, int delta_x, int delta_y);
 
-    void shuffle();
-    void shuffle(int x1, int y1, int x2, int y2);
-    void disturb();
     std::pair<int, int> xy_microns_to_dbu(double x, double y);
     int64_t microns_to_dbu(double microns);
 
@@ -72,7 +66,6 @@ public:
     void load_state();
     void save_pos_to_file(std::string path);
     void load_pos_from_file(std::string path);
-    void save_costs_to_file(std::string path);
 
     // todo: delete
     void show_legalized_vector();
@@ -123,9 +116,6 @@ private:
         odb::Rect row, int site_width,
         AbacusCluster* new_cluster, int* previous_i
     );
-
-    // todo: delete
-    static int max_clusters;
     
     double dbu_to_microns(int64_t dbu);
 
@@ -151,9 +141,6 @@ private:
 
     // attributes
     odb::dbDatabase* db;
-
-    // todo: delete
-    std::vector<std::string> fixed_names;
 
     std::vector<std::pair<double, odb::dbInst*>> last_costs;
     std::set<odb::dbInst*> cells_legalized;

@@ -44,13 +44,6 @@ namespace leg {
         return "Block not available";
     }
 
-    // note: both (get/set)(Location/Origin) operate at block coordinate system
-    void Legalizer::test() {
-        Rect rect(1, 1, 3, 3);
-        rect.moveTo(2, 2);
-        printf("(%d, %d), (%d, %d)\n", rect.xMin(), rect.yMin(), rect.xMax(), rect.yMax());
-    }
-
     bool Legalizer::translate(std::string cell_name, int delta_x, int delta_y) {
         dbBlock* block = get_block();
         if (!block) {
@@ -384,93 +377,6 @@ namespace leg {
         return {true, ""};
     }
 
-    // todo: this function may cause crashes because the dbInst::destroy function invalidates the pointer, which could be stored in one of the attributes
-    void Legalizer::destroy_cells_with_name_prefix(std::string prefix) {
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        dbSet<dbInst> cells = block->getInsts();
-        for (dbInst* cell : cells) {
-            if (cell->getName().find(prefix) == 0) {
-                dbInst::destroy(cell);
-            }
-        }
-    }
-
-    void Legalizer::disturb() {
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        dbSet<dbInst> insts = block->getInsts();
-        for (dbInst* inst : insts) {
-            if (inst->isFixed()) continue;
-
-            Rect rect = inst->getBBox()->getBox();
-
-            int new_x = rect.xMin() + (rand() % rect.dx() - rect.dx()/2);
-            int new_y = rect.yMin() + (rand() % rect.dy() - rect.dy()/2);
-
-            set_pos(inst, new_x, new_y, false);
-        }
-    }
-
-    void Legalizer::shuffle() {
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        Rect core = block->getCoreArea();
-        shuffle(core.xMin(), core.yMin(), core.xMax(), core.yMax());
-    }
-
-    void Legalizer::shuffle(int x1, int y1, int x2, int y2) {
-        int x_min, x_max, y_min, y_max;
-        if (x1 < x2) {
-            x_min = x1;
-            x_max = x2;
-        } else {
-            x_min = x2;
-            x_max = x1;
-        }
-        if (y1 < y2) {
-            y_min = y1;
-            y_max = y2;
-        } else {
-            y_min = y2;
-            y_max = y1;
-        }
-        int dx = x_max - x_min;
-        int dy = y_max - y_min;
-
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return;
-        }
-
-        dbSet<dbInst> insts = block->getInsts();
-        for (dbInst* inst : insts) {
-            if (inst->isFixed()) continue;
-
-            Rect cell = inst->getBBox()->getBox();
-
-            int new_x = x_min + rand() % (dx - cell.dx());
-            int new_y = y_min + rand() % (dy - cell.dy());
-
-            set_pos(inst, new_x, new_y, false);
-        }
-    }
-
-    int Legalizer::max_clusters = 0;
-
     void Legalizer::abacus() {
         auto [rows, splits_per_rows, cells] = get_sorted_rows_splits_and_cells();
         printf("cells.size() = %lu\n", cells.size());
@@ -575,8 +481,6 @@ namespace leg {
 
         // todo: delete
         setbuf(stdout, 0);
-
-        last_costs.clear();
 
         test_count = 0;
         // todo: delete
@@ -745,8 +649,6 @@ namespace leg {
                 fail_counter++;
                 fprintf(stderr, "ERROR: could not place cell\n");
             } else {
-                last_costs.emplace_back(dbu_to_microns(sqrt(best_cost)), inst);
-
                 int accum_split_i =
                     row_to_start_split[best_row_i] + best_split_i;
                 cells_per_accum_split[accum_split_i]
@@ -839,12 +741,6 @@ namespace leg {
         } else {
             logger->report("Could not place " + std::to_string(fail_counter) + " cells");
         }
-
-        printf("max_row_iter = %d\n", max_row_iter);
-        printf("recursion_count = %d\n", total_recursion_count);
-        printf("max_clusters = %d\n", max_clusters);
-        printf("rows size = %lu\n", rows.size());
-        printf("cells size = %lu\n", cells.size());
         printf("\n");
     }
 
@@ -883,8 +779,6 @@ namespace leg {
         ) {
             return false;
         }
-
-        if (clusters.size() > max_clusters) max_clusters = clusters.size();
 
         return true;
     }
@@ -949,8 +843,6 @@ namespace leg {
         vector<Cell>&& cells_and_insts
     ) {
         if (cells_and_insts.size() == 0) return;
-
-        last_costs.clear();
 
         // todo: move this to a struct (or receive in the arguments)
         float left_factor = 1.0; 
@@ -1114,8 +1006,6 @@ namespace leg {
                 fprintf(stderr, "ERROR: could not place cell\n");
                 continue;
             }
-
-            last_costs.emplace_back(dbu_to_microns(sqrt(lowest_cost)), cells_and_insts[cell_i].second);
 
             int new_x = winning_site_x;
             int new_y = rows_and_sites[winning_row].first.yMin();
@@ -1339,14 +1229,6 @@ namespace leg {
         load_state();
     }
 
-    void Legalizer::save_costs_to_file(string path) {
-        std::ofstream file(path);
-
-        for (auto const& [cost, inst] : last_costs) {
-            file << cost << "\n";
-        }
-    }
-
     void Legalizer::show_legalized_vector() {
         int count = 0;
         for (dbInst* inst : cells_legalized) {
@@ -1459,7 +1341,6 @@ namespace leg {
 //                    || cells_legalized.find(inst) != cells_legalized.end()
                 ) {
                     fixed_cells.push_back(rect);
-                    fixed_names.push_back(inst->getName());
                 } else {
                     cells.push_back({rect, inst});
                 }

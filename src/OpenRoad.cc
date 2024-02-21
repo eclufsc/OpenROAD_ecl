@@ -81,6 +81,7 @@
 #include "rmp/MakeRestructure.h"
 #include "rsz/MakeResizer.hh"
 #include "leg/MakeLegalizer.h"
+#include "misc/MakeMisc.h"
 #include "drw/MakeDrawing.h"
 #include "cng/MakeCongestion.h"
 #include "sta/StaMain.hh"
@@ -157,6 +158,7 @@ OpenRoad::~OpenRoad()
   deleteDistributed(distributer_);
   deleteSteinerTreeBuilder(stt_builder_);
   deleteLegalizer(legalizer_);
+  deleteMisc(misc_);
   deleteDrawing(drawing_);
   deleteCongestion(congestion_);
   dft::deleteDft(dft_);
@@ -216,6 +218,7 @@ void OpenRoad::init(Tcl_Interp* tcl_interp)
   pdngen_ = makePdnGen();
   icewall_ = makeICeWall();
   legalizer_ = makeLegalizer();
+  misc_ = makeMisc();
   drawing_ = makeDrawing();
   congestion_ = makeCongestion();
   distributer_ = makeDistributed();
@@ -260,6 +263,7 @@ void OpenRoad::init(Tcl_Interp* tcl_interp)
   initPdnGen(this);
   initDistributed(this);
   initLegalizer(this);
+  initMisc(this);
   initDrawing(this);
   initCongestion(this);
   initSteinerTreeBuilder(this);
