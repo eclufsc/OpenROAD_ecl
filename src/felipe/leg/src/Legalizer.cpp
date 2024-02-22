@@ -44,33 +44,6 @@ namespace leg {
         return "Block not available";
     }
 
-    bool Legalizer::translate(std::string cell_name, int delta_x, int delta_y) {
-        dbBlock* block = get_block();
-        if (!block) {
-            std::string reason = error_message_from_get_block();
-            return false;
-        }
-
-        dbSet<dbInst> cells = block->getInsts();
-
-        dbInst* cell = 0;
-        for (dbInst* curr_cell : cells) {
-            if (curr_cell->getName() == cell_name) {
-                cell = curr_cell;
-            }
-        }
-
-        if (!cell) {
-            return false;
-        }
-
-        int x = cell->getBBox()->xMin();
-        int y = cell->getBBox()->yMin();
-        set_pos(cell, x + delta_x, y + delta_y, false);
-
-        return true;
-    }
-
     // note: conditions:
     // fixed cells are already legalized
     // fixed cells can occupy many rows
@@ -379,9 +352,6 @@ namespace leg {
 
     void Legalizer::abacus() {
         auto [rows, splits_per_rows, cells] = get_sorted_rows_splits_and_cells();
-        printf("cells.size() = %lu\n", cells.size());
-        printf("cell name = %s\n", cells[0].second->getName().c_str());
-        fflush(stdout);
         abacus(move(rows), move(splits_per_rows), move(cells));
     }
 
@@ -472,19 +442,11 @@ namespace leg {
         vector<vector<Split>>&& splits_per_row,
         vector<Cell>&& cells
     ) {
-        // todo: delete
         sort(cells.begin(), cells.end(),
             [&](Cell const& a, Cell const& b) {
                 return a.first.xMin() < b.first.xMin();
             }
         );
-
-        // todo: delete
-        setbuf(stdout, 0);
-
-        test_count = 0;
-        // todo: delete
-        int total_recursion_count = 0;
 
         // todo: delete
         auto start = high_resolution_clock::now();
@@ -503,19 +465,9 @@ namespace leg {
         // todo: delete
         int last_percentage = 0;
 
-        // todo: delete
-        int max_row_iter = 0;
-
         int fail_counter = 0;
 
-        clust_size.resize(100000);
-
-        // todo: delete
-        vector<int> recursion_counts(cells.size());
-
         for (int cell_i = 0; cell_i < cells.size(); cell_i++) {
-            cell_index = cell_i;
-
             auto const& [global_pos, inst] = cells[cell_i];
 
             double best_cost = std::numeric_limits<double>::max();
@@ -523,9 +475,6 @@ namespace leg {
             int best_split_i = -1;
             AbacusCluster best_new_cluster;
             int best_previous_i = 0;
-
-            // todo: delete
-            bool first_time = true;
 
             auto evaluate = [&](int row_i, double y_cost, int split_i) {
                 auto const& [whole_row, site_width] = rows[row_i];
@@ -538,10 +487,6 @@ namespace leg {
                 AbacusCluster new_cluster;
                 int previous_i;
 
-                recursion_count = 0;
-
-                test_start = high_resolution_clock::now();
-
                 int accum_split_i = row_to_start_split[row_i] + split_i;
                 if (!abacus_try_add_cell(
                     row, site_width,
@@ -549,15 +494,7 @@ namespace leg {
                     clusters_per_accum_split[accum_split_i],
                     &new_cluster, &previous_i
                 )) {
-                    test_end = high_resolution_clock::now();
-                    test_count += duration_cast<nanoseconds>(test_end - test_start).count();
                     return;
-                }
-                test_end = high_resolution_clock::now();
-                test_count += duration_cast<nanoseconds>(test_end - test_start).count();
-
-                if (first_time && cell_index < 100000) {
-                    clust_size[cell_index] = clusters_per_accum_split[accum_split_i].size();
                 }
 
                 int new_x = new_cluster.x + new_cluster.width - global_pos.dx();
@@ -572,11 +509,6 @@ namespace leg {
                     best_split_i = split_i;
                     best_new_cluster = new_cluster;
                     best_previous_i = previous_i;
-                }
-
-                if (first_time) {
-                    total_recursion_count += recursion_count;
-                    first_time = false;
                 }
             };
 
@@ -643,11 +575,9 @@ namespace leg {
                 if (!loop_y(row_i)) break;
             }
 
-            if (row_iter > max_row_iter) max_row_iter = row_iter;
-
             if (best_row_i == -1) {
                 fail_counter++;
-                fprintf(stderr, "ERROR: could not place cell\n");
+                fprintf(stderr, "ERROR: could not place cell %s\n", inst->getName().c_str());
             } else {
                 int accum_split_i =
                     row_to_start_split[best_row_i] + best_split_i;
@@ -664,47 +594,13 @@ namespace leg {
                 logger->report(std::to_string(curr_percentage) + "% of the cells processed");
                 last_percentage = curr_percentage;
             }
-
-            recursion_counts[cell_i] = recursion_count;
         }
 
-        // todo: delete
+        // todo: maybe delete
         auto end = high_resolution_clock::now();
         logger->report("Time spent (ms): " + std::to_string(duration_cast<milliseconds>(end - start).count()));
-        logger->report("Test time (ms): " + std::to_string((int)test_count / 1000000));
         
-        // checking whether the cells preserved relative ordering
-        {
-            int order_changed_n = 0;
-            int accum_split_i = 0;
-            for (int row_i = 0; row_i < rows.size(); row_i++) {
-                int last_cell_i = -1;
-                for (
-                    int split_i = 0;
-                    split_i < splits_per_row[row_i].size();
-                    split_i++
-                ) {
-                    for (int cell_i : cells_per_accum_split[accum_split_i]) {
-                        if (cell_i < last_cell_i) {
-                            if (order_changed_n == 0) {
-                                printf("\nOrder changed:\n");
-                                char const* name1 = cells[last_cell_i].second->getName().c_str();
-                                char const* name2 = cells[cell_i].second->getName().c_str();
-                                printf("%s and %s\n", name1, name2);
-                            }
-                            order_changed_n++;
-                        }
-                        last_cell_i = cell_i;
-                    }
-                    accum_split_i += 1;
-                }
-            }
-
-            if (order_changed_n) {
-                logger->report("Order changed of " + std::to_string(order_changed_n) + " cells");
-            }
-        }
-
+        // set_pos
         {
             int accum_split_i = 0;
             for (int row_i = 0; row_i < rows.size(); row_i++) {
@@ -788,8 +684,6 @@ namespace leg {
         Rect row, int site_width,
         AbacusCluster* new_cluster, int* previous_i
     ) {
-        recursion_count++;
-
         if (new_cluster->width > row.dx()) return false;
 
         new_cluster->x = new_cluster->q / new_cluster->weight;
@@ -883,14 +777,6 @@ namespace leg {
         // todo: it is possible to substitute the queue for a vector with two indexes (WindowVector). All cells_and_insts in the current accum split would be added beforehand. The pop_front would increment the start index; the push_back would increment the end index. I believe this is a better alternative due to its simplicity
         vector<deque<Rect>> last_placed_per_accum_split(total_splits);
 
-        int max_row_iter = 0;
-        int max_split_iter = 0;
-        int max_last_placed_size = 0;
-
-        double total_row_iter = 0;
-        double total_split_iter = 0;
-        double total_last_placed_size = 0;
-
         int not_placed_n = 0;
 
         // note: cells_and_insts cannot move too much (like tetris). According to the analogy, the left factor determines the fall speed
@@ -964,9 +850,6 @@ namespace leg {
                     break;
                 }
 
-                if (split_iter > max_split_iter) max_split_iter = split_iter;
-                total_split_iter += split_iter;
-
                 return true;
             };
 
@@ -991,9 +874,6 @@ namespace leg {
                 if (!loop_y(row_i)) break;
             }
 
-            if (row_iter > max_row_iter) max_row_iter = row_iter;
-            total_row_iter += row_iter;
-
             int curr_percentage = ((cell_i+1)*10 / (int)cells_and_insts.size())*10;
             if (curr_percentage > last_percentage) {
                 logger->report(std::to_string(curr_percentage) + "% of the cells processed");
@@ -1002,8 +882,8 @@ namespace leg {
 
             if (lowest_cost == std::numeric_limits<double>::max()) {
                 not_placed_n++;
-
-                fprintf(stderr, "ERROR: could not place cell\n");
+                dbInst* inst = cells_and_insts[cell_i].second;
+                fprintf(stderr, "ERROR: could not place cell %s\n", inst->getName().c_str());
                 continue;
             }
 
@@ -1033,9 +913,6 @@ namespace leg {
                 }
             }
             last_placed->push_back(cell);
-
-            if (last_placed->size() > max_last_placed_size) max_last_placed_size = last_placed->size();
-            total_last_placed_size += last_placed->size();
         }
 
         // todo: delete
@@ -1051,14 +928,6 @@ namespace leg {
         } else {
             logger->report("Could not place " + std::to_string(not_placed_n) + " cells");
         }
-
-        printf("max_row_iter = %d\n", max_row_iter);
-        printf("max_split_iter = %d\n", max_split_iter);
-        printf("max_last_placed_size = %d\n", max_last_placed_size);
-        printf("average_row_iter = %lf\n", total_row_iter / (int)cells_and_insts.size());
-        printf("average_split_iter = %lf\n", total_split_iter / (int)total_row_iter);
-        printf("average_last_placed_size = %lf\n", total_last_placed_size / (int)cells_and_insts.size());
-        printf("\n");
     }
 
     int Legalizer::tetris_try_to_place_in_row(
@@ -1090,38 +959,7 @@ namespace leg {
         }
     }
 
-    double Legalizer::dbu_to_microns(int64_t dbu) {
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return 0;
-        }
-
-        return (double) dbu / block->getDbUnitsPerMicron();
-    };
-
-    int64_t Legalizer::microns_to_dbu(double microns) {
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return 0;
-        }
-
-        return microns * block->getDbUnitsPerMicron();
-    };
-
-    std::pair<double, double> Legalizer::xy_dbu_to_microns(int x, int y) {
-        return {dbu_to_microns(x), dbu_to_microns(y)};
-    };
-
-    std::pair<int, int> Legalizer::xy_microns_to_dbu(double x, double y) {
-        return {microns_to_dbu(x), microns_to_dbu(y)};
-    };
-
     void Legalizer::set_pos(dbInst* cell, int x, int y, bool legalizing) {
-        if (legalizing) cells_legalized.insert(cell);
-        else            cells_legalized.erase(cell);
-
         cell->setLocation(x, y);
     };
 
@@ -1134,109 +972,6 @@ namespace leg {
     bool Legalizer::collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max) {
         return pos1_min < pos2_max && pos2_min < pos1_max;
     };
-
-    auto Legalizer::dummy_row_and_site(int y_min) -> Row {
-        int int_max = numeric_limits<int>::max();
-        return std::make_pair(Rect(0, y_min, int_max, int_max), 0);
-    }
-
-    void Legalizer::save_state() {
-        {
-            saved_state.pos.clear();
-
-            dbBlock* block = get_block();
-            if (!block) {
-                std::string reason = error_message_from_get_block();
-                return;
-            }
-
-            dbSet<dbInst> insts = block->getInsts();
-
-            for (dbInst* inst : insts) {
-                if (!inst->isFixed()) {
-                    Rect cell = inst->getBBox()->getBox();
-                    saved_state.pos.emplace_back(cell, inst);
-                }
-            }
-        }
-        saved_state.cells_legalized = cells_legalized;
-    }
-
-    void Legalizer::load_state() {
-        for (auto const& [cell, inst] : saved_state.pos) {
-            set_pos(inst, cell.xMin(), cell.yMin(), false);
-        }
-        cells_legalized = saved_state.cells_legalized;
-    }
-
-    void Legalizer::save_pos_to_file(string path) {
-        save_state();
-
-        std::ofstream file(path);
-        for (auto const& [cell, inst] : saved_state.pos) {
-            file << inst->getName() << " " << cell.xMin() << " " << cell.yMin() << "\n";
-        }
-    }
-
-    void Legalizer::load_pos_from_file(string path) {
-        saved_state.pos.clear();
-
-        std::ifstream file(path);
-        if (!file) {
-            fprintf(stderr, "File not found\n");
-            return;
-        }
-
-        vector<pair<string, dbInst*>> names;
-        {
-            dbBlock* block = get_block();
-            if (!block) {
-                std::string reason = error_message_from_get_block();
-                return;
-            }
-
-            dbSet<dbInst> insts = block->getInsts();
-
-            for (dbInst* inst : insts) {
-                if (!inst->isFixed()) {
-                    names.emplace_back(inst->getName(), inst);
-                }
-            }
-            std::sort(names.begin(), names.end());
-        }
-
-        while (true) {
-            string name;
-            int x, y;
-            file >> name >> x >> y;
-
-            if (!file) break;
-
-            pair<string, dbInst*> dummy_pair = std::make_pair(name, (dbInst*)0);
-            auto iter = std::lower_bound(names.begin(), names.end(), dummy_pair);
-
-            if (iter != names.end() && iter->first == name) {
-                dbInst* inst = iter->second;
-                Rect pos = inst->getBBox()->getBox();
-
-                pos.moveTo(x, y);
-                saved_state.pos.emplace_back(pos, inst);
-            } else {
-                fprintf(stderr, "The cell %s does not exist\n", name.c_str());
-            }
-        }
-
-        load_state();
-    }
-
-    void Legalizer::show_legalized_vector() {
-        int count = 0;
-        for (dbInst* inst : cells_legalized) {
-            logger->report(inst->getName());
-            count++;
-        }
-        logger->report(std::to_string(count) + " cells legalized");
-    }
 
     auto Legalizer::sort_and_get_splits(
         vector<Row>* rows,
@@ -1337,9 +1072,7 @@ namespace leg {
             dbSet<dbInst> cells_set = block->getInsts();
             for (dbInst* inst : cells_set) {
                 Rect rect = inst->getBBox()->getBox();
-                if (inst->isFixed()
-//                    || cells_legalized.find(inst) != cells_legalized.end()
-                ) {
+                if (inst->isFixed()) {
                     fixed_cells.push_back(rect);
                 } else {
                     cells.push_back({rect, inst});
@@ -1424,9 +1157,7 @@ namespace leg {
                     cells.push_back({rect, inst});
                     cell_total_area += rect.dx() * rect.dy();
                 } else {
-                    if (cells_legalized.find(inst) != cells_legalized.end()) {
-                        fixed_cells.push_back(rect);
-                    }
+                    fixed_cells.push_back(rect);
                 }
             }
         }

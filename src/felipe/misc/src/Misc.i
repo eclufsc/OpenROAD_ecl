@@ -23,18 +23,15 @@ void destroy_cells_with_name_prefix(const char* prefix) {
   misc->destroy_cells_with_name_prefix(prefix);
 }
 
-/*
-void translate_mi(const char* cell_name, int delta_x_mi, int delta_y_mi) {
+void translate(const char* cell_name, int delta_x, int delta_y) {
   Misc* misc = getMisc();
-
-  int delta_x = misc->microns_to_dbu(delta_x_mi);
-  int delta_y = misc->microns_to_dbu(delta_y_mi);
 
   if (!misc->translate(cell_name, delta_x, delta_y)) {
     misc->logger->report("Failed to move cell");
   }
 }
 
+/*
 void xy_microns_to_dbu(double x, double y) {
   Misc* misc = getMisc();
   auto [dbu_x, dbu_y] = misc->xy_microns_to_dbu(x, y);
@@ -47,15 +44,41 @@ void shuffle() {
   misc->shuffle();
 }
 
-void shuffle(int x1, int y1, int x2, int y2) {
+void shuffle_to(int x1, int y1, int x2, int y2) {
   Misc* misc = getMisc();
-  misc->shuffle(x1, y1, x2, y2);
+  misc->shuffle_to(x1, y1, x2, y2);
+}
+
+void shuffle_in(int x1, int y1, int x2, int y2) {
+  Misc* misc = getMisc();
+  misc->shuffle_in(x1, y1, x2, y2);
 }
 
 void disturb() {
   Misc* misc = getMisc();
   misc->disturb();
 }
+
+void save_state() {
+  Misc* misc = getMisc();
+  misc->save_state();
+}
+
+void load_state() {
+  Misc* misc = getMisc();
+  misc->load_state();
+}
+
+void save_pos_to_file(const char* path) {
+  Misc* misc = getMisc();
+  misc->save_pos_to_file(path);
+}
+
+void load_pos_from_file(const char* path) {
+  Misc* misc = getMisc();
+  misc->load_pos_from_file(path);
+}
+
 
 } // namespace
 

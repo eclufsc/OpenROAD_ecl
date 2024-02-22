@@ -79,31 +79,6 @@ void is_legalized_excluding_border(int x1, int y1, int x2, int y2) {
 }
 
 
-void save_state() {
-  Legalizer* legalizer = getLegalizer();
-  legalizer->save_state();
-}
-
-void load_state() {
-  Legalizer* legalizer = getLegalizer();
-  legalizer->load_state();
-}
-
-void save_pos_to_file(const char* path) {
-  Legalizer* legalizer = getLegalizer();
-  legalizer->save_pos_to_file(path);
-}
-
-void load_pos_from_file(const char* path) {
-  Legalizer* legalizer = getLegalizer();
-  legalizer->load_pos_from_file(path);
-}
-
-void show_legalized_vector() {
-  Legalizer* legalizer = getLegalizer();
-  legalizer->show_legalized_vector();
-}
-
 } // namespace
 
 %} // inline

@@ -46,12 +46,16 @@ public:
         std::vector<Cell>&& cells
     );
 
-    void dump_lowest_costs(std::string file_path);
-    bool translate(std::string cell, int delta_x, int delta_y);
-
-    std::pair<int, int> xy_microns_to_dbu(double x, double y);
-    int64_t microns_to_dbu(double microns);
-
+    // note: This implementation of abacus does not preverse relative ordering
+    // Thats because the fixed cell (e.g. a macro) divides the row into two subrows
+    // So its possible that the first bigger cell can not fit on the first part
+    // of the row and is placed on the second part, but the second smaller cell can
+    // fit on the first part
+    // This can be fixed with not so much effort, however it would be necessary to change
+    // the definition of `Row` to possibly tuple<vector<pair<int, int>>, int, int>
+    // (start and end ofthe subrows, y-position of first subrow and site_width)
+    // Since by my experiments the violation of ordering is not common relative
+    // to the total cells, I didnt change
     void abacus_artur(int x1, int y1, int x2, int y2);
 
     void abacus();
@@ -61,14 +65,6 @@ public:
         std::vector<std::vector<Split>>&& splits_per_row,
         std::vector<Cell>&& cells
     );
-
-    void save_state();
-    void load_state();
-    void save_pos_to_file(std::string path);
-    void load_pos_from_file(std::string path);
-
-    // todo: delete
-    void show_legalized_vector();
 
     // attributes
     utl::Logger* logger;
@@ -88,8 +84,6 @@ private:
         odb::Rect const& cell, int target_x,
         std::deque<odb::Rect> const& last_placed
     );
-
-    std::pair<odb::Rect, int> dummy_row_and_site(int y_min);
 
     struct AbacusCluster {
         double q;
@@ -117,10 +111,6 @@ private:
         AbacusCluster* new_cluster, int* previous_i
     );
     
-    double dbu_to_microns(int64_t dbu);
-
-    std::pair<double, double> xy_dbu_to_microns(int x, int y);
-
     void set_pos(odb::dbInst* cell, int x, int y, bool legalizing);
 
     int row_to_y(odb::dbRow* row);
@@ -141,24 +131,6 @@ private:
 
     // attributes
     odb::dbDatabase* db;
-
-    std::vector<std::pair<double, odb::dbInst*>> last_costs;
-    std::set<odb::dbInst*> cells_legalized;
-
-    struct SavedState {
-        std::vector<std::pair<odb::Rect, odb::dbInst*>> pos;
-        std::set<odb::dbInst*> cells_legalized;
-    };
-
-    SavedState saved_state;
-
-    // todo: delete
-    std::chrono::time_point<std::chrono::high_resolution_clock> test_start;
-    std::chrono::time_point<std::chrono::high_resolution_clock> test_end;
-    unsigned test_count;
-    unsigned recursion_count;
-    int cell_index;
-    std::vector<int> clust_size;
 };
 }
 
