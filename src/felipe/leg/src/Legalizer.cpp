@@ -1,3 +1,7 @@
+#if defined NDEBUG
+#undef NDEBUG
+#endif
+
 #include "leg/Legalizer.h"
 #include "odb/db.h"
 #include "ord/OpenRoad.hh"
@@ -13,8 +17,6 @@
 #include <fstream>
 #include <chrono>
 #include <string>
-
-// todo: create function to highlight area in openroad (maybe create a dummy cell and add it to a group?
 
 // todo: is it better for tetris to split rows or check fixed_cells?
 
@@ -348,6 +350,327 @@ namespace leg {
         }
 
         return {true, ""};
+    }
+
+    auto Legalizer::split_rows(
+        vector<Row> const& rows,
+        vector<Rect> const& fixed_cells
+    ) -> vector<vector<Split>> {
+        assert(is_sorted(rows.begin(), rows.end(),
+            [&](Row const& a, Row const& b) {
+                return a.first.yMin() < b.first.yMin();
+            }
+        ));
+
+        assert(is_sorted(fixed_cells.begin(), fixed_cells.end(),
+            [&](Rect const& a, Rect const& b) {
+                return a.xMin() < b.xMin();
+            }
+        ));
+
+        vector<vector<Split>> splits_per_row(rows.size());
+        vector<Split> remaining_splits;
+        for (auto const& [rect, site_width] : rows) {
+            remaining_splits.emplace_back(rect.xMin(), rect.xMax());
+        }
+
+        for (Rect const& fixed_cell : fixed_cells) {
+            int int_min = numeric_limits<int>::min();
+            int int_max = numeric_limits<int>::max();
+
+            Rect dummy_row1 = Rect(
+                int_min, int_min,
+                int_max, fixed_cell.yMin()
+            );
+            int row_start = std::upper_bound(rows.begin(), rows.end(),
+                make_pair(dummy_row1, 0),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMax() < b.first.yMax();
+                }
+            ) - rows.begin();
+
+            Rect dummy_row2 = Rect(
+                int_min, int_min,
+                int_max, fixed_cell.yMax()
+            );
+            int row_end = std::lower_bound(rows.begin(), rows.end(),
+                make_pair(dummy_row2, 0),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMax() < b.first.yMax();
+                }
+            ) - rows.begin();
+
+            if (row_end == rows.size()) row_end--;
+            if (row_start == 0 && rows[row_start].first.yMin() >= fixed_cell.yMax()) continue;
+
+            for (int row_i = row_start; row_i <= row_end; row_i++) {
+                auto [old_x_min, old_x_max] = remaining_splits[row_i];
+
+                if (old_x_max <= fixed_cell.xMin()) continue;
+
+                auto const& [row, site_width] = rows[row_i];
+
+                int mid_x_min =
+                    (fixed_cell.xMin() - row.xMin())
+                    / site_width * site_width + row.xMin();
+                int mid_x_max = 
+                    ((fixed_cell.xMax() - row.xMin()) + site_width-1)
+                    / site_width * site_width + row.xMin();
+
+                if (old_x_min < mid_x_min) {
+                    splits_per_row[row_i].emplace_back(old_x_min, mid_x_min);
+                }
+                if (mid_x_max <= old_x_max) {
+                    remaining_splits[row_i] = make_pair(mid_x_max, old_x_max);
+                }
+            }
+        }
+
+        for (int row_i = 0; row_i < rows.size(); row_i++) {
+            Split const& split = remaining_splits[row_i];
+            if (split.second - split.first > 0) {
+                splits_per_row[row_i].push_back(split);
+            }
+        }
+
+        return splits_per_row;
+    }
+
+    auto Legalizer::sort_and_get_splits(
+        vector<Row>* rows,
+        vector<Rect> const& fixed_cells
+    ) -> vector<vector<Split>> {
+        sort(rows->begin(), rows->end(),
+            [&](Row const& a, Row const& b) {
+                return a.first.yMin() < b.first.yMin();
+            }
+        );
+
+        // todo: maybe vector<set<Split>> and when returning converting to vector<vector<Split>> is faster? Because vector::erase is O(n)
+        vector<vector<Split>> splits_per_row(rows->size());
+        for (int row_i = 0; row_i < rows->size(); row_i++) {
+            Rect const& rect = (*rows)[row_i].first;
+            splits_per_row[row_i].emplace_back(rect.xMin(), rect.xMax());
+        }
+
+        for (Rect const& fixed_cell : fixed_cells) {
+            int int_min = numeric_limits<int>::min();
+            int int_max = numeric_limits<int>::max();
+
+            Rect dummy_row1 = Rect(
+                int_min, int_min,
+                int_max, fixed_cell.yMin()
+            );
+            int row_start = std::upper_bound(rows->begin(), rows->end(),
+                make_pair(dummy_row1, 0),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMax() < b.first.yMax();
+                }
+            ) - rows->begin();
+
+            Rect dummy_row2 = Rect(
+                int_min, int_min,
+                int_max, fixed_cell.yMax()
+            );
+            int row_end = std::lower_bound(rows->begin(), rows->end(),
+                make_pair(dummy_row2, 0),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMax() < b.first.yMax();
+                }
+            ) - rows->begin();
+
+            if (row_end == rows->size()) row_end--;
+
+            for (int row_i = row_start; row_i <= row_end; row_i++) {
+                vector<Split>* splits = &splits_per_row[row_i];
+                auto const& [row, site_width] = (*rows)[row_i];
+
+                auto split = lower_bound(splits->begin(), splits->end(),
+                    make_pair(0, fixed_cell.xMin()),
+                    [&](Split const& a, Split const& b) {
+                        return a.second < b.second;
+                    }
+                );
+                if (split == splits->end()) continue;
+
+                auto [old_x_min, old_x_max] = *split;
+
+                if (!collide(fixed_cell.xMin(), fixed_cell.xMax(), old_x_min, old_x_max)) {
+                    continue;
+                }
+
+                int new_x_min =
+                    (fixed_cell.xMin() - row.xMin())
+                    / site_width * site_width + row.xMin();
+                int new_x_max = 
+                    ((fixed_cell.xMax() - row.xMin()) + site_width-1)
+                    / site_width * site_width + row.xMin();
+
+                splits->erase(split);
+
+                if (new_x_max < old_x_max) {
+                    splits->insert(split, make_pair(new_x_max, old_x_max));
+                }
+                if (old_x_min < new_x_min) {
+                    splits->insert(split, make_pair(old_x_min, new_x_min));
+                }
+            }
+        }
+
+        return splits_per_row;
+    }
+
+    auto Legalizer::get_sorted_rows_splits_and_cells()
+        -> tuple<vector<Row>, vector<vector<Split>>, vector<Cell>>
+    {
+        dbBlock* block = get_block();
+        if (!block) {
+            fprintf(stderr, "%s\n", error_message_from_get_block());
+            return {};
+        }
+
+        vector<Cell> cells;
+        vector<Rect> fixed_cells;
+        {
+            dbSet<dbInst> cells_set = block->getInsts();
+            for (dbInst* inst : cells_set) {
+                Rect rect = inst->getBBox()->getBox();
+                if (inst->isFixed()) {
+                    fixed_cells.push_back(rect);
+                } else {
+                    cells.push_back({rect, inst});
+                }
+            }
+
+            sort(cells.begin(), cells.end(),
+                [&](Cell const& a, Cell const& b) {
+                    return a.first.xMin() < b.first.xMin();
+                }
+            );
+
+            sort(fixed_cells.begin(), fixed_cells.end(),
+                [&](Rect const& a, Rect const& b) {
+                    return a.xMin() < b.xMin();
+                }
+            );
+        }
+
+        vector<Row> rows;
+        vector<vector<Split>> splits_per_row;
+        {
+            dbSet<dbRow> rows_set = block->getRows();
+            for (dbRow* row : rows_set) {
+                Rect rect = row->getBBox();
+                int site_width = row->getSite()->getWidth();
+                rows.push_back({rect, site_width});
+            }
+
+            sort(rows.begin(), rows.end(),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMin() < b.first.yMin();
+                }
+            );
+
+            splits_per_row = split_rows(rows, fixed_cells);
+        }
+
+        return {rows, splits_per_row, cells};
+    }
+
+    auto Legalizer::get_sorted_rows_splits_and_cells(int x1, int y1, int x2, int y2, bool include_boundary)
+        -> tuple<vector<Row>, vector<vector<Split>>, vector<Cell>>
+    {
+        int area_x_min, area_x_max, area_y_min, area_y_max;
+        if (x1 < x2) {
+            area_x_min = x1;
+            area_x_max = x2;
+        } else {
+            area_x_max = x1;
+            area_x_min = x2;
+        }
+        if (y1 < y2) {
+            area_y_min = y1;
+            area_y_max = y2;
+        } else {
+            area_y_max = y1;
+            area_y_min = y2;
+        }
+
+        dbBlock* block = get_block();
+        if (!block) {
+            fprintf(stderr, "%s\n", error_message_from_get_block());
+            return {};
+        }
+
+        double cell_total_area = 0;
+        vector<Cell> cells;
+        vector<Rect> fixed_cells;
+        {
+            dbSet<dbInst> insts = block->getInsts();
+            
+            for (dbInst* inst : insts) {
+                Rect rect = inst->getBBox()->getBox();
+
+                if (!collide(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
+                    || !collide(rect.yMin(), rect.yMax(), area_y_min, area_y_max)) {
+                    continue;
+                }
+
+                int cx = rect.xMin() + rect.dx()/2;
+                int cy = rect.yMin() + rect.dy()/2;
+
+                bool center_inside;
+                if (include_boundary) {
+                    center_inside = area_x_min <= cx && cx <= area_x_max
+                                 && area_y_min <= cy && cy <= area_y_max;
+                } else {
+                    center_inside = area_x_min < cx && cx < area_x_max
+                                 && area_y_min < cy && cy < area_y_max;
+                }
+
+                if (center_inside && !inst->isFixed()) {
+                    cells.push_back({rect, inst});
+                    cell_total_area += rect.dx() * rect.dy();
+                } else {
+                    fixed_cells.push_back(rect);
+                }
+            }
+        }
+
+        vector<Row> rows;
+        vector<vector<Split>> splits_per_row;
+        {
+            dbSet<dbRow> rows_set = block->getRows();
+            for (dbRow* row : rows_set) {
+                Rect rect = row->getBBox();
+                if (collide(area_x_min, area_x_max, rect.xMin(), rect.xMax())
+                    && collide(area_y_min, area_y_max, rect.yMin(), rect.yMax())
+                ) {
+                    int site_width = row->getSite()->getWidth();
+
+                    int site_x_min = (area_x_min - rect.xMin()) / site_width * site_width + rect.xMin();
+                    int site_x_max = (area_x_max - rect.xMin()) / site_width * site_width + rect.xMin();
+
+                    rect.set_xlo(std::max(site_x_min, rect.xMin()));
+                    rect.set_xhi(std::min(site_x_max, rect.xMax()));
+                    rows.push_back({rect, site_width});
+                }
+            }
+
+            splits_per_row = sort_and_get_splits(&rows, fixed_cells);
+        }
+
+        double row_total_area = 0;
+        for (int i = 0; i < rows.size(); i++) {
+            Rect const& rect = rows[i].first;
+            row_total_area += rect.dx() * rect.dy();
+        }
+        
+        if (cell_total_area > row_total_area) {
+            logger->report("Impossible to legalize: cells total area is bigger than rows total area");
+        }
+
+        return {rows, splits_per_row, cells};
     }
 
     void Legalizer::abacus() {
@@ -973,229 +1296,5 @@ namespace leg {
         return pos1_min < pos2_max && pos2_min < pos1_max;
     };
 
-    auto Legalizer::sort_and_get_splits(
-        vector<Row>* rows,
-        vector<Rect> const& fixed_cells
-    ) -> vector<vector<Split>> {
-        sort(rows->begin(), rows->end(),
-            [&](Row const& a, Row const& b) {
-                return a.first.yMin() < b.first.yMin();
-            }
-        );
-
-        // todo: maybe vector<set<Split>> and when returning converting to vector<vector<Split>> is faster? Because vector::erase is O(n)
-        vector<vector<Split>> splits_per_row(rows->size());
-        for (int row_i = 0; row_i < rows->size(); row_i++) {
-            Rect const& rect = (*rows)[row_i].first;
-            splits_per_row[row_i].emplace_back(rect.xMin(), rect.xMax());
-        }
-
-        for (Rect const& fixed_cell : fixed_cells) {
-            int int_min = numeric_limits<int>::min();
-            int int_max = numeric_limits<int>::max();
-
-            Rect dummy_row1 = Rect(
-                int_min, int_min,
-                int_max, fixed_cell.yMin()
-            );
-            int row_start = std::upper_bound(rows->begin(), rows->end(),
-                make_pair(dummy_row1, 0),
-                [&](Row const& a, Row const& b) {
-                    return a.first.yMax() < b.first.yMax();
-                }
-            ) - rows->begin();
-
-            Rect dummy_row2 = Rect(
-                int_min, int_min,
-                int_max, fixed_cell.yMax()
-            );
-            int row_end = std::lower_bound(rows->begin(), rows->end(),
-                make_pair(dummy_row2, 0),
-                [&](Row const& a, Row const& b) {
-                    return a.first.yMax() < b.first.yMax();
-                }
-            ) - rows->begin();
-
-            if (row_end == rows->size()) row_end--;
-
-            for (int row_i = row_start; row_i <= row_end; row_i++) {
-                vector<Split>* splits = &splits_per_row[row_i];
-                auto const& [row, site_width] = (*rows)[row_i];
-
-                auto split = lower_bound(splits->begin(), splits->end(),
-                    make_pair(0, fixed_cell.xMin()),
-                    [&](Split const& a, Split const& b) {
-                        return a.second < b.second;
-                    }
-                );
-                if (split == splits->end()) continue;
-
-                auto [old_x_min, old_x_max] = *split;
-
-                if (!collide(fixed_cell.xMin(), fixed_cell.xMax(), old_x_min, old_x_max)) {
-                    continue;
-                }
-
-                int new_x_min =
-                    (fixed_cell.xMin() - row.xMin())
-                    / site_width * site_width + row.xMin();
-                int new_x_max = 
-                    ((fixed_cell.xMax() - row.xMin()) + site_width-1)
-                    / site_width * site_width + row.xMin();
-
-                splits->erase(split);
-
-                if (new_x_max < old_x_max) {
-                    splits->insert(split, make_pair(new_x_max, old_x_max));
-                }
-                if (old_x_min < new_x_min) {
-                    splits->insert(split, make_pair(old_x_min, new_x_min));
-                }
-            }
-        }
-
-        return splits_per_row;
-    }
-
-    auto Legalizer::get_sorted_rows_splits_and_cells()
-        -> tuple<vector<Row>, vector<vector<Split>>, vector<Cell>>
-    {
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return {};
-        }
-
-        vector<Cell> cells;
-        vector<Rect> fixed_cells;
-        {
-            dbSet<dbInst> cells_set = block->getInsts();
-            for (dbInst* inst : cells_set) {
-                Rect rect = inst->getBBox()->getBox();
-                if (inst->isFixed()) {
-                    fixed_cells.push_back(rect);
-                } else {
-                    cells.push_back({rect, inst});
-                }
-            }
-
-            sort(cells.begin(), cells.end(),
-                [&](Cell const& a, Cell const& b) {
-                    return a.first.xMin() < b.first.xMin();
-                }
-            );
-        }
-
-        vector<Row> rows;
-        vector<vector<Split>> splits_per_row;
-        {
-            dbSet<dbRow> rows_set = block->getRows();
-            for (dbRow* row : rows_set) {
-                Rect rect = row->getBBox();
-                int site_width = row->getSite()->getWidth();
-                rows.push_back({rect, site_width});
-            }
-
-            splits_per_row = sort_and_get_splits(&rows, fixed_cells);
-        }
-
-        return {rows, splits_per_row, cells};
-    }
-
-    auto Legalizer::get_sorted_rows_splits_and_cells(int x1, int y1, int x2, int y2, bool include_boundary)
-        -> tuple<vector<Row>, vector<vector<Split>>, vector<Cell>>
-    {
-        int area_x_min, area_x_max, area_y_min, area_y_max;
-        if (x1 < x2) {
-            area_x_min = x1;
-            area_x_max = x2;
-        } else {
-            area_x_max = x1;
-            area_x_min = x2;
-        }
-        if (y1 < y2) {
-            area_y_min = y1;
-            area_y_max = y2;
-        } else {
-            area_y_max = y1;
-            area_y_min = y2;
-        }
-
-        dbBlock* block = get_block();
-        if (!block) {
-            fprintf(stderr, "%s\n", error_message_from_get_block());
-            return {};
-        }
-
-        double cell_total_area = 0;
-        vector<Cell> cells;
-        vector<Rect> fixed_cells;
-        {
-            dbSet<dbInst> insts = block->getInsts();
-            
-            for (dbInst* inst : insts) {
-                Rect rect = inst->getBBox()->getBox();
-
-                if (!collide(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
-                    || !collide(rect.yMin(), rect.yMax(), area_y_min, area_y_max)) {
-                    continue;
-                }
-
-                int cx = rect.xMin() + rect.dx()/2;
-                int cy = rect.yMin() + rect.dy()/2;
-
-                bool center_inside;
-                if (include_boundary) {
-                    center_inside = area_x_min <= cx && cx <= area_x_max
-                                 && area_y_min <= cy && cy <= area_y_max;
-                } else {
-                    center_inside = area_x_min < cx && cx < area_x_max
-                                 && area_y_min < cy && cy < area_y_max;
-                }
-
-                if (center_inside && !inst->isFixed()) {
-                    cells.push_back({rect, inst});
-                    cell_total_area += rect.dx() * rect.dy();
-                } else {
-                    fixed_cells.push_back(rect);
-                }
-            }
-        }
-
-        vector<Row> rows;
-        vector<vector<Split>> splits_per_row;
-        {
-            dbSet<dbRow> rows_set = block->getRows();
-            for (dbRow* row : rows_set) {
-                Rect rect = row->getBBox();
-                if (collide(area_x_min, area_x_max, rect.xMin(), rect.xMax())
-                    && collide(area_y_min, area_y_max, rect.yMin(), rect.yMax())
-                ) {
-                    int site_width = row->getSite()->getWidth();
-
-                    int site_x_min = (area_x_min - rect.xMin()) / site_width * site_width + rect.xMin();
-                    int site_x_max = (area_x_max - rect.xMin()) / site_width * site_width + rect.xMin();
-
-                    rect.set_xlo(std::max(site_x_min, rect.xMin()));
-                    rect.set_xhi(std::min(site_x_max, rect.xMax()));
-                    rows.push_back({rect, site_width});
-                }
-            }
-
-            splits_per_row = sort_and_get_splits(&rows, fixed_cells);
-        }
-
-        double row_total_area = 0;
-        for (int i = 0; i < rows.size(); i++) {
-            Rect const& rect = rows[i].first;
-            row_total_area += rect.dx() * rect.dy();
-        }
-        
-        if (cell_total_area > row_total_area) {
-            logger->report("Impossible to legalize: cells total area is bigger than rows total area");
-        }
-
-        return {rows, splits_per_row, cells};
-    }
 }
 

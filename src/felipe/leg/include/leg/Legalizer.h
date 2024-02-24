@@ -35,6 +35,13 @@ public:
     // exclude from verification the cells that are in the border, colliding by less than half of its dimension in at least one of the axis
     std::pair<bool, std::string> is_legalized_excluding_border(int x1, int y1, int x2, int y2);
 
+private:
+    std::pair<bool, std::string> is_legalized(
+        std::vector<std::pair<odb::Rect, int>> rows_and_sites,
+        std::vector<std::pair<odb::Rect, odb::dbInst*>> const& cells
+    );
+
+public:
     void tetris();
     void tetris(
         int area_x1, int area_y1, int area_x2, int area_y2,
@@ -46,14 +53,23 @@ public:
         std::vector<Cell>&& cells
     );
 
+private:
+    int tetris_try_to_place_in_row(
+        odb::Rect const& row, int site_width,
+        odb::Rect const& cell, int target_x,
+        std::deque<odb::Rect> const& last_placed
+    );
+
+public:
+
     // note: This implementation of abacus does not preverse relative ordering
     // Thats because the fixed cell (e.g. a macro) divides the row into two subrows
     // So its possible that the first bigger cell can not fit on the first part
     // of the row and is placed on the second part, but the second smaller cell can
     // fit on the first part
     // This can be fixed with not so much effort, however it would be necessary to change
-    // the definition of `Row` to possibly tuple<vector<pair<int, int>>, int, int>
-    // (start and end ofthe subrows, y-position of first subrow and site_width)
+    // the definition of `Row` to possibly tuple<vector<Split>, int, int>
+    // (Splits, y-position and site_width)
     // Since by my experiments the violation of ordering is not common relative
     // to the total cells, I didnt change
     void abacus_artur(int x1, int y1, int x2, int y2);
@@ -66,25 +82,7 @@ public:
         std::vector<Cell>&& cells
     );
 
-    // attributes
-    utl::Logger* logger;
-
 private:
-    std::pair<bool, std::string> is_legalized(
-        std::vector<std::pair<odb::Rect, int>> rows_and_sites,
-        std::vector<std::pair<odb::Rect, odb::dbInst*>> const& cells
-    );
-
-    // methods
-    const char* error_message_from_get_block();
-    odb::dbBlock* get_block();
-
-    int tetris_try_to_place_in_row(
-        odb::Rect const& row, int site_width,
-        odb::Rect const& cell, int target_x,
-        std::deque<odb::Rect> const& last_placed
-    );
-
     struct AbacusCluster {
         double q;
         double weight;
@@ -111,11 +109,25 @@ private:
         AbacusCluster* new_cluster, int* previous_i
     );
     
+public:
+    // attributes
+    utl::Logger* logger;
+
+private:
+    // methods
+    const char* error_message_from_get_block();
+    odb::dbBlock* get_block();
+
     void set_pos(odb::dbInst* cell, int x, int y, bool legalizing);
 
     int row_to_y(odb::dbRow* row);
 
     bool collide(int pos1_min, int pos1_max, int pos2_min, int pos2_max);
+
+    auto split_rows(
+        std::vector<Row> const& rows,
+        std::vector<odb::Rect> const& fixed_cells
+    ) -> std::vector<std::vector<Split>>;
 
     auto sort_and_get_splits(
         std::vector<Row>* rows,
