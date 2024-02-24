@@ -40,6 +40,7 @@ public:
     virtual void drawObjects(gui::Painter& painter) override {
         for (Sprite const& sprite : sprites) {
             if (sprite.type == RECT) {
+                painter.setPen(gui::Painter::Color(200, 200, 200, 200), false, 20);
                 painter.setBrush(sprite.color);
                 painter.drawRect(odb::Rect(sprite.points[0], sprite.points[1]));
             } else if (sprite.type == LINE) {

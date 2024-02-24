@@ -23,9 +23,10 @@ void update_routing_heatmap() {
     congestion->update_routing_heatmap();
 }
 
-void test(char const* name) {
+// todo
+void test() {
     Congestion* congestion = getCongestion();
-    congestion->test(name);
+    congestion->test("inst1");
 }
 
 void undraw() {

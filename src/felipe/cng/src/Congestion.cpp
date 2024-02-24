@@ -146,31 +146,41 @@ namespace cng {
         setbuf(stdout, 0);
 
         dbBlock* block = 0;
-        dbChip* chip = db->getChip();
-        if (chip) block = chip->getBlock();
+        {
+            dbChip* chip = db->getChip();
+            if (chip) block = chip->getBlock();
 
-        if (!block) {
-            fprintf(stderr, "Failed to load block\n");
-        }
-
-        dbSet<dbInst> insts = block->getInsts();
-        dbInst* moving_inst = 0;
-        for (dbInst* i : insts) {
-            if (i->getName() == name) {
-                moving_inst = i;
+            if (!block) {
+                fprintf(stderr, "Failed to load block\n");
             }
         }
 
-        if (!moving_inst) {
-            printf("%s", (name + " not found\n").c_str());
-            return;
+        dbInst* moving_inst = 0;
+        dbSet<dbInst> insts = block->getInsts();
+        {
+            for (dbInst* i : insts) {
+                if (i->getName() == name) {
+                    moving_inst = i;
+                }
+            }
+
+            if (!moving_inst) {
+                printf("%s", (name + " not found\n").c_str());
+                return;
+            }
         }
 
         Rect src_rect = moving_inst->getBBox()->getBox();
-
         Rect dst_rect;
         std::vector<Rect> other_cells;
-        {
+        int max_delta = INT_MIN;
+        for (dbInst* curr_moving_inst : insts) {
+            if (curr_moving_inst->isFixed()) continue;
+
+            Rect curr_src_rect = curr_moving_inst->getBBox()->getBox();
+            Rect curr_dst_rect;
+            std::vector<Rect> curr_other_cells;
+
             std::vector<int> nets_Bbox_Xs;
             std::vector<int> nets_Bbox_Ys;
 
@@ -192,7 +202,7 @@ namespace cng {
 
                     odb::dbInst* inst = iterm->getInst();
                     if (inst && (inst != moving_inst)) {
-                        other_cells.push_back(inst->getBBox()->getBox());
+                        curr_other_cells.push_back(inst->getBBox()->getBox());
                         inst->getLocation(x, y);
                         xur = std::max(xur, x);
                         yur = std::max(yur, y);
@@ -208,10 +218,25 @@ namespace cng {
             }
 
             std::pair<int, int> Optimal_Region = nets_Bboxes_median(nets_Bbox_Xs, nets_Bbox_Ys);
-            dst_rect = Rect(
+            curr_dst_rect = Rect(
                 Optimal_Region.first, Optimal_Region.second,
-                Optimal_Region.first + src_rect.dx(), Optimal_Region.second + src_rect.dy()
+                Optimal_Region.first + curr_src_rect.dx(), Optimal_Region.second + curr_src_rect.dy()
             );
+
+            auto abs_int = [&](int x) {
+                if (x >= 0) return x;
+                else        return -x;
+            };
+
+            int curr_delta = abs_int(curr_src_rect.xMin() - curr_dst_rect.xMin())
+                           + abs_int(curr_src_rect.yMin() - curr_dst_rect.yMin());
+
+            if (curr_delta > max_delta) {
+                src_rect = curr_src_rect;
+                dst_rect = curr_dst_rect;
+                other_cells = curr_other_cells;
+                max_delta = curr_delta;
+            }
         }
 
         auto draw_rect = [&](Rect rect, gui::Painter::Color color) {
@@ -277,6 +302,12 @@ namespace cng {
                 int grid_y_min_i = (rect.yMin() - block_start) / y_size;
                 int grid_y_max_i = (rect.yMax() - block_start - 1) / y_size;
 
+                assert(grid_x_min_i >= 0
+                    && grid_x_max_i < x_grid.size()
+                    && grid_y_min_i >= 0
+                    && grid_y_max_i < y_grid.size()
+                    && "Out of grid");
+
                 Rect pos(
                     x_grid[grid_x_min_i], y_grid[grid_y_min_i],
                     x_grid[grid_x_max_i+1], y_grid[grid_y_max_i+1]
@@ -297,6 +328,8 @@ namespace cng {
                         double vert = data.vertical_capacity
                                       ? (double)data.vertical_usage / data.vertical_capacity
                                       : -1;
+
+                        //printf("(%d %d %d)\n", data.horizontal_capacity, data.vertical_capacity, vert > hor);
 
                         if (hor > vert) {
                             total_usage    += data.horizontal_usage;
