@@ -406,22 +406,24 @@ namespace leg {
             for (int row_i = row_start; row_i <= row_end; row_i++) {
                 auto [old_x_min, old_x_max] = remaining_splits[row_i];
 
-                if (old_x_max <= fixed_cell.xMin()) continue;
+                if (fixed_cell.xMax() <= old_x_min || old_x_max <= fixed_cell.xMin()) continue;
 
                 auto const& [row, site_width] = rows[row_i];
 
-                int mid_x_min =
+                int break_x_min =
                     (fixed_cell.xMin() - row.xMin())
                     / site_width * site_width + row.xMin();
-                int mid_x_max = 
+                int break_x_max = 
                     ((fixed_cell.xMax() - row.xMin()) + site_width-1)
                     / site_width * site_width + row.xMin();
 
-                if (old_x_min < mid_x_min) {
-                    splits_per_row[row_i].emplace_back(old_x_min, mid_x_min);
+                if (old_x_min < break_x_min) {
+                    splits_per_row[row_i].emplace_back(old_x_min, break_x_min);
                 }
-                if (mid_x_max <= old_x_max) {
-                    remaining_splits[row_i] = make_pair(mid_x_max, old_x_max);
+                if (break_x_max <= old_x_max) {
+                    remaining_splits[row_i] = make_pair(break_x_max, old_x_max);
+                } else {
+                    remaining_splits[row_i] = make_pair(0, 0);
                 }
             }
         }
@@ -430,90 +432,6 @@ namespace leg {
             Split const& split = remaining_splits[row_i];
             if (split.second - split.first > 0) {
                 splits_per_row[row_i].push_back(split);
-            }
-        }
-
-        return splits_per_row;
-    }
-
-    auto Legalizer::sort_and_get_splits(
-        vector<Row>* rows,
-        vector<Rect> const& fixed_cells
-    ) -> vector<vector<Split>> {
-        sort(rows->begin(), rows->end(),
-            [&](Row const& a, Row const& b) {
-                return a.first.yMin() < b.first.yMin();
-            }
-        );
-
-        // todo: maybe vector<set<Split>> and when returning converting to vector<vector<Split>> is faster? Because vector::erase is O(n)
-        vector<vector<Split>> splits_per_row(rows->size());
-        for (int row_i = 0; row_i < rows->size(); row_i++) {
-            Rect const& rect = (*rows)[row_i].first;
-            splits_per_row[row_i].emplace_back(rect.xMin(), rect.xMax());
-        }
-
-        for (Rect const& fixed_cell : fixed_cells) {
-            int int_min = numeric_limits<int>::min();
-            int int_max = numeric_limits<int>::max();
-
-            Rect dummy_row1 = Rect(
-                int_min, int_min,
-                int_max, fixed_cell.yMin()
-            );
-            int row_start = std::upper_bound(rows->begin(), rows->end(),
-                make_pair(dummy_row1, 0),
-                [&](Row const& a, Row const& b) {
-                    return a.first.yMax() < b.first.yMax();
-                }
-            ) - rows->begin();
-
-            Rect dummy_row2 = Rect(
-                int_min, int_min,
-                int_max, fixed_cell.yMax()
-            );
-            int row_end = std::lower_bound(rows->begin(), rows->end(),
-                make_pair(dummy_row2, 0),
-                [&](Row const& a, Row const& b) {
-                    return a.first.yMax() < b.first.yMax();
-                }
-            ) - rows->begin();
-
-            if (row_end == rows->size()) row_end--;
-
-            for (int row_i = row_start; row_i <= row_end; row_i++) {
-                vector<Split>* splits = &splits_per_row[row_i];
-                auto const& [row, site_width] = (*rows)[row_i];
-
-                auto split = lower_bound(splits->begin(), splits->end(),
-                    make_pair(0, fixed_cell.xMin()),
-                    [&](Split const& a, Split const& b) {
-                        return a.second < b.second;
-                    }
-                );
-                if (split == splits->end()) continue;
-
-                auto [old_x_min, old_x_max] = *split;
-
-                if (!collide(fixed_cell.xMin(), fixed_cell.xMax(), old_x_min, old_x_max)) {
-                    continue;
-                }
-
-                int new_x_min =
-                    (fixed_cell.xMin() - row.xMin())
-                    / site_width * site_width + row.xMin();
-                int new_x_max = 
-                    ((fixed_cell.xMax() - row.xMin()) + site_width-1)
-                    / site_width * site_width + row.xMin();
-
-                splits->erase(split);
-
-                if (new_x_max < old_x_max) {
-                    splits->insert(split, make_pair(new_x_max, old_x_max));
-                }
-                if (old_x_min < new_x_min) {
-                    splits->insert(split, make_pair(old_x_min, new_x_min));
-                }
             }
         }
 
@@ -657,7 +575,19 @@ namespace leg {
                 }
             }
 
-            splits_per_row = sort_and_get_splits(&rows, fixed_cells);
+            sort(rows.begin(), rows.end(),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMin() < b.first.yMin();
+                }
+            );
+
+            sort(fixed_cells.begin(), fixed_cells.end(),
+                [&](Rect const& a, Rect const& b) {
+                    return a.xMin() < b.xMin();
+                }
+            );
+
+            splits_per_row = split_rows(rows, fixed_cells);
         }
 
         double row_total_area = 0;
@@ -752,7 +682,8 @@ namespace leg {
                 }
             }
 
-            splits_per_row = sort_and_get_splits(&rows, fixed_cells);
+            // todo: test this line
+            splits_per_row = split_rows(rows, fixed_cells);
         }
 
         abacus(move(rows), move(splits_per_row), move(cells));

@@ -129,11 +129,6 @@ private:
         std::vector<odb::Rect> const& fixed_cells
     ) -> std::vector<std::vector<Split>>;
 
-    auto sort_and_get_splits(
-        std::vector<Row>* rows,
-        std::vector<odb::Rect> const& fixed_cells
-    ) -> std::vector<std::vector<Split>>;
-
     auto get_sorted_rows_splits_and_cells()
         -> std::tuple<std::vector<Row>, std::vector<std::vector<Split>>, std::vector<Cell>>;
 
