@@ -3,6 +3,7 @@
 namespace odb {
   class dbDatabase;
   class dbNet;
+  class dbInst; //maybe not needed
 }
 
 namespace utl {
@@ -15,9 +16,10 @@ namespace grt {
   struct GSegment;
 }
 
-//namespace stt {
-//class SteinerTreeBuilder;
-//}
+namespace stt {
+class SteinerTreeBuilder;
+class Tree;
+}
 
 namespace tut {
 
@@ -28,6 +30,8 @@ class Tutorial {
 
     //Print Hello World
     void printHello();
+
+    stt::Tree buildSteinerTree(odb::dbNet * net);
 
     //Print all cell names
     void printCells();
@@ -48,7 +52,7 @@ class Tutorial {
     utl::Logger* logger_;
     grt::GlobalRouter *grt_;
     //odb::dbBlock* block_;
-    //stt::SteinerTreeBuilder* stt_builder_;
+    stt::SteinerTreeBuilder *stt_;
   };
 }
 
