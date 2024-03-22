@@ -48,7 +48,7 @@ Tutorial::printHello()
   auto cellNumber = db_->getChip()->getBlock()->getInsts().size();
 
   block->setDrivingItermsforNets(); //setar os drivers das nets (?)
-  stt_->setAlpha(0.0);
+  //stt_->setAlpha(0.0); // any attempt setting Alpha causes segmentation fault crash
 
   std::cout<<"No. of cells in block: "<< cellNumber << std::endl;
 
@@ -70,7 +70,7 @@ Tutorial::printHello()
     int stwl = getTreeWl(tree);
     std::cout<<"             STWL: "<< stwl << std::endl; //calculo do steiner wirelength da net
 
-    int hpwl=0, wl=0, dRatio=0;
+    int hpwl=0, wl=0;
 
     netWlLookup[netName] = std::make_pair(hpwl,wl);
     
@@ -84,48 +84,20 @@ Tutorial::printHello()
     int netDelta = wl - hpwl; //calculo do delta da net/pino
     std::cout<<"        Net Delta: "<< netDelta << std::endl;
 
-    if(pinCount && netDelta >0) dRatio = netDelta / pinCount; // calc razao delta/pins
-    else dRatio = 0;
-
-
     delta.push_back(std::make_pair(netDelta,netName));
-    ratio.push_back(std::make_pair(dRatio,netName));
 
     std::cout<< "            cell map size: " << netWlLookup.size() << std::endl;
-    std::cout<< "           ratio map size: " << ratio.size() << std::endl;
     std::cout<< "           delta map size: " << delta.size() << std::endl;
 
   } //for
 
-  //bool comp(const std::pair <int,std::string> &begin, const std::pair <int,std::string> &end){
-  //  if (begin.first > end.first) return true;
-  //  else return false;
-  //}
-
-  //struct
-    //{
-    //    bool operator()(int a, int b) const { return a < b; }
-    //}
-    //customLess;
-
   std::sort(delta.begin(), delta.end());
 
-  std::sort(ratio.begin(), ratio.end());  //, [](const int a, const int b)
-  //                                {
-  //                                    if (a > b) return true; else return false;//broken
-  //                               });
   for(auto data: delta){
     auto inteiro = data.first;
     auto text = data.second;
     std::cout<<" Delta: "<< inteiro <<" Net name: " << text <<std::endl;
   }
-
-  for(auto data: ratio){
-    auto inteiro = data.first;
-    auto text = data.second;
-    std::cout<<" Ratio: "<< inteiro <<" Net name: " << text <<std::endl;
-  }
-
 
 } //metodo
 
