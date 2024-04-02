@@ -9,7 +9,7 @@
 #include <iostream>
 
 int
-getTreeWl(const stt::Tree &tree)
+getTreeWl(const stt::Tree &tree) //get steiner wirelength from steiner tree object
 {
   int treeWl = 0;
   
@@ -34,7 +34,7 @@ namespace tut {
 Tutorial::Tutorial() :
   db_{ord::OpenRoad::openRoad()->getDb()},
   logger_{ord::OpenRoad::openRoad()->getLogger()},
-  stt_{ord::OpenRoad::openRoad()->getSteinerTreeBuilder()},
+  //stt_{ord::OpenRoad::openRoad()->getSteinerTreeBuilder()}, //seg fault crash due to null pointer if here
   grt_{ord::OpenRoad::openRoad()->getGlobalRouter()}
 {
 }
@@ -44,31 +44,33 @@ Tutorial::printHello()
 
 {
 
-  odb::dbBlock *block = db_->getChip()->getBlock(); //pega o bloco
-  auto cellNumber = db_->getChip()->getBlock()->getInsts().size();
+  stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder(); // create object before using
 
-  block->setDrivingItermsforNets(); //setar os drivers das nets (?)
-  //stt_->setAlpha(0.0); // any attempt setting Alpha causes segmentation fault crash
+  odb::dbBlock *block = db_->getChip()->getBlock(); //get the block
+  auto cellNumber = db_->getChip()->getBlock()->getInsts().size(); //get num. of cells in block
 
+  block->setDrivingItermsforNets(); //set net driver
   std::cout<<"No. of cells in block: "<< cellNumber << std::endl;
 
-  
   std::map <std::string, std::pair<int,int>> netWlLookup; //mapa de nets e hpwl, wl
   std::vector<std::pair<int,std::string>> delta; //mapa de nets e deltas
-  std::vector<std::pair<int,std::string>> ratio; //mapa de razoes delta/n.pinos
+  //std::vector<std::pair<int,std::string>> ratio; //mapa de razoes delta/n.pinos
   
 
   for (auto net: block->getNets()){ //cálculo do delta hpwl-wl de uma net
 
-      
-    auto netName = net->getName(); //pega o nome desta net
-    auto pinCount = net->getITermCount(); //num de pinos da net
+    if ((net->getSigType() == odb::dbSigType::GROUND)
+      || (net->getSigType() == odb::dbSigType::POWER))//ignore VDD/VSS nets
+      continue;
+
+    auto netName = net->getName(); //get net name
+    auto pinCount = net->getITermCount(); //get net pin number
 
     std::cout<<"      NetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl;
 
-    auto tree = buildSteinerTree(net); //faz a steiner tree da net
+    auto tree = buildSteinerTree(net); //make net steiner tree
     int stwl = getTreeWl(tree);
-    std::cout<<"             STWL: "<< stwl << std::endl; //calculo do steiner wirelength da net
+    std::cout<<"               STWL: "<< stwl << std::endl; //calculo do steiner wirelength da net
 
     int hpwl=0, wl=0;
 
@@ -76,6 +78,7 @@ Tutorial::printHello()
     
     hpwl = calc_HPWL(net);
     netWlLookup[netName].first = hpwl; //insere hpwl no pair
+    std::cout<<"               HPWL: "<< hpwl << std::endl;
 
     wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
     std::cout<<"               WL: "<< wl << std::endl; //calculo do wirelength da net
@@ -133,9 +136,6 @@ Tutorial::buildSteinerTree(odb::dbNet * net)
       }
       xcoords.push_back(x);
       ycoords.push_back(y);
-      std::cout<<"foi"<< std::endl; //apagar
-      //std::cout<<"x: "<< x << std::endl; //apagar
-      //std::cout<<"y: "<< y << std::endl; //apagar
     }
   }
   std::cout<<"root index: "<<rootIndex<< std::endl; //apagar

@@ -75,6 +75,8 @@ target_sources(stt
     src/LinesRenderer.cpp
 )
 
+set_source_files_properties(src/SteinerTreeBuilder.cpp PROPERTIES COMPILE_FLAGS "-g -O0")
+
 target_include_directories(stt_lib
   PUBLIC
     include

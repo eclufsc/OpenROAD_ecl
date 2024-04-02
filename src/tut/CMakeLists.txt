@@ -14,6 +14,8 @@ target_sources(tut
     src/MakeTutorial.cpp
 )
 
+set_source_files_properties(src/Tutorial.cpp PROPERTIES COMPILE_FLAGS "-g -O0")
+
 target_include_directories(tut
   PUBLIC
     include
