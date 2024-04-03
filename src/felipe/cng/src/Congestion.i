@@ -18,15 +18,20 @@ using cng::Congestion;
 
 namespace cng {
 
-void update_routing_heatmap() {
+void update_routing_heatmap(char const* layer_name) {
     Congestion* congestion = getCongestion();
-    congestion->update_routing_heatmap();
+    congestion->update_routing_heatmap(layer_name);
 }
 
 // todo
 void test() {
     Congestion* congestion = getCongestion();
     congestion->test("inst1");
+}
+
+void test2(char const* layer_name) {
+    Congestion* congestion = getCongestion();
+    congestion->test2(layer_name);
 }
 
 void undraw() {

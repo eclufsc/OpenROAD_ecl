@@ -14,6 +14,8 @@ target_sources(cng
     src/MakeCongestion.cpp
 )
 
+set_source_files_properties(src/Congestion.cpp PROPERTIES COMPILE_FLAGS "-g -O0")
+
 target_include_directories(cng
   PUBLIC
     include

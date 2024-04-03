@@ -14,6 +14,8 @@ target_sources(leg
     src/MakeLegalizer.cpp
 )
 
+set_source_files_properties(src/Legalizer.cpp PROPERTIES COMPILE_FLAGS "-g -O0")
+
 target_include_directories(leg
   PUBLIC
     include
@@ -25,6 +27,7 @@ target_link_libraries(leg
     gui
     OpenSTA
 )
+
 
 messages(
   TARGET leg

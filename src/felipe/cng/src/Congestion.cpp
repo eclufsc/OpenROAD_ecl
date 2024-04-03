@@ -40,13 +40,25 @@ namespace cng {
     Congestion::~Congestion() {}
 
     // note: adapted from RoutingCongestionDataSource
-    bool Congestion::update_routing_heatmap() {
+    bool Congestion::update_routing_heatmap(std::string layer_name) {
         dbBlock* block = db->getChip()->getBlock();
 
         dbGCellGrid* grid = block->getGCellGrid();
         if (!grid) return false;
 
         dbTechLayer* layer = 0;
+        if (layer_name != "") {
+            for (dbTechLayer* curr_layer : block->getDataBase()->getTech()->getLayers()) {
+                if (curr_layer->getType() != dbTechLayerType::ROUTING) continue;
+
+                if (curr_layer->getName() == layer_name) layer = curr_layer;
+            }
+
+            if (!layer) {
+                logger->report("Layer not found");
+                return false;
+            }
+        }
         dbMatrix<dbGCellGrid::GCellData> congestion_data = grid->getCongestionMap(layer);
         if (congestion_data.numElems() == 0) return false;
 
@@ -121,6 +133,11 @@ namespace cng {
         return true;
     }
 
+    void Congestion::undraw() {
+        renderer.sprites.clear();
+        renderer.redraw();
+    }
+
     std::pair<int, int> Congestion::nets_Bboxes_median(
         std::vector<int> Xs, std::vector<int> Ys
     ) {
@@ -142,6 +159,19 @@ namespace cng {
         return std::pair<int, int> (x, y);
     }
 
+    // todo: add as member
+    double get_congestion(dbGCellGrid::GCellData& data) {
+        double hor = data.horizontal_capacity
+                     ? (double)data.horizontal_usage / data.horizontal_capacity
+                     : -1;
+        double vert = data.vertical_capacity
+                      ? (double)data.vertical_usage / data.vertical_capacity
+                      : -1;
+
+        if (hor > vert) return hor;
+        else            return vert;
+    }
+    
     void Congestion::test(std::string name) {
         setbuf(stdout, 0);
 
@@ -362,9 +392,105 @@ namespace cng {
         }
     }
 
-    void Congestion::undraw() {
-        renderer.sprites.clear();
-        renderer.redraw();
+    void Congestion::test2(std::string layer_name) {
+        dbBlock* block = 0;
+        {
+            dbChip* chip = db->getChip();
+            if (chip) block = chip->getBlock();
+
+            if (!block) {
+                fprintf(stderr, "Failed to load block\n");
+            }
+        }
+
+        dbGCellGrid* grid = block->getGCellGrid();
+
+        auto run = [&](dbTechLayer* layer) {
+            dbMatrix<dbGCellGrid::GCellData> congestion_data = grid->getCongestionMap(layer);
+
+            std::vector<int> x_grid, y_grid;
+            grid->getGridX(x_grid);
+            grid->getGridY(y_grid);
+
+            assert(x_grid.size() == congestion_data.numRows());
+            assert(y_grid.size() == congestion_data.numCols());
+
+            int max_x = congestion_data.numRows()-2;
+            int max_y = congestion_data.numCols()-2;
+
+            bool first = true;
+            double max = -1;
+            int x_i_max_cong = -1;
+            int y_i_max_cong = -1;
+            for (int x_i = 0; x_i <= max_x; x_i++) {
+                for (int y_i = 0; y_i <= max_y; y_i++) {
+                    double cong;
+                    {
+                        dbGCellGrid::GCellData data = congestion_data(x_i, y_i);
+                        double hor = data.horizontal_capacity
+                                     ? (double)data.horizontal_usage / data.horizontal_capacity
+                                     : -1;
+                        double vert = data.vertical_capacity
+                                      ? (double)data.vertical_usage / data.vertical_capacity
+                                      : -1;
+
+                        if (hor > vert) cong = hor;
+                        else            cong = vert;
+
+                        if (cong > 1) {
+                            Rect rect_max_cong = Rect(
+                                x_grid[x_i], y_grid[y_i],
+                                x_grid[x_i+1], y_grid[y_i+1]
+                            );
+
+                            auto draw_rect = [&](Rect rect, gui::Painter::Color color) {
+                                renderer.sprites.push_back({
+                                    "",
+                                    drw::RECT,
+                                    {rect.ll(), rect.ur()},
+                                    color,
+                                });
+                            };
+
+                            draw_rect(rect_max_cong, gui::Painter::Color(0, 0, 255, 255));
+                        }
+
+                        if (cong > 100) {
+                            if (first) {
+                                logger->report("Congestion bigger than 100");
+                                first = false;
+                            }
+                        }
+                    }
+                    if (cong > max) {
+                        max = cong;
+                        x_i_max_cong = x_i;
+                        y_i_max_cong = y_i;
+                    }
+                }
+            }
+            renderer.redraw();
+
+            logger->report("Congestionamento maximo: " + std::to_string(max));
+        };
+
+        dbTechLayer* layer = 0;
+        if (layer_name != "") {
+            for (dbTechLayer* curr_layer : block->getDataBase()->getTech()->getLayers()) {
+                if (curr_layer->getType() != dbTechLayerType::ROUTING) continue;
+
+                if (curr_layer->getName() == layer_name) layer = curr_layer;
+            }
+
+            if (!layer) {
+                logger->report("Layer not found");
+                return;
+            }
+        }
+
+        undraw();
+        update_routing_heatmap(layer_name);
+        run(layer);
     }
 }
 

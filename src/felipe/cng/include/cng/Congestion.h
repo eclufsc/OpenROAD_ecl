@@ -110,9 +110,10 @@ public:
     Congestion();
     ~Congestion();
 
-    bool update_routing_heatmap();
-    void test(std::string name);
+    bool update_routing_heatmap(std::string layer_name);
     void undraw();
+    void test(std::string name);
+    void test2(std::string layer_name);
 
     std::pair<int, int> nets_Bboxes_median(
         std::vector<int> Xs, std::vector<int> Ys
