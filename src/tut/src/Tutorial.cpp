@@ -47,12 +47,12 @@ Tutorial::printHello()
   stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder(); // create object before using
 
   odb::dbBlock *block = db_->getChip()->getBlock(); //get the block
-  auto cellNumber = db_->getChip()->getBlock()->getInsts().size(); //get num. of cells in block
+  auto cellNumber = db_->getChip()->getBlock()->getInsts().size(); //get no. of cells in block
 
   block->setDrivingItermsforNets(); //set net driver
-  std::cout<<"No. of cells in block: "<< cellNumber << std::endl;
+  std::cout<<"\nNo. of cells in block: "<< cellNumber << std::endl;
 
-  std::map <std::string, std::pair<int,int>> netWlLookup; //mapa de nets e hpwl, wl
+  std::map <std::string, std::pair<int,int>> hpwlMap; //mapa de nets e hpwl, wl
   std::vector<std::pair<int,std::string>> delta; //mapa de nets e deltas
   //std::vector<std::pair<int,std::string>> ratio; //mapa de razoes delta/n.pinos
   
@@ -60,13 +60,13 @@ Tutorial::printHello()
   for (auto net: block->getNets()){ //cálculo do delta hpwl-wl de uma net
 
     if ((net->getSigType() == odb::dbSigType::GROUND)
-      || (net->getSigType() == odb::dbSigType::POWER))//ignore VDD/VSS nets
+      || (net->getSigType() == odb::dbSigType::POWER)) //ignore VDD/VSS nets
       continue;
 
     auto netName = net->getName(); //get net name
     auto pinCount = net->getITermCount(); //get net pin number
 
-    std::cout<<"      NetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl;
+    std::cout<<"\n      NetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl;
 
     auto tree = buildSteinerTree(net); //make net steiner tree
     int stwl = getTreeWl(tree);
@@ -74,25 +74,25 @@ Tutorial::printHello()
 
     int hpwl=0, wl=0;
 
-    netWlLookup[netName] = std::make_pair(hpwl,wl);
+    hpwlMap[netName] = std::make_pair(hpwl,wl);
     
     hpwl = calc_HPWL(net);
-    netWlLookup[netName].first = hpwl; //insere hpwl no pair
+    hpwlMap[netName].first = hpwl; //insere hpwl no pair
     std::cout<<"               HPWL: "<< hpwl << std::endl;
 
     wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
     std::cout<<"               WL: "<< wl << std::endl; //calculo do wirelength da net
-    netWlLookup[netName].second = wl; //insere wl no pair
+    hpwlMap[netName].second = wl; //insere wl no pair
 
     int netDelta = wl - hpwl; //calculo do delta da net/pino
     std::cout<<"        Net Delta: "<< netDelta << std::endl;
 
     delta.push_back(std::make_pair(netDelta,netName));
 
-    std::cout<< "            cell map size: " << netWlLookup.size() << std::endl;
-    std::cout<< "           delta map size: " << delta.size() << std::endl;
-
   } //for
+
+  std::cout<< "\n            cell map size: " << hpwlMap.size() << std::endl;
+  std::cout<< "           delta map size: " << delta.size() << std::endl;
 
   std::sort(delta.begin(), delta.end());
 
