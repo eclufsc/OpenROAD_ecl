@@ -127,7 +127,7 @@ Tutorial::printHello()
     std::cout<<"               HPWL delta sum: "<< cellHpwlSum << std::endl;
     std::cout<<"               STWL delta sum: "<< cellStwlSum << std::endl;
 
-  } //for
+  } //for 
 
   std::cout<< "\n            cell map size: " << deltaMap.size() << std::endl;
   std::cout<< "        HPWL delta map size: " << hpDelta.size() << std::endl;
