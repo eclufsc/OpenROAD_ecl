@@ -52,55 +52,102 @@ Tutorial::printHello()
   block->setDrivingItermsforNets(); //set net driver
   std::cout<<"\nNo. of cells in block: "<< cellNumber << std::endl;
 
-  std::map <std::string, std::pair<int,int>> hpwlMap; //mapa de nets e hpwl, wl
-  std::vector<std::pair<int,std::string>> delta; //mapa de nets e deltas
-  //std::vector<std::pair<int,std::string>> ratio; //mapa de razoes delta/n.pinos
+  std::map <std::string, std::pair<int,int>> deltaMap; //net name, <HPWL,STWL> map
+  std::vector<std::pair<int,std::string>> hpDelta; // cell HPWL sum vector
+  std::vector<std::pair<int,std::string>> stDelta; //cell STWL sum vector
   
+  int i = 0;
 
-  for (auto net: block->getNets()){ //cálculo do delta hpwl-wl de uma net
+  for (auto net: block->getNets()){ //first part: calculate HPWL, STWL of all nets
 
     if ((net->getSigType() == odb::dbSigType::GROUND)
       || (net->getSigType() == odb::dbSigType::POWER)) //ignore VDD/VSS nets
       continue;
 
     auto netName = net->getName(); //get net name
-    auto pinCount = net->getITermCount(); //get net pin number
+    auto pinCount = net->getITermCount(); //get net pin count
+    std::cout<<"\nNetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl;
 
-    std::cout<<"\n      NetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl;
+    int hpwl=0, wl=0, netHpwlDelta=0, netStwlDelta=0;
 
     auto tree = buildSteinerTree(net); //make net steiner tree
-    int stwl = getTreeWl(tree);
-    std::cout<<"               STWL: "<< stwl << std::endl; //calculo do steiner wirelength da net
+    int stwl = getTreeWl(tree); //get STWL from tree
 
-    int hpwl=0, wl=0;
-
-    hpwlMap[netName] = std::make_pair(hpwl,wl);
+    deltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta);
     
-    hpwl = calc_HPWL(net);
-    hpwlMap[netName].first = hpwl; //insere hpwl no pair
+    hpwl = calc_HPWL(net); //get net HPWL
+    deltaMap[netName].first = hpwl; // insert in pair
     std::cout<<"               HPWL: "<< hpwl << std::endl;
+
+    std::cout<<"               STWL: "<< stwl << std::endl;
 
     wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
     std::cout<<"               WL: "<< wl << std::endl; //calculo do wirelength da net
-    hpwlMap[netName].second = wl; //insere wl no pair
 
-    int netDelta = wl - hpwl; //calculo do delta da net/pino
-    std::cout<<"        Net Delta: "<< netDelta << std::endl;
+    netHpwlDelta = wl - hpwl; //calculate HPWL delta
+    deltaMap[netName].first = netHpwlDelta; // insert in pair
+    std::cout<<"        HPWL Delta: "<< netHpwlDelta << std::endl;
+    
+    netStwlDelta = wl - stwl; //calculate STWL delta
+    deltaMap[netName].second = stwl; //insert in pair
+    std::cout<<"        STWL Delta: "<< netStwlDelta << std::endl;
 
-    delta.push_back(std::make_pair(netDelta,netName));
+    i++;
+  } //for
+
+  std::cout<<"\nNets: "<< i << std::endl;
+
+  for(auto cell: block->getInsts()){ //second part: calculate HPWL, STWL sum of all cells
+
+    int cellHpwlSum, cellStwlSum = 0;
+
+    auto cellNetName = cell->getName(); //get cell name
+    std::cout<<"\n            cell name: "<< cellNetName << std::endl;
+
+    for(auto pin: cell->getITerms()){ //for each pin in cell
+
+      auto pinNet = pin->getNet(); //get net attached to pin
+
+      if(pinNet == 0 ) continue;
+
+      if ((pinNet->getSigType() == odb::dbSigType::GROUND)
+        || (pinNet->getSigType() == odb::dbSigType::POWER)) //ignore VDD/VSS nets
+      continue;
+
+      auto pinNetName = pinNet->getName(); //get name of net attached to pin
+      std::cout<<"               pin net name: "<< pinNetName << std::endl;
+
+      cellHpwlSum = deltaMap[pinNetName].first ++; //sum net HPWL to cell HPWL total
+      cellStwlSum = deltaMap[pinNetName].second ++; //sum net STWL to cell STWL total
+    }
+
+    hpDelta.push_back(std::make_pair(cellHpwlSum, cellNetName)); //insert HPWL sum in cell HPWL vector
+    stDelta.push_back(std::make_pair(cellStwlSum, cellNetName)); //insert STWL sum in cell HPWL vector
+
+    std::cout<<"               HPWL delta sum: "<< cellHpwlSum << std::endl;
+    std::cout<<"               STWL delta sum: "<< cellStwlSum << std::endl;
 
   } //for
 
-  std::cout<< "\n            cell map size: " << hpwlMap.size() << std::endl;
-  std::cout<< "           delta map size: " << delta.size() << std::endl;
+  std::cout<< "\n            cell map size: " << deltaMap.size() << std::endl;
+  std::cout<< "        HPWL delta map size: " << hpDelta.size() << std::endl;
+  std::cout<< "        STWL delta map size: " << stDelta.size() << std::endl;
 
-  std::sort(delta.begin(), delta.end());
+  std::sort(hpDelta.begin(), hpDelta.end()); //sort delta vectors
+  std::sort(stDelta.begin(), stDelta.end());
 
-  for(auto data: delta){
-    auto inteiro = data.first;
+  for(auto data: hpDelta){
+    auto integer = data.first;
     auto text = data.second;
-    std::cout<<" Delta: "<< inteiro <<" Net name: " << text <<std::endl;
+    std::cout<<" HPWL Delta: "<< integer <<" cell name: " << text <<std::endl;
   }
+
+  for(auto data: stDelta){
+    auto integer = data.first;
+    auto text = data.second;
+    std::cout<<" STWL Delta: "<< integer <<" cell name: " << text <<std::endl;
+  }
+  
 
 } //metodo
 
@@ -138,9 +185,9 @@ Tutorial::buildSteinerTree(odb::dbNet * net)
       ycoords.push_back(y);
     }
   }
-  std::cout<<"root index: "<<rootIndex<< std::endl; //apagar
+  //std::cout<<"root index: "<<rootIndex<< std::endl; //apagar
   if(rootIndex == -1){
-    std::cout<<"NO ROOT INDEX ERROR"<< std::endl; //apagar
+  //  std::cout<<"NO ROOT INDEX ERROR"<< std::endl; //apagar
     return stt::Tree{};
 
   }
