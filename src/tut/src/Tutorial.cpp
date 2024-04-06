@@ -41,7 +41,6 @@ Tutorial::Tutorial() :
 
 void
 Tutorial::printHello()
-
 {
 
   stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder(); // create object before using
@@ -50,112 +49,110 @@ Tutorial::printHello()
   auto cellNumber = db_->getChip()->getBlock()->getInsts().size(); //get no. of cells in block
 
   block->setDrivingItermsforNets(); //set net driver
-  std::cout<<"\nNo. of cells in block: "<< cellNumber << std::endl;
+  std::cout<<"\nNo. of cells in block: "<< cellNumber << std::endl; ///////////////////////////////cout
 
   std::map <std::string, std::pair<int,int>> deltaMap; //net name, <HPWL,STWL> map
   std::vector<std::pair<int,std::string>> hpDelta; // cell HPWL sum vector
   std::vector<std::pair<int,std::string>> stDelta; //cell STWL sum vector
   
-  int i = 0;
+  int i = 0; //for net number report cout
 
   for (auto net: block->getNets()){ //first part: calculate HPWL, STWL of all nets
 
-    if ((net->getSigType() == odb::dbSigType::GROUND)
-      || (net->getSigType() == odb::dbSigType::POWER)) //ignore VDD/VSS nets
+    if ((net->getSigType() == odb::dbSigType::GROUND) //ignore VDD/VSS nets
+      || (net->getSigType() == odb::dbSigType::POWER))
       continue;
 
     auto netName = net->getName(); //get net name
     auto pinCount = net->getITermCount(); //get net pin count
-    std::cout<<"\nNetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl;
+    std::cout<<"\nNetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl; ///////////////////////////////cout
 
     int hpwl=0, wl=0, netHpwlDelta=0, netStwlDelta=0;
 
     auto tree = buildSteinerTree(net); //make net steiner tree
     int stwl = getTreeWl(tree); //get STWL from tree
 
-    deltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta);
+    deltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta); //create entry in map
     
     hpwl = calc_HPWL(net); //get net HPWL
     deltaMap[netName].first = hpwl; // insert in pair
-    std::cout<<"               HPWL: "<< hpwl << std::endl;
+    std::cout<<"               HPWL: "<< hpwl << std::endl; ///////////////////////////////cout
 
-    std::cout<<"               STWL: "<< stwl << std::endl;
+    std::cout<<"               STWL: "<< stwl << std::endl; ///////////////////////////////cout
 
     wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
-    std::cout<<"               WL: "<< wl << std::endl; //calculo do wirelength da net
+    std::cout<<"               WL: "<< wl << std::endl; ///////////////////////////////cout
 
     netHpwlDelta = wl - hpwl; //calculate HPWL delta
     deltaMap[netName].first = netHpwlDelta; // insert in pair
-    std::cout<<"        HPWL Delta: "<< netHpwlDelta << std::endl;
+    std::cout<<"        HPWL Delta: "<< netHpwlDelta << std::endl; ///////////////////////////////cout
     
     netStwlDelta = wl - stwl; //calculate STWL delta
     deltaMap[netName].second = stwl; //insert in pair
-    std::cout<<"        STWL Delta: "<< netStwlDelta << std::endl;
+    std::cout<<"        STWL Delta: "<< netStwlDelta << std::endl; ///////////////////////////////cout
 
-    i++;
+    i++; //for net number report cout
+
   } //for
 
-  std::cout<<"\nNets: "<< i << std::endl;
+  std::cout<<"\nNets: "<< i << std::endl; ///////////////////////////////cout
 
   for(auto cell: block->getInsts()){ //second part: calculate HPWL, STWL sum of all cells
 
     int cellHpwlSum, cellStwlSum = 0;
 
     auto cellNetName = cell->getName(); //get cell name
-    std::cout<<"\n            cell name: "<< cellNetName << std::endl;
+    std::cout<<"\n            cell name: "<< cellNetName << std::endl; ///////////////////////////////cout
 
     for(auto pin: cell->getITerms()){ //for each pin in cell
 
       auto pinNet = pin->getNet(); //get net attached to pin
 
-      if(pinNet == 0 ) continue;
+      if(pinNet == 0) continue; //ignore pin not attached to a net
 
       if ((pinNet->getSigType() == odb::dbSigType::GROUND)
-        || (pinNet->getSigType() == odb::dbSigType::POWER)) //ignore VDD/VSS nets
+        || (pinNet->getSigType() == odb::dbSigType::POWER)) //ignore pin attached to VDD/VSS
       continue;
 
       auto pinNetName = pinNet->getName(); //get name of net attached to pin
-      std::cout<<"               pin net name: "<< pinNetName << std::endl;
+      std::cout<<"               pin net name: "<< pinNetName << std::endl; ///////////////////////////////cout
 
       cellHpwlSum = deltaMap[pinNetName].first ++; //sum net HPWL to cell HPWL total
       cellStwlSum = deltaMap[pinNetName].second ++; //sum net STWL to cell STWL total
-    }
+    } //for
 
     hpDelta.push_back(std::make_pair(cellHpwlSum, cellNetName)); //insert HPWL sum in cell HPWL vector
     stDelta.push_back(std::make_pair(cellStwlSum, cellNetName)); //insert STWL sum in cell HPWL vector
 
-    std::cout<<"               HPWL delta sum: "<< cellHpwlSum << std::endl;
-    std::cout<<"               STWL delta sum: "<< cellStwlSum << std::endl;
+    std::cout<<"               HPWL delta sum: "<< cellHpwlSum << std::endl; ///////////////////////////////cout
+    std::cout<<"               STWL delta sum: "<< cellStwlSum << std::endl; ///////////////////////////////cout
 
   } //for
 
-  std::cout<< "\n            cell map size: " << deltaMap.size() << std::endl;
-  std::cout<< "        HPWL delta map size: " << hpDelta.size() << std::endl;
-  std::cout<< "        STWL delta map size: " << stDelta.size() << std::endl;
+  std::cout<< "\n            cell map size: " << deltaMap.size() << std::endl; ///////////////////////////////cout
+  std::cout<< "        HPWL delta map size: " << hpDelta.size() << std::endl; ///////////////////////////////cout
+  std::cout<< "        STWL delta map size: " << stDelta.size() << std::endl; ///////////////////////////////cout
 
   std::sort(hpDelta.begin(), hpDelta.end()); //sort delta vectors
   std::sort(stDelta.begin(), stDelta.end());
 
-  for(auto data: hpDelta){
+  for(auto data: hpDelta){ //report cell HPWL deltas
     auto integer = data.first;
     auto text = data.second;
-    std::cout<<" HPWL Delta: "<< integer <<" cell name: " << text <<std::endl;
-  }
+    std::cout<<" HPWL Delta: "<< integer <<" cell name: " << text <<std::endl; ///////////////////////////////cout
+  } //for
 
-  for(auto data: stDelta){
+  for(auto data: stDelta){ //report cell STWL deltas
     auto integer = data.first;
     auto text = data.second;
-    std::cout<<" STWL Delta: "<< integer <<" cell name: " << text <<std::endl;
-  }
+    std::cout<<" STWL Delta: "<< integer <<" cell name: " << text <<std::endl; ///////////////////////////////cout
+  } //for
   
-
 } //metodo
 
 stt::Tree
 Tutorial::buildSteinerTree(odb::dbNet * net)
 {
-  //std::cout<<"Branch Count :\n";
-  //skip PG Nets (double check for clock?)
 
   if ((net->getSigType() == odb::dbSigType::GROUND)
       || (net->getSigType() == odb::dbSigType::POWER))
@@ -187,7 +184,7 @@ Tutorial::buildSteinerTree(odb::dbNet * net)
   }
   //std::cout<<"root index: "<<rootIndex<< std::endl; //apagar
   if(rootIndex == -1){
-  //  std::cout<<"NO ROOT INDEX ERROR"<< std::endl; //apagar
+    std::cout<<"NO ROOT INDEX ERROR"<< std::endl; //apagar
     return stt::Tree{};
 
   }
@@ -319,45 +316,11 @@ Tutorial::calc_HPWL(odb::dbNet* net)
   int hpwl = (max_x - min_x) + (max_y - min_y);
 
   return hpwl;
-
-
-  #if(0)
-  int xll = std::numeric_limits<int>::max();
-  int yll = std::numeric_limits<int>::max();
-  int xur = std::numeric_limits<int>::min();
-  int yur = std::numeric_limits<int>::min();
-  for(auto iterm : net->getITerms())
-  {
-    int x=0, y=0;
-    iterm->getAvgXY(&x, &y);
-            
-    xur = std::max(xur, x);
-    yur = std::max(yur, y);
-    xll = std::min(xll, x);
-    yll = std::min(yll, y);
-  }
-  int width = std::abs(xur-xll);
-  int height = std::abs(yur-yll);
-          
-  int hpwl = width + height; //calculo do hpwl da net/pino
-  std::cout<<"             HPWL: "<< hpwl << std::endl;
-  return hpwl;
- #endif
 }
 
 void
 Tutorial::printCells()
-{
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  /*
+{/*
   std::cout<<"Printing all cell names:"<<std::endl;
   auto block = db_->getChip()->getBlock();
   for(auto inst : block->getInsts())
