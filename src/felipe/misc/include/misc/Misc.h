@@ -25,6 +25,8 @@ namespace misc {
         dbBlock* get_block();
         const char* error_message_from_get_block();
 
+        std::vector<int> get_free_spaces(int x1, int y1, int x2, int y2);
+
         void shuffle();
         void shuffle_to(int x1, int y1, int x2, int y2);
         void shuffle_in(int x1, int y1, int x2, int y2);

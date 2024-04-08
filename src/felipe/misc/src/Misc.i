@@ -18,6 +18,15 @@ using misc::Misc;
 
 namespace misc {
 
+void get_free_spaces(int x1, int y1, int x2, int y2) {
+  Misc* misc = getMisc();
+  std::vector<int> free_spaces = misc->get_free_spaces(x1, y1, x2, y2);
+
+  for (int free_space : free_spaces) {
+    misc->logger->report(std::to_string(free_space));
+  }
+}
+
 void destroy_cells_with_name_prefix(const char* prefix) {
   Misc* misc = getMisc();
   misc->destroy_cells_with_name_prefix(prefix);
