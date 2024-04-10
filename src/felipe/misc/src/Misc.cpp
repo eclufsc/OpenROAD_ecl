@@ -24,7 +24,6 @@ namespace misc {
         return "Block not available";
     }
 
-    // TODO: add std:: and odb::
     std::vector<int> Misc::get_free_spaces(int x1, int y1, int x2, int y2) {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
@@ -72,8 +71,24 @@ namespace misc {
             }
         );
 
+        auto get_limits = [&](std::tuple<odb::Rect, int>& row_and_site_width) -> std::tuple<int, int, int, int> {
+            auto& [row, site_width] = row_and_site_width;
+
+            int x_min_without_site_correction = std::max<int>(area_x_min, row.xMin());
+            int x_min = (x_min_without_site_correction + site_width - 1) / site_width * site_width;
+            int x_max = std::min<int>(area_x_max, row.xMax());
+
+            int y_min = std::max<int>(area_y_min, row.yMin());
+            int y_max = std::min<int>(area_y_max, row.yMax());
+
+            return {x_min, x_max, y_min, y_max};
+        };
+
         std::vector<int> free_spaces;
-        bool first_time = true;
+        for (auto& row_and_site_width : rows) {
+            auto [x_min, x_max, y_min, y_max] = get_limits(row_and_site_width);
+            free_spaces.push_back(x_max - x_min);
+        }
 
         odb::dbSet<odb::dbInst> insts_set = block->getInsts();
         for (odb::dbInst* inst : insts_set) {
@@ -86,16 +101,7 @@ namespace misc {
             }
 
             for (int i = 0; i < rows.size(); i++) {
-                auto& [row, site_width] = rows[i];
-
-                int x_min_without_site_correction = std::max<int>(area_x_min, row.xMin());
-                int x_min = (x_min_without_site_correction + site_width - 1) / site_width * site_width;
-                int x_max = std::min<int>(area_x_max, row.xMax());
-
-                if (first_time) free_spaces.push_back(x_max - x_min);
-
-                int y_min = std::max<int>(area_y_min, row.yMin());
-                int y_max = std::min<int>(area_y_max, row.yMax());
+                auto [x_min, x_max, y_min, y_max] = get_limits(rows[i]);
 
                 if (!overlap(cell.yMin(), cell.yMax(), y_min, y_max)) continue;
 
@@ -106,8 +112,6 @@ namespace misc {
 
                 free_spaces[i] -= overlap;
             }
-
-            first_time = false;
         }
 
         return free_spaces;
