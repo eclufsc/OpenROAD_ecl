@@ -51,11 +51,10 @@ Tutorial::printHello()
   block->setDrivingItermsforNets(); //set net driver
   std::cout<<"\nNo. of cells in block: "<< cellNumber << std::endl; ///////////////////////////////cout
 
-  std::map <std::string, std::pair<int,int>> deltaMap; //net name, <HPWL,STWL> map
-  std::vector<std::pair<int,std::string>> hpDelta; // cell HPWL sum vector
-  std::vector<std::pair<int,std::string>> stDelta; //cell STWL sum vector
+  std::map <std::string, std::pair<int,int>> netDeltaMap; //net name, net <HPWL,STWL> map
+  std::vector<std::pair<int,std::string>> cellHpDelta; // cell HPWL sum vector <HPWL,cellname>
+  std::vector<std::pair<int,std::string>> cellStDelta; //cell STWL sum vector <STWL,cellname>
   
-  int i = 0; //for net number report cout
 
   for (auto net: block->getNets()){ //first part: calculate HPWL, STWL of all nets
 
@@ -72,10 +71,10 @@ Tutorial::printHello()
     auto tree = buildSteinerTree(net); //make net steiner tree
     int stwl = getTreeWl(tree); //get STWL from tree
 
-    deltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta); //create entry in map
+    netDeltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta); //create entry in map
     
     hpwl = calc_HPWL(net); //get net HPWL
-    deltaMap[netName].first = hpwl; // insert in pair
+    netDeltaMap[netName].first = hpwl; // insert in pair
     std::cout<<"               HPWL: "<< hpwl << std::endl; ///////////////////////////////cout
 
     std::cout<<"               STWL: "<< stwl << std::endl; ///////////////////////////////cout
@@ -84,18 +83,15 @@ Tutorial::printHello()
     std::cout<<"               WL: "<< wl << std::endl; ///////////////////////////////cout
 
     netHpwlDelta = wl - hpwl; //calculate HPWL delta
-    deltaMap[netName].first = netHpwlDelta; // insert in pair
+    netDeltaMap[netName].first = netHpwlDelta; // insert in pair
     std::cout<<"        HPWL Delta: "<< netHpwlDelta << std::endl; ///////////////////////////////cout
     
     netStwlDelta = wl - stwl; //calculate STWL delta
-    deltaMap[netName].second = stwl; //insert in pair
+    netDeltaMap[netName].second = stwl; //insert in pair
     std::cout<<"        STWL Delta: "<< netStwlDelta << std::endl; ///////////////////////////////cout
 
-    i++; //for net number report cout
+  } //for net
 
-  } //for
-
-  std::cout<<"\nNets: "<< i << std::endl; ///////////////////////////////cout
 
   for(auto cell: block->getInsts()){ //second part: calculate HPWL, STWL sum of all cells
 
@@ -117,36 +113,48 @@ Tutorial::printHello()
       auto pinNetName = pinNet->getName(); //get name of net attached to pin
       std::cout<<"               pin net name: "<< pinNetName << std::endl; ///////////////////////////////cout
 
-      cellHpwlSum = deltaMap[pinNetName].first ++; //sum net HPWL to cell HPWL total
-      cellStwlSum = deltaMap[pinNetName].second ++; //sum net STWL to cell STWL total
-    } //for
+      cellHpwlSum = netDeltaMap[pinNetName].first ++; //sum net HPWL to cell HPWL total
+      cellStwlSum = netDeltaMap[pinNetName].second ++; //sum net STWL to cell STWL total
+    } //for pin
 
-    hpDelta.push_back(std::make_pair(cellHpwlSum, cellNetName)); //insert HPWL sum in cell HPWL vector
-    stDelta.push_back(std::make_pair(cellStwlSum, cellNetName)); //insert STWL sum in cell HPWL vector
+    cellHpDelta.push_back(std::make_pair(cellHpwlSum, cellNetName)); //insert HPWL sum in cell HPWL vector
+    cellStDelta.push_back(std::make_pair(cellStwlSum, cellNetName)); //insert STWL sum in cell HPWL vector
 
     std::cout<<"               HPWL delta sum: "<< cellHpwlSum << std::endl; ///////////////////////////////cout
     std::cout<<"               STWL delta sum: "<< cellStwlSum << std::endl; ///////////////////////////////cout
 
-  } //for
+  } //for cell
 
-  std::cout<< "\n            cell map size: " << deltaMap.size() << std::endl; ///////////////////////////////cout
-  std::cout<< "        HPWL delta map size: " << hpDelta.size() << std::endl; ///////////////////////////////cout
-  std::cout<< "        STWL delta map size: " << stDelta.size() << std::endl; ///////////////////////////////cout
+  std::cout<< "\n            net map size: " << netDeltaMap.size() << std::endl; ///////////////////////////////cout
+  std::cout<< "   cell HPWL delta map size: " << cellHpDelta.size() << std::endl; ///////////////////////////////cout
+  std::cout<< "   cell STWL delta map size: " << cellStDelta.size() << std::endl << std::endl; ///////////////////////////////cout
 
-  std::sort(hpDelta.begin(), hpDelta.end()); //sort delta vectors
-  std::sort(stDelta.begin(), stDelta.end());
+  std::sort(cellHpDelta.begin(), cellHpDelta.end()); //sort delta vectors
+  std::sort(cellStDelta.begin(), cellStDelta.end());
 
-  for(auto data: hpDelta){ //report cell HPWL deltas
+  for(auto data: cellHpDelta){ //report cell HPWL deltas
     auto integer = data.first;
-    auto text = data.second;
-    std::cout<<" HPWL Delta: "<< integer <<" cell name: " << text <<std::endl; ///////////////////////////////cout
-  } //for
+    auto name = data.second;
+    std::cout<<" HPWL Delta: "<< integer <<" cell name: " << name <<std::endl; ///////////////////////////////cout
+  }
 
-  for(auto data: stDelta){ //report cell STWL deltas
+  for(auto data: cellStDelta){ //report cell STWL deltas
     auto integer = data.first;
-    auto text = data.second;
-    std::cout<<" STWL Delta: "<< integer <<" cell name: " << text <<std::endl; ///////////////////////////////cout
-  } //for
+    auto name = data.second;
+    std::cout<<" STWL Delta: "<< integer <<" cell name: " << name <<std::endl; ///////////////////////////////cout
+  }
+
+  int sameIndexSum =0;
+
+  for(int i=0; i < cellHpDelta.size(); i++){ //report which cells have HPWL and STWL in the same positions in vectors
+    
+    if (cellHpDelta[i].second == cellStDelta[i].second){
+      std::cout<< cellHpDelta[i].second <<" is in the same position in cell delta vectors" << std::endl;
+      sameIndexSum++;
+      std::cout<< sameIndexSum << std::endl;
+    }
+  }
+  std::cout<< sameIndexSum <<" cells in total are in the same position"<< std::endl;
   
 } //metodo
 
@@ -192,77 +200,6 @@ Tutorial::buildSteinerTree(odb::dbNet * net)
   const stt::Tree tree = stt_->makeSteinerTree(xcoords, ycoords, rootIndex);
   return tree;
 }
-
-#if(0)
-{
-
-  odb::dbBlock *block = db_->getChip()->getBlock(); //pega o bloco
-  auto cellNumber = db_->getChip()->getBlock()->getInsts().size();
-
-  std::cout<<"No. of cells in block: "<< cellNumber << std::endl;
-
-  
-  std::map <std::string, std::pair<int,int>> netWlLookup; //nets e hpwl, wl - por enquanto inutil
-  std::map <std::string, int> netDelta; //nets e deltas
-  std::map <std::string, int> netRatio; //nets e razoes
-  //std::vector <std::pair<int,std::string>> cellDelta; //deltas e celulas
-  //std::vector <std::pair<int,std::string>> cellRatio; //vetor de razoes delta/n.pinos
-  
-
-  for (auto net: block->getNets()){ //cálculo do delta hpwl-wl das nets
-
-      
-    auto netName = net->getName(); //pega o nome desta net
-    auto pinCount = net->getITermCount(); //num de pinos da net
-
-    std::cout<<"      NetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl;
-
-    int hpwl=0, wl=0;
-    //int dRatio=0;
-
-    netWlLookup[netName] = std::make_pair(hpwl,wl);
-    
-    hpwl = calc_HPWL(net);
-    netWlLookup[netName].first = hpwl; //insere hpwl no pair
-
-    wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
-    std::cout<<"               WL: "<< wl << std::endl; //calculo do wirelength da net
-    netWlLookup[netName].second = wl; //insere wl no pair
-
-    int netDelta = wl - hpwl; //calculo do delta da net/pino
-    std::cout<<"        Net Delta: "<< netDelta << std::endl;
-
-    if(pinCount && netDelta >0) dRatio = netDelta / pinCount; // calc razao delta/pins
-    else dRatio = 0;
-
-
-    delta.push_back(std::make_pair(netDelta,netName));
-    ratio.push_back(std::make_pair(dRatio,netName));
-
-    std::cout<< "            cell map size: " << netWlLookup.size() << std::endl;
-    std::cout<< "           ratio map size: " << ratio.size() << std::endl;
-    std::cout<< "           delta map size: " << delta.size() << std::endl;
-
-  } //for
-
-  std::sort(delta.begin(),delta.end());
-  std::sort(ratio.begin(),ratio.end());
-
-  for(auto data: delta){
-    auto inteiro = data.first;
-    auto text = data.second;
-    std::cout<<" Delta: "<< inteiro <<" Net name: " << text <<std::endl;
-  }
-
-  for(auto data: ratio){
-    auto inteiro = data.first;
-    auto text = data.second;
-    std::cout<<" Ratio: "<< inteiro <<" Net name: " << text <<std::endl;
-  }
-
-
-} //metodo
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
