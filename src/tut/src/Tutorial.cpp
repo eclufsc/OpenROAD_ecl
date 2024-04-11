@@ -52,6 +52,12 @@ Tutorial::printHello()
   std::cout<<"\nNo. of cells in block: "<< cellNumber << std::endl; ///////////////////////////////cout
 
   std::map <std::string, std::pair<int,int>> netDeltaMap; //net name, net <HPWL,STWL> map
+
+  ////temp net vectors, for show only
+  std::vector<std::pair<int,std::string>> netHpDelta; // net HPWL sum vector <HPWL,netname>
+  std::vector<std::pair<int,std::string>> netStDelta; //net STWL sum vector <STWL,netname>
+  ////temp net vectors, for show only
+
   std::vector<std::pair<int,std::string>> cellHpDelta; // cell HPWL sum vector <HPWL,cellname>
   std::vector<std::pair<int,std::string>> cellStDelta; //cell STWL sum vector <STWL,cellname>
   
@@ -90,8 +96,33 @@ Tutorial::printHello()
     netDeltaMap[netName].second = stwl; //insert in pair
     std::cout<<"        STWL Delta: "<< netStwlDelta << std::endl; ///////////////////////////////cout
 
-  } //for net
 
+    ////for show only
+    netHpDelta.push_back(std::make_pair(netHpwlDelta, netName)); //insert HPWL sum in net HPWL vector
+    netStDelta.push_back(std::make_pair(netStwlDelta, netName)); //insert STWL sum in net HPWL vector
+    ////for show only
+
+  } //for net - first part
+
+  ///////////temporary, for net show only
+  std::cout<< "   net HPWL delta map size: " << netHpDelta.size() << std::endl; ///////////////////////////////cout
+  std::cout<< "   net STWL delta map size: " << netStDelta.size() << std::endl << std::endl; ///////////////////////////////cout
+
+  std::sort(netHpDelta.begin(), netHpDelta.end()); //sort delta vectors
+  std::sort(netStDelta.begin(), netStDelta.end());
+
+  for(auto data: netHpDelta){ //report net HPWL deltas
+    auto integer = data.first;
+    auto name = data.second;
+    std::cout<<" HPWL Delta: "<< integer <<" net name: " << name <<std::endl; ///////////////////////////////cout
+  }
+
+  for(auto data: netStDelta){ //report net STWL deltas
+    auto integer = data.first;
+    auto name = data.second;
+    std::cout<<" STWL Delta: "<< integer <<" net name: " << name <<std::endl; ///////////////////////////////cout
+  }
+  ///////////temporary, for net show only
 
   for(auto cell: block->getInsts()){ //second part: calculate HPWL, STWL sum of all cells
 
@@ -123,7 +154,7 @@ Tutorial::printHello()
     std::cout<<"               HPWL delta sum: "<< cellHpwlSum << std::endl; ///////////////////////////////cout
     std::cout<<"               STWL delta sum: "<< cellStwlSum << std::endl; ///////////////////////////////cout
 
-  } //for cell
+  } //for cell - second part
 
   std::cout<< "\n            net map size: " << netDeltaMap.size() << std::endl; ///////////////////////////////cout
   std::cout<< "   cell HPWL delta map size: " << cellHpDelta.size() << std::endl; ///////////////////////////////cout
@@ -149,9 +180,9 @@ Tutorial::printHello()
   for(int i=0; i < cellHpDelta.size(); i++){ //report which cells have HPWL and STWL in the same positions in vectors
     
     if (cellHpDelta[i].second == cellStDelta[i].second){
-      std::cout<< cellHpDelta[i].second <<" is in the same position in cell delta vectors" << std::endl;
+      std::cout<< cellHpDelta[i].second <<" is in the same position in both cell delta vectors" << std::endl;
       sameIndexSum++;
-      std::cout<< sameIndexSum << std::endl;
+      //std::cout<< sameIndexSum << std::endl;
     }
   }
   std::cout<< sameIndexSum <<" cells in total are in the same position"<< std::endl;
