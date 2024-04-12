@@ -50,7 +50,7 @@ Tutorial::printHello()
 
   block->setDrivingItermsforNets(); //set net driver
   //std::cout<<"\nNo. of cells in block: "<< cellNumber << std::endl; ///////////////////////////////cout
-  logger_->report("\nNo. of cells in block: " + std::to_string(cellNumber));
+  logger_->report("\nNo. of cells in block: {}", cellNumber);
 
   std::map <std::string, std::pair<int,int>> netDeltaMap; //net name, net <HPWL,STWL> map
 
@@ -72,7 +72,7 @@ Tutorial::printHello()
     auto netName = net->getName(); //get net name
     auto pinCount = net->getITermCount(); //get net pin count
     //std::cout<<"\nNetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl; ///////////////////////////////cout
-    logger_->report( "\nNetName: " + netName + "      NetPinCount: " +std::to_string(pinCount));
+    //logger_->report( "\nNetName: {}      NetPinCount: {}", netName, pinCount);
 
     int hpwl=0, wl=0, netHpwlDelta=0, netStwlDelta=0;
 
@@ -84,24 +84,24 @@ Tutorial::printHello()
     hpwl = calc_HPWL(net); //get net HPWL
     netDeltaMap[netName].first = hpwl; // insert in pair
     //std::cout<<"               HPWL: "<< hpwl << std::endl; ///////////////////////////////cout
-    logger_->report("               HPWL: " + std::to_string(hpwl));
+    //logger_->report("               HPWL: {}", hpwl);
 
     //std::cout<<"               STWL: "<< stwl << std::endl; ///////////////////////////////cout
-    logger_->report("               STWL: " + std::to_string(stwl));
+    //logger_->report("               STWL: {}", stwl);
 
     wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
     //std::cout<<"               WL: "<< wl << std::endl; ///////////////////////////////cout
-    logger_->report("               WL: " + std::to_string(wl));
+    //logger_->report("               WL: {}", wl);
 
     netHpwlDelta = wl - hpwl; //calculate HPWL delta
     netDeltaMap[netName].first = netHpwlDelta; // insert in pair
     //std::cout<<"        HPWL Delta: "<< netHpwlDelta << std::endl; ///////////////////////////////cout
-    logger_->report("        HPWL Delta: " + std::to_string(netHpwlDelta));
+    //logger_->report("        HPWL Delta: {}", netHpwlDelta);
     
     netStwlDelta = wl - stwl; //calculate STWL delta
     netDeltaMap[netName].second = stwl; //insert in pair
     //std::cout<<"        STWL Delta: "<< netStwlDelta << std::endl; ///////////////////////////////cout
-    logger_->report("        STWL Delta: " + std::to_string(netStwlDelta));
+    //logger_->report("        STWL Delta: ", netStwlDelta);
 
 
     ////for show only
@@ -114,8 +114,8 @@ Tutorial::printHello()
   ///////////temporary, for net show only
   /*std::cout<< "   net HPWL delta map size: " << netHpDelta.size() << std::endl; ///////////////////////////////cout
   std::cout<< "   net STWL delta map size: " << netStDelta.size() << std::endl << std::endl; ///////////////////////////////cout*/
-  logger_->report("   net HPWL delta map size: " + netHpDelta.size());
-  logger_->report("   net STWL delta map size: " + netStDelta.size());
+  logger_->report("   net HPWL delta map size: {}", netHpDelta.size());
+  logger_->report("   net STWL delta map size: {}", netStDelta.size());
 
   std::sort(netHpDelta.begin(), netHpDelta.end()); //sort delta vectors
   std::sort(netStDelta.begin(), netStDelta.end());
@@ -124,14 +124,14 @@ Tutorial::printHello()
     auto integer = data.first;
     auto name = data.second;
     //std::cout<<" HPWL Delta: "<< integer <<" net name: " << name <<std::endl; ///////////////////////////////cout
-    logger_->report(" HPWL Delta: " + std::to_string(integer) + " net name: " + name);
+    logger_->report(" Net HPWL Delta: {} net name: {}", integer, name);
   }
 
   for(auto data: netStDelta){ //report net STWL deltas
     auto integer = data.first;
     auto name = data.second;
     //std::cout<<" STWL Delta: "<< integer <<" net name: " << name <<std::endl; ///////////////////////////////cout
-    logger_->report(" STWL Delta: " + std::to_string(integer) + " net name: " + name);
+    logger_->report(" Net STWL Delta: {} net name: {}", integer, name);
   }
   ///////////temporary, for net show only
 
@@ -141,7 +141,7 @@ Tutorial::printHello()
 
     auto cellNetName = cell->getName(); //get cell name
     //std::cout<<"\n            cell name: "<< cellNetName << std::endl; ///////////////////////////////cout
-    logger_->report("\n            cell name: " + cellNetName);
+    //logger_->report("\n            cell name: {}", cellNetName);
 
     for(auto pin: cell->getITerms()){ //for each pin in cell
 
@@ -155,7 +155,7 @@ Tutorial::printHello()
 
       auto pinNetName = pinNet->getName(); //get name of net attached to pin
       //std::cout<<"               pin net name: "<< pinNetName << std::endl; ///////////////////////////////cout
-      logger_->report("               pin net name: " + pinNetName);
+      //logger_->report("               pin net name: {}", pinNetName);
 
       cellHpwlSum = netDeltaMap[pinNetName].first ++; //sum net HPWL to cell HPWL total
       cellStwlSum = netDeltaMap[pinNetName].second ++; //sum net STWL to cell STWL total
@@ -166,17 +166,17 @@ Tutorial::printHello()
 
     /*std::cout<<"               HPWL delta sum: "<< cellHpwlSum << std::endl; ///////////////////////////////cout
     std::cout<<"               STWL delta sum: "<< cellStwlSum << std::endl; ///////////////////////////////cout*/
-    logger_->report("               HPWL delta sum: " + std::to_string(cellHpwlSum));
-    logger_->report("               STWL delta sum: " + std::to_string(cellStwlSum));
+    //logger_->report("               HPWL delta sum: {}", cellHpwlSum);
+    //logger_->report("               STWL delta sum: {}", cellStwlSum);
 
   } //for cell - second part
 
   /*std::cout<< "\n            net map size: " << netDeltaMap.size() << std::endl; ///////////////////////////////cout
   std::cout<< "   cell HPWL delta map size: " << cellHpDelta.size() << std::endl; ///////////////////////////////cout
   std::cout<< "   cell STWL delta map size: " << cellStDelta.size() << std::endl << std::endl; ///////////////////////////////cout*/
-  logger_->report("\n            net map size: " + netDeltaMap.size());
-  logger_->report("   cell HPWL delta map size: " + cellHpDelta.size());
-  logger_->report("   cell STWL delta map size: " + cellStDelta.size());
+  logger_->report("\n            net map size: {}", netDeltaMap.size());
+  logger_->report("   cell HPWL delta map size: {}", cellHpDelta.size());
+  logger_->report("   cell STWL delta map size: {}", cellStDelta.size());
   
   
 
@@ -187,14 +187,14 @@ Tutorial::printHello()
     auto integer = data.first;
     auto name = data.second;
     //std::cout<<" HPWL Delta: "<< integer <<"- cell name: " << name <<std::endl; ///////////////////////////////cout
-    logger_->report(" HPWL Delta: "+std::to_string(integer)+" -- cell name: "+ name);
+    logger_->report(" HPWL Delta: {} -- cell name: {}", integer, name);
   }
 
   for(auto data: cellStDelta){ //report cell STWL deltas
     auto integer = data.first;
     auto name = data.second;
     //std::cout<<" STWL Delta: "<< integer <<"- cell name: " << name <<std::endl; ///////////////////////////////cout
-    logger_->report(" STWL Delta: "+std::to_string(integer)+" -- cell name: "+ name);
+    logger_->report(" STWL Delta: {} -- cell name: {}", integer, name);
   }
 
   int sameIndexSum =0;
@@ -203,13 +203,13 @@ Tutorial::printHello()
     
     if (cellHpDelta[i].second == cellStDelta[i].second){
       //std::cout<< cellHpDelta[i].second <<" is in the same position in both cell delta vectors" << std::endl;
-      logger_->report(cellHpDelta[i].second + " is in the same position in both cell delta vectors");
+      logger_->report("{} is in the same position in both cell delta vectors", cellHpDelta[i].second);
       sameIndexSum++;
       //std::cout<< sameIndexSum << std::endl;
     }
   }
   //std::cout<< sameIndexSum <<" cells in total are in the same position"<< std::endl;
-  logger_->report(std::to_string(sameIndexSum) + " cells in total are in the same position");
+  logger_->report( "{} cells in total are in the same position", sameIndexSum);
   
   
 } //metodo
