@@ -60,8 +60,9 @@ Tutorial::printHello()
   ////temp net vectors, for net debug only
   std::vector<std::pair<int,std::string>> netHpDelta; // net HPWL sum vector <HPWL,netname>
   std::vector<std::pair<int,std::string>> netStDelta; //net STWL sum vector <STWL,netname>
-  int zerowl = 0; //sum of nets with wl = 0
-  int zerostwl = 0; //sum of nets with stwl = 0
+  int zeroWl = 0; //sum of nets with wl = 0
+  int zeroStwl = 0; //sum of nets with stwl = 0
+  int hpLargerSt = 0; //sum of nets w/ HPWL greater than STWL (should be 0)
   ////temp net vectors, for net debug only
 
   std::vector<std::pair<int,std::string>> cellHpDelta; // cell HPWL sum vector <HPWL,cellname>
@@ -79,33 +80,40 @@ Tutorial::printHello()
 
     logger_->report( "\nNetName: {}      NetPinCount: {}", netName, pinCount); ///////////////////////////////logger
 
-    int hpwl=0, wl=0, netHpwlDelta=0, netStwlDelta=0;
+    //int hpwl=0, wl=0, netHpwlDelta=0, netStwlDelta=0;
 
-     wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
+    int wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
 
-     if(!wl){ //if wl = 0, report and ignore net
-        zerowl++;
-        logger_->report(" Ignored net due to null wirelength"); ///////////////////////////////logger
-        continue;
-     }
+    if(!wl){ //if wl = 0, report and ignore net
+      zeroWl++;
+      logger_->report(" Ignored net due to null wirelength"); ///////////////////////////////logger
+      continue;
+    }
 
     auto tree = buildSteinerTree(net); //make net steiner tree
-    int stwl = getTreeWl(tree); //get STWL from tree
+    int stwl = getTreeWl(tree); //get net STWL from tree
 
     if(!stwl){ //if stwl = 0, report and ignore net
-        zerostwl++;
-        logger_->report(" Ignored net due to null steiner wirelength"); ///////////////////////////////logger
-        continue;
-     }
-
-    netDeltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta); //create entry in map
+      zeroStwl++;
+      logger_->report(" Ignored net due to null steiner wirelength"); ///////////////////////////////logger
+      continue;
+    }
     
-    hpwl = calc_HPWL(net); //get net HPWL
-    netDeltaMap[netName].first = hpwl; // insert in pair
+    int hpwl = calc_HPWL(net); //get net HPWL
+
+    if(hpwl > stwl){ //if HPWL greater than STWL (it is impossible, should never happen)
+      hpLargerSt++;
+      logger_->report(" Ignored net due to HPWL greater than STWL. Verify net"); ///////////////////////////////logger
+      continue;
+    }
     
     logger_->report("               HPWL: {}", hpwl); ///////////////////////////////logger
     logger_->report("               STWL: {}", stwl); ///////////////////////////////logger
     logger_->report("               WL: {}", wl); ///////////////////////////////logger
+
+    int netHpwlDelta=0, netStwlDelta=0;
+
+    netDeltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta); //create entry in map
 
     netHpwlDelta = wl - hpwl; //calculate HPWL delta
     netDeltaMap[netName].first = netHpwlDelta; // insert in pair
@@ -113,7 +121,7 @@ Tutorial::printHello()
     logger_->report("        HPWL Delta: {}", netHpwlDelta); ///////////////////////////////logger
     
     netStwlDelta = wl - stwl; //calculate STWL delta
-    netDeltaMap[netName].second = stwl; //insert in pair
+    netDeltaMap[netName].second = netStwlDelta; //insert in pair
 
     logger_->report("        STWL Delta: {}", netStwlDelta); ///////////////////////////////logger
 
@@ -123,16 +131,17 @@ Tutorial::printHello()
     netStDelta.push_back(std::make_pair(netStwlDelta, netName)); //insert STWL sum in net HPWL vector
     ////for net debug only
 
-  } //for net - first part
+  } //for net - first part ---------------------
 
 
   ///////////temporary, for net debug only
   
-  logger_->report("\n     Total of processed nets: {}", netHpDelta.size() + zerowl);
-  logger_->report("     Net HPWL delta map size: {}", netHpDelta.size()); ///////////////////////////////logger
-  logger_->report("     Net STWL delta map size: {}", netStDelta.size());
-  logger_->report(" Ignored nets due to null WL: {}", zerowl);
-  logger_->report("Ignored nets due to null STWL: {}\n", zerostwl);
+  logger_->report("\n      Total of processed nets: {}", netHpDelta.size() + zeroWl + zeroStwl + hpLargerSt);
+  logger_->report("      Net HPWL delta map size: {}", netHpDelta.size()); ///////////////////////////////logger
+  logger_->report("      Net STWL delta map size: {}", netStDelta.size());
+  logger_->report("  Ignored nets due to null WL: {}", zeroWl);
+  logger_->report("Ignored nets due to null STWL: {}\n", zeroStwl);
+  logger_->report("Ignored nets due to HPWL greater than STWL: {} <- must be 0\n", hpLargerSt);
 
   std::sort(netHpDelta.begin(), netHpDelta.end()); //sort delta vectors
   std::sort(netStDelta.begin(), netStDelta.end());
@@ -174,6 +183,8 @@ Tutorial::printHello()
       auto pinNetName = pinNet->getName(); //get name of net attached to pin
       
       logger_->report("               pin net name: {}", pinNetName); ///////////////////////////////logger
+      logger_->report("               pin net delta HPWL: {}", netDeltaMap[pinNetName].first);
+      logger_->report("               pin net delta STWL: {}", netDeltaMap[pinNetName].second);
 
       cellHpwlSum = netDeltaMap[pinNetName].first ++; //sum net HPWL to cell HPWL total
       cellStwlSum = netDeltaMap[pinNetName].second ++; //sum net STWL to cell STWL total
@@ -182,10 +193,10 @@ Tutorial::printHello()
     cellHpDelta.push_back(std::make_pair(cellHpwlSum, cellNetName)); //insert HPWL sum in cell HPWL vector
     cellStDelta.push_back(std::make_pair(cellStwlSum, cellNetName)); //insert STWL sum in cell HPWL vector
 
-    logger_->report("               HPWL delta sum: {}", cellHpwlSum); ///////////////////////////////logger
-    logger_->report("               STWL delta sum: {}", cellStwlSum);
+    logger_->report("                 HPWL delta sum: {}", cellHpwlSum); ///////////////////////////////logger
+    logger_->report("                 STWL delta sum: {}", cellStwlSum);
 
-  } //for cell - second part
+  } //for cell - second part ---------------------
 
   
   logger_->report("\n            net map size: {}", netDeltaMap.size()); ///////////////////////////////logger
@@ -213,16 +224,16 @@ Tutorial::printHello()
 
   int sameIndexSum =0;
 
-  for(int i=0; i < cellHpDelta.size(); i++){ //report which cells have HPWL and STWL in the same positions in vectors --------------------
+  for(int i=0; i < cellHpDelta.size(); i++){ //report which cells have HPWL and STWL in the same positions in vectors ---------------------
     
     if (cellHpDelta[i].second == cellStDelta[i].second){
 
-      logger_->report("{} is in the same position in both cell delta vectors", cellHpDelta[i].second); ///////////////////////////////logger
+      logger_->report("{} is in the same position in both cell delta vectors (pos. {})", cellHpDelta[i].second, i); ///////////////////////////////logger
       sameIndexSum++;
     }
   }
   
-  logger_->report( "\n{} cells in total are in the same position", sameIndexSum); ///////////////////////////////logger
+  logger_->report( "\n{} cells of {} are in the same position", sameIndexSum, cellHpDelta.size()); ///////////////////////////////logger
   
 } //metodo
 
