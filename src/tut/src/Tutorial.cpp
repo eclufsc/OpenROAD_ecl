@@ -46,18 +46,23 @@ Tutorial::printHello()
   stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder(); // create object before using
 
   odb::dbBlock *block = db_->getChip()->getBlock(); //get the block
-  auto cellNumber = db_->getChip()->getBlock()->getInsts().size(); //get no. of cells in block
 
-  block->setDrivingItermsforNets(); //set net driver
-  //std::cout<<"\nNo. of cells in block: "<< cellNumber << std::endl; ///////////////////////////////cout
+  auto netNumber = block->getNets().size(); //get no. of nets in block
+  auto cellNumber = block->getInsts().size(); //get no. of cells in block
+
+  block->setDrivingItermsforNets(); //set net drivers
+
+  logger_->report("\nNo. of nets in block: {}", netNumber); ///////////////////////////////logger
   logger_->report("\nNo. of cells in block: {}", cellNumber);
 
   std::map <std::string, std::pair<int,int>> netDeltaMap; //net name, net <HPWL,STWL> map
 
-  ////temp net vectors, for show only
+  ////temp net vectors, for net debug only
   std::vector<std::pair<int,std::string>> netHpDelta; // net HPWL sum vector <HPWL,netname>
   std::vector<std::pair<int,std::string>> netStDelta; //net STWL sum vector <STWL,netname>
-  ////temp net vectors, for show only
+  int zerowl = 0; //sum of nets with wl = 0
+  int zerostwl = 0; //sum of nets with stwl = 0
+  ////temp net vectors, for net debug only
 
   std::vector<std::pair<int,std::string>> cellHpDelta; // cell HPWL sum vector <HPWL,cellname>
   std::vector<std::pair<int,std::string>> cellStDelta; //cell STWL sum vector <STWL,cellname>
@@ -71,51 +76,63 @@ Tutorial::printHello()
 
     auto netName = net->getName(); //get net name
     auto pinCount = net->getITermCount(); //get net pin count
-    //std::cout<<"\nNetName: "<< netName <<"      NetPinCount: "<< pinCount << std::endl; ///////////////////////////////cout
-    //logger_->report( "\nNetName: {}      NetPinCount: {}", netName, pinCount);
+
+    logger_->report( "\nNetName: {}      NetPinCount: {}", netName, pinCount); ///////////////////////////////logger
 
     int hpwl=0, wl=0, netHpwlDelta=0, netStwlDelta=0;
 
+     wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
+
+     if(!wl){ //if wl = 0, report and ignore net
+        zerowl++;
+        logger_->report(" Ignored net due to null wirelength"); ///////////////////////////////logger
+        continue;
+     }
+
     auto tree = buildSteinerTree(net); //make net steiner tree
     int stwl = getTreeWl(tree); //get STWL from tree
+
+    if(!stwl){ //if stwl = 0, report and ignore net
+        zerostwl++;
+        logger_->report(" Ignored net due to null steiner wirelength"); ///////////////////////////////logger
+        continue;
+     }
 
     netDeltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta); //create entry in map
     
     hpwl = calc_HPWL(net); //get net HPWL
     netDeltaMap[netName].first = hpwl; // insert in pair
-    //std::cout<<"               HPWL: "<< hpwl << std::endl; ///////////////////////////////cout
-    //logger_->report("               HPWL: {}", hpwl);
-
-    //std::cout<<"               STWL: "<< stwl << std::endl; ///////////////////////////////cout
-    //logger_->report("               STWL: {}", stwl);
-
-    wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
-    //std::cout<<"               WL: "<< wl << std::endl; ///////////////////////////////cout
-    //logger_->report("               WL: {}", wl);
+    
+    logger_->report("               HPWL: {}", hpwl); ///////////////////////////////logger
+    logger_->report("               STWL: {}", stwl); ///////////////////////////////logger
+    logger_->report("               WL: {}", wl); ///////////////////////////////logger
 
     netHpwlDelta = wl - hpwl; //calculate HPWL delta
     netDeltaMap[netName].first = netHpwlDelta; // insert in pair
-    //std::cout<<"        HPWL Delta: "<< netHpwlDelta << std::endl; ///////////////////////////////cout
-    //logger_->report("        HPWL Delta: {}", netHpwlDelta);
+
+    logger_->report("        HPWL Delta: {}", netHpwlDelta); ///////////////////////////////logger
     
     netStwlDelta = wl - stwl; //calculate STWL delta
     netDeltaMap[netName].second = stwl; //insert in pair
-    //std::cout<<"        STWL Delta: "<< netStwlDelta << std::endl; ///////////////////////////////cout
-    //logger_->report("        STWL Delta: ", netStwlDelta);
+
+    logger_->report("        STWL Delta: {}", netStwlDelta); ///////////////////////////////logger
 
 
-    ////for show only
+    ////for net debug only
     netHpDelta.push_back(std::make_pair(netHpwlDelta, netName)); //insert HPWL sum in net HPWL vector
     netStDelta.push_back(std::make_pair(netStwlDelta, netName)); //insert STWL sum in net HPWL vector
-    ////for show only
+    ////for net debug only
 
   } //for net - first part
 
-  ///////////temporary, for net show only
-  /*std::cout<< "   net HPWL delta map size: " << netHpDelta.size() << std::endl; ///////////////////////////////cout
-  std::cout<< "   net STWL delta map size: " << netStDelta.size() << std::endl << std::endl; ///////////////////////////////cout*/
-  logger_->report("   net HPWL delta map size: {}", netHpDelta.size());
-  logger_->report("   net STWL delta map size: {}", netStDelta.size());
+
+  ///////////temporary, for net debug only
+  
+  logger_->report("\n     Total of processed nets: {}", netHpDelta.size() + zerowl);
+  logger_->report("     Net HPWL delta map size: {}", netHpDelta.size()); ///////////////////////////////logger
+  logger_->report("     Net STWL delta map size: {}", netStDelta.size());
+  logger_->report(" Ignored nets due to null WL: {}", zerowl);
+  logger_->report("Ignored nets due to null STWL: {}\n", zerostwl);
 
   std::sort(netHpDelta.begin(), netHpDelta.end()); //sort delta vectors
   std::sort(netStDelta.begin(), netStDelta.end());
@@ -123,25 +140,26 @@ Tutorial::printHello()
   for(auto data: netHpDelta){ //report net HPWL deltas
     auto integer = data.first;
     auto name = data.second;
-    //std::cout<<" HPWL Delta: "<< integer <<" net name: " << name <<std::endl; ///////////////////////////////cout
-    logger_->report(" Net HPWL Delta: {} net name: {}", integer, name);
+    
+    logger_->report(" Net HPWL Delta: {} net name: {}", integer, name); ///////////////////////////////logger
   }
 
   for(auto data: netStDelta){ //report net STWL deltas
     auto integer = data.first;
     auto name = data.second;
-    //std::cout<<" STWL Delta: "<< integer <<" net name: " << name <<std::endl; ///////////////////////////////cout
-    logger_->report(" Net STWL Delta: {} net name: {}", integer, name);
+    
+    logger_->report(" Net STWL Delta: {} net name: {}", integer, name); ///////////////////////////////logger
   }
-  ///////////temporary, for net show only
+  ///////////temporary, for net debug only
+
 
   for(auto cell: block->getInsts()){ //second part: calculate HPWL, STWL sum of all cells -------------------------------
 
     int cellHpwlSum, cellStwlSum = 0;
 
     auto cellNetName = cell->getName(); //get cell name
-    //std::cout<<"\n            cell name: "<< cellNetName << std::endl; ///////////////////////////////cout
-    //logger_->report("\n            cell name: {}", cellNetName);
+    
+    logger_->report("\n            cell name: {}", cellNetName); ///////////////////////////////logger
 
     for(auto pin: cell->getITerms()){ //for each pin in cell
 
@@ -154,8 +172,8 @@ Tutorial::printHello()
       continue;
 
       auto pinNetName = pinNet->getName(); //get name of net attached to pin
-      //std::cout<<"               pin net name: "<< pinNetName << std::endl; ///////////////////////////////cout
-      //logger_->report("               pin net name: {}", pinNetName);
+      
+      logger_->report("               pin net name: {}", pinNetName); ///////////////////////////////logger
 
       cellHpwlSum = netDeltaMap[pinNetName].first ++; //sum net HPWL to cell HPWL total
       cellStwlSum = netDeltaMap[pinNetName].second ++; //sum net STWL to cell STWL total
@@ -164,19 +182,15 @@ Tutorial::printHello()
     cellHpDelta.push_back(std::make_pair(cellHpwlSum, cellNetName)); //insert HPWL sum in cell HPWL vector
     cellStDelta.push_back(std::make_pair(cellStwlSum, cellNetName)); //insert STWL sum in cell HPWL vector
 
-    /*std::cout<<"               HPWL delta sum: "<< cellHpwlSum << std::endl; ///////////////////////////////cout
-    std::cout<<"               STWL delta sum: "<< cellStwlSum << std::endl; ///////////////////////////////cout*/
-    //logger_->report("               HPWL delta sum: {}", cellHpwlSum);
-    //logger_->report("               STWL delta sum: {}", cellStwlSum);
+    logger_->report("               HPWL delta sum: {}", cellHpwlSum); ///////////////////////////////logger
+    logger_->report("               STWL delta sum: {}", cellStwlSum);
 
   } //for cell - second part
 
-  /*std::cout<< "\n            net map size: " << netDeltaMap.size() << std::endl; ///////////////////////////////cout
-  std::cout<< "   cell HPWL delta map size: " << cellHpDelta.size() << std::endl; ///////////////////////////////cout
-  std::cout<< "   cell STWL delta map size: " << cellStDelta.size() << std::endl << std::endl; ///////////////////////////////cout*/
-  logger_->report("\n            net map size: {}", netDeltaMap.size());
+  
+  logger_->report("\n            net map size: {}", netDeltaMap.size()); ///////////////////////////////logger
   logger_->report("   cell HPWL delta map size: {}", cellHpDelta.size());
-  logger_->report("   cell STWL delta map size: {}", cellStDelta.size());
+  logger_->report("   cell STWL delta map size: {}\n", cellStDelta.size());
   
   
 
@@ -186,15 +200,15 @@ Tutorial::printHello()
   for(auto data: cellHpDelta){ //report cell HPWL deltas
     auto integer = data.first;
     auto name = data.second;
-    //std::cout<<" HPWL Delta: "<< integer <<"- cell name: " << name <<std::endl; ///////////////////////////////cout
-    logger_->report(" HPWL Delta: {} -- cell name: {}", integer, name);
+    
+    logger_->report(" HPWL Delta: {} -- cell name: {}", integer, name); ///////////////////////////////logger
   }
 
   for(auto data: cellStDelta){ //report cell STWL deltas
     auto integer = data.first;
     auto name = data.second;
-    //std::cout<<" STWL Delta: "<< integer <<"- cell name: " << name <<std::endl; ///////////////////////////////cout
-    logger_->report(" STWL Delta: {} -- cell name: {}", integer, name);
+    
+    logger_->report(" STWL Delta: {} -- cell name: {}", integer, name); ///////////////////////////////logger
   }
 
   int sameIndexSum =0;
@@ -202,15 +216,13 @@ Tutorial::printHello()
   for(int i=0; i < cellHpDelta.size(); i++){ //report which cells have HPWL and STWL in the same positions in vectors --------------------
     
     if (cellHpDelta[i].second == cellStDelta[i].second){
-      //std::cout<< cellHpDelta[i].second <<" is in the same position in both cell delta vectors" << std::endl;
-      logger_->report("{} is in the same position in both cell delta vectors", cellHpDelta[i].second);
+
+      logger_->report("{} is in the same position in both cell delta vectors", cellHpDelta[i].second); ///////////////////////////////logger
       sameIndexSum++;
-      //std::cout<< sameIndexSum << std::endl;
     }
   }
-  //std::cout<< sameIndexSum <<" cells in total are in the same position"<< std::endl;
-  logger_->report( "{} cells in total are in the same position", sameIndexSum);
   
+  logger_->report( "\n{} cells in total are in the same position", sameIndexSum); ///////////////////////////////logger
   
 } //metodo
 
