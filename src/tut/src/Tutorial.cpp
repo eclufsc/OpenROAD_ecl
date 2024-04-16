@@ -116,13 +116,21 @@ Tutorial::printHello()
     netDeltaMap[netName] = std::make_pair(netHpwlDelta,netStwlDelta); //create entry in map
 
     netHpwlDelta = wl - hpwl; //calculate HPWL delta
-    netDeltaMap[netName].first = netHpwlDelta; // insert in pair
 
+    if(netHpwlDelta < 0){ //if negative delta, report and replace with 0
+      logger_->report("   Neg. HPWL Delta: {}. Ignored", netHpwlDelta);
+      netHpwlDelta = 0;
+    }
+    netDeltaMap[netName].first = netHpwlDelta; // insert HPWL in pair
     logger_->report("        HPWL Delta: {}", netHpwlDelta); ///////////////////////////////logger
     
     netStwlDelta = wl - stwl; //calculate STWL delta
-    netDeltaMap[netName].second = netStwlDelta; //insert in pair
 
+    if(netStwlDelta < 0){ //if negative delta, report and replace with 0
+      logger_->report("   Neg. STWL Delta: {}. Ignored", netStwlDelta);
+      netStwlDelta = 0;
+    }
+    netDeltaMap[netName].second = netStwlDelta; //insert STWL in pair
     logger_->report("        STWL Delta: {}", netStwlDelta); ///////////////////////////////logger
 
 
@@ -164,7 +172,7 @@ Tutorial::printHello()
 
   for(auto cell: block->getInsts()){ //second part: calculate HPWL, STWL sum of all cells -------------------------------
 
-    int cellHpwlSum, cellStwlSum = 0;
+    int cellHpwlSum = 0, cellStwlSum = 0;
 
     auto cellNetName = cell->getName(); //get cell name
     
@@ -186,8 +194,8 @@ Tutorial::printHello()
       logger_->report("               pin net delta HPWL: {}", netDeltaMap[pinNetName].first);
       logger_->report("               pin net delta STWL: {}", netDeltaMap[pinNetName].second);
 
-      cellHpwlSum = netDeltaMap[pinNetName].first ++; //sum net HPWL to cell HPWL total
-      cellStwlSum = netDeltaMap[pinNetName].second ++; //sum net STWL to cell STWL total
+      cellHpwlSum += netDeltaMap[pinNetName].first; //sum net HPWL to cell HPWL total
+      cellStwlSum += netDeltaMap[pinNetName].second; //sum net STWL to cell STWL total
     } //for pin
 
     cellHpDelta.push_back(std::make_pair(cellHpwlSum, cellNetName)); //insert HPWL sum in cell HPWL vector
