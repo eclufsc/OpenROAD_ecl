@@ -50,7 +50,8 @@ RectangleRender::clear_rectangles()
 CellMoveRouter::CellMoveRouter():
   db_{ord::OpenRoad::openRoad()->getDb()},
   grt_{ord::OpenRoad::openRoad()->getGlobalRouter()},
-  logger_{ord::OpenRoad::openRoad()->getLogger()}
+  logger_{ord::OpenRoad::openRoad()->getLogger()},
+  debug_{false}
 {
 }
 
@@ -226,15 +227,11 @@ CellMoveRouter::Cell_Move_Rerout(){
 bool
 CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
   auto block = db_->getChip()->getBlock();
-  std::map<int, std::vector<odb::dbInst *>> cell_length;
   std::vector<odb::dbNet*>  affected_nets;
   std::vector<int>  nets_Bbox_Xs;
   std::vector<int>  nets_Bbox_Ys;
+
   gui::Gui* gui = gui::Gui::get();
-  if(!grt_->getDirtyNets().empty()) {
-    logger_->report("lista não estava vazia");
-    grt_->clearDirtyNets();
-  }
   //Finding the cell's nets bounding boxes
   int before_hwpl = 0;
   for(auto pin : moving_cell->getITerms())
@@ -273,6 +270,13 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
     }
   }
 
+  if(debug()) {
+    int icx, icy;
+    moving_cell->getLocation(icx, icy);
+    std::cout<<"Cell to be moved: "<<moving_cell->getName()<<"\n";
+    std::cout<<"  Intial Position: ("<<icx<<", "<<icy<<")"<<std::endl;
+  }
+
   //Get median cell Point
   //std::cout<<"Computing cell median point"<<std::endl;
   std::pair<int, int> Optimal_Region = nets_Bboxes_median(nets_Bbox_Xs, nets_Bbox_Ys);
@@ -301,45 +305,48 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
     return false;
   }
 
-  //std::cout<<"nome celula: "<<moving_cell->getName()<<"\n";
-  //std::cout<<"  Cell pos intial: ("<<icx<<", "<<icy<<")"<<std::endl;
-  //std::cout<<"  Cell pos before Abacus: ("<<Optimal_Region.first<<", "<<Optimal_Region.second<<")"<<std::endl;
+  if(debug()) {
+    std::cout<<"  New Position: ("<<Optimal_Region.first<<", "<<Optimal_Region.second<<")"<<std::endl;
+  }
 
   //Find median Gcell
   std::vector<GCellElement> result;
   gcellTree_->query(bgi::intersects(point_t(Optimal_Region.first, Optimal_Region.second)), std::back_inserter(result));
   
-  /*std::cout<<"Optimal Gcell: ("<<result[0].second.xMin()<<", "<<result[0].second.yMin()<<"), ";
-  std::cout<<"("<<result[0].second.xMax()<<", "<<result[0].second.yMax()<<")\n";
-  std::cout<<std::endl;*/
+  if(debug()) {
+    std::cout<<"Optimal Gcell: ("<<result[0].second.xMin()<<", "<<result[0].second.yMin()<<"), ";
+    std::cout<<"("<<result[0].second.xMax()<<", "<<result[0].second.yMax()<<")\n";
+    std::cout<<std::endl;
+  }
 
   // Expend Legalization Area to be 10x10 GCells
   int gcell_length = result[0].second.xMax() - result[0].second.xMin();
   int gcell_height = result[0].second.yMax() - result[0].second.yMin();
 
   //Expanding legalization Area
-  /*std::vector<GCellElement> result2;
-  gcellTree_->query(bgi::intersects(box_t({result[0].second.xMin(), result[0].second.yMin()}, {result[0].second.xMax(), result[0].second.yMax()})), std::back_inserter(result2));
-  for(auto gcell : result2) {*/
   xur = std::min(xur, result[0].second.xMax() + 14 * gcell_length);
   yur = std::min(yur, result[0].second.yMax() + 14 * gcell_height);
   xll = std::max(xll, result[0].second.xMin() - 14 * gcell_length);
   yll = std::max(yll, result[0].second.yMin() - 14 * gcell_height);
-  //}
 
 
   //Call abacus for legalization area
-  /*TODO return information of moved cells during abacus legalizarion*/
   auto changed_cells = abacus_.abacus(xll, yll, xur, yur);
 
-  if(abacus_.failed()) {
+  if(debug()) {
+    int icx, icy;
+    moving_cell->getLocation(icx, icy);
+    std::cout<<"Legalized Position: ("<<icx<<", "<<icy<<")"<<std::endl;
+    std::cout<<"Number of moved cells by Abacus: "<<changed_cells.size()<<std::endl;
+  }
+
+  if(debug() && moving_cell->getName() == "inst29545") {
     rectangleRender_->addRectangle(odb::Rect(xur, yur, xll, yll));
     //drawRectangle(xur, yur, xll, yll);
   }
-  //moving_cell->getLocation(acx, acy);
-  //std::cout<<"  Cell pos after Abacus: ("<<acx<<", "<<acy<<")"<<std::endl;
 
-  /*for(auto cell : changed_cells) {
+  //Put back!!!!!!!!
+  for(auto cell : changed_cells) {
     if(cell == moving_cell) {
       continue;
     }
@@ -354,7 +361,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
         affected_nets.push_back(affected_net);
       }
     }
-  }*/
+  }
 
   for(auto pin : moving_cell->getITerms())
   {
@@ -373,8 +380,6 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
     }
   }
 
-
-  /*TODO chamar o incremental router para as nets afetadas*/
   //std::cout<<"Reroteando nets afetadas....."<<std::endl;
   //clear dirty nets and update the new nets ot be rerouted
   grt_->clearDirtyNets();

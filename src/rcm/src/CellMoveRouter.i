@@ -37,6 +37,13 @@ move_rerout()
   cellMoveRouter->Cell_Move_Rerout();
 }
 
+void
+set_debug_cmd(bool debug)
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->set_debug(debug);
+}
+
 
 } // namespace
 

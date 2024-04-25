@@ -5,5 +5,9 @@ namespace eval rcm {
 #is required.
 
 # rcm namespace end
+
+    proc set_rcm_debug {} {
+        set_debug_cmd true
+    }
 }
 

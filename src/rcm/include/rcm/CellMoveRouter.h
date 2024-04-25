@@ -54,6 +54,8 @@ class CellMoveRouter {
     void Cell_Move_Rerout();
 
     void InitCellsWeight();
+    
+    void set_debug(bool debug) { debug_ = debug; };
 
   private:
 
@@ -69,6 +71,8 @@ class CellMoveRouter {
 
     std::pair<int, int> nets_Bboxes_median(std::vector<int> Xs, std::vector<int> Ys);
 
+    bool debug() {return debug_; };
+
     std::vector<std::pair<int, odb::dbInst *>> cells_weight; //mapa de cells e deltas
     std::vector<odb::dbInst *> cells_to_move;
     int ggrid_max_x_;
@@ -83,6 +87,7 @@ class CellMoveRouter {
     grt::IncrementalGRoute *icr_grt_;// = grt::IncrementalGRoute(grt_, block);
     std::unique_ptr<CRTree> cellrTree_;
     std::unique_ptr<GRTree> gcellTree_;
+    bool debug_ = false;
     Abacus abacus_;
 };
 }
