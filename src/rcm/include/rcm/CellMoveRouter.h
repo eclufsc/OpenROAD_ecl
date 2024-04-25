@@ -71,6 +71,11 @@ class CellMoveRouter {
 
     std::vector<std::pair<int, odb::dbInst *>> cells_weight; //mapa de cells e deltas
     std::vector<odb::dbInst *> cells_to_move;
+    int ggrid_max_x_;
+    int ggrid_min_x_;
+    int ggrid_max_y_;
+    int ggrid_min_y_;
+    
     odb::dbDatabase* db_;
     utl::Logger* logger_;
     std::unique_ptr<RectangleRender> rectangleRender_;

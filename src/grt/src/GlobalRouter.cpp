@@ -525,10 +525,28 @@ void GlobalRouter::setPerturbationAmount(int perturbation)
   perturbation_amount_ = perturbation;
 };
 
+int GlobalRouter::num_nets() {
+  int num_nets = 0;
+
+  for(auto [key, value] : db_net_map_) {
+    if(value != nullptr) {
+      if(value->getName() == "net35622") {
+        logger_->report("Ela existe");
+      }
+      num_nets ++;
+    }
+  }
+  return db_net_map_.size();
+}
+
 void GlobalRouter::updateDirtyNets(std::vector<Net*>& dirty_nets)
 {
   initRoutingLayers();
   for (odb::dbNet* db_net : dirty_nets_) {
+    if (db_net_map_.find(db_net) == db_net_map_.end()) {
+      std::cout<<"ue: "<<db_net->getName()<<std::endl;
+      continue;
+    }
     Net* net = db_net_map_[db_net];
     // get last pin positions
     std::vector<odb::Point> last_pos;
@@ -2743,6 +2761,9 @@ std::vector<Net*> GlobalRouter::initNetlist()
 
   std::vector<Net*> clk_nets;
   for (odb::dbNet* db_net : block_->getNets()) {
+    if(db_net->getName() == "net35622") {
+      logger_->report("Achou ela");
+    }
     Net* net = addNet(db_net);
     // add clock nets not connected to a leaf first
     if (net) {
@@ -2775,12 +2796,21 @@ Net* GlobalRouter::addNet(odb::dbNet* db_net)
 {
   if (!db_net->getSigType().isSupply() && !db_net->isSpecial()
       && db_net->getSWires().empty() && !db_net->isConnectedByAbutment()) {
+    
     Net* net = new Net(db_net, db_net->getWire() != nullptr);
     db_net_map_[db_net] = net;
     makeItermPins(net, db_net, grid_->getGridArea());
     makeBtermPins(net, db_net, grid_->getGridArea());
     findPins(net);
     return net;
+  } else {
+    if(db_net->getName() == "net35622") {
+      logger_->report("É especial: ");
+      logger_->report(" especial: {}", db_net->isSpecial());
+      logger_->report(" supply: {}", db_net->getSigType().isSupply());
+      logger_->report(" s wires: {}", db_net->getSWires().empty());
+      logger_->report(" connectec by abbundent: {}", db_net->isConnectedByAbutment());
+    }
   }
   return nullptr;
 }

@@ -34,6 +34,7 @@ namespace rcm {
         }
 
         dbBlock* block = db->getChip()->getBlock();
+        failed_ = false;
 
         vector<Cell> cells;
         vector<Rect> fixed_cells;
@@ -217,7 +218,9 @@ namespace rcm {
             }
 
             if (best_row_i == -1) {
-                //fprintf(stderr, "ERROR: could not place cell\n");
+                std::cout<<"Cell failed name: "<<inst->getName()<<std::endl;
+                failed_ = true;
+                fprintf(stderr, "ERROR: could not place cell\n");
             } else {
                 int accum_split_i =
                     row_to_start_split[best_row_i] + best_split_i;
@@ -393,6 +396,7 @@ namespace rcm {
             ) - rows->begin();
 
             if (row_end == rows->size()) row_end--;
+            if (row_start == 0 && (*rows)[row_start].first.yMin() >= fixed_cell.yMax()) continue;
 
             for (int row_i = row_start; row_i <= row_end; row_i++) {
                 vector<Split>* splits = &splits_per_row[row_i];

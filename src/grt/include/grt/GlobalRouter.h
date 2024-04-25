@@ -154,6 +154,8 @@ class GlobalRouter : public ant::GlobalRouteSource
 
   void clear();
 
+  int num_nets();
+
   void setAdjustment(const float adjustment);
   void setMinRoutingLayer(const int min_layer);
   void setMaxRoutingLayer(const int max_layer);

@@ -18,7 +18,8 @@ class Abacus {
 
 public:
     Abacus();
-
+    
+    bool failed() { return failed_; };
     std::vector<odb::dbInst *> abacus(int x1, int y1, int x2, int y2);
     std::vector<odb::dbInst *> abacus(
         std::vector<Row> const& rows,
@@ -63,6 +64,7 @@ private:
     ) -> std::vector<std::vector<Split>>;
 
     // attributes
+    bool failed_ = false;
     odb::dbDatabase* db;
 };
 }
