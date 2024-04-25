@@ -436,4 +436,97 @@ namespace rcm {
 
         return splits_per_row;
     }
+
+    std::vector<int> Abacus::get_free_spaces(int x1, int y1, int x2, int y2) {
+        int area_x_min, area_x_max, area_y_min, area_y_max;
+        if (x1 < x2) {
+            area_x_min = x1;
+            area_x_max = x2;
+        } else {
+            area_x_min = x2;
+            area_x_max = x1;
+        }
+        if (y1 < y2) {
+            area_y_min = y1;
+            area_y_max = y2;
+        } else {
+            area_y_min = y2;
+            area_y_max = y1;
+        }
+
+        odb::dbBlock* block = db->getChip()->getBlock();
+
+        auto overlap = [&](int d1_min, int d1_max, int d2_min, int d2_max) -> bool {
+            return d1_min < d2_max && d2_min < d1_max;
+        };
+
+        std::vector<std::tuple<odb::Rect, int>> rows;
+        odb::dbSet<odb::dbRow> rows_set = block->getRows();
+        for (odb::dbRow* row : rows_set) {
+            odb::Rect rect = row->getBBox();
+
+            if (   !overlap(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
+                || !overlap(rect.yMin(), rect.yMax(), area_y_min, area_y_max)
+            ) {
+                continue;
+            }
+
+            rows.emplace_back(row->getBBox(), row->getSite()->getWidth());
+        }
+
+        std::sort(rows.begin(), rows.end(),
+            [&](std::tuple<odb::Rect, int>& a_, std::tuple<odb::Rect, int>& b_) {
+                odb::Rect& a = std::get<0>(a_);
+                odb::Rect& b = std::get<0>(b_);
+
+                if (a.yMin() != b.yMin()) return a.yMin() < b.yMin();
+                else                      return a.xMin() < b.xMin();
+            }
+        );
+
+        auto get_limits = [&](std::tuple<odb::Rect, int>& row_and_site_width) -> std::tuple<int, int, int, int> {
+            auto& [row, site_width] = row_and_site_width;
+
+            int x_min_without_site_correction = std::max<int>(area_x_min, row.xMin());
+            int x_min = (x_min_without_site_correction + site_width - 1) / site_width * site_width;
+            int x_max = std::min<int>(area_x_max, row.xMax());
+
+            int y_min = std::max<int>(area_y_min, row.yMin());
+            int y_max = std::min<int>(area_y_max, row.yMax());
+
+            return {x_min, x_max, y_min, y_max};
+        };
+
+        std::vector<int> free_spaces;
+        for (auto& row_and_site_width : rows) {
+            auto [x_min, x_max, y_min, y_max] = get_limits(row_and_site_width);
+            free_spaces.push_back(x_max - x_min);
+        }
+
+        odb::dbSet<odb::dbInst> insts_set = block->getInsts();
+        for (odb::dbInst* inst : insts_set) {
+            odb::Rect cell = inst->getBBox()->getBox();
+
+            if (   !overlap(cell.xMin(), cell.xMax(), area_x_min, area_x_max)
+                || !overlap(cell.yMin(), cell.yMax(), area_y_min, area_y_max)
+            ) {
+                continue;
+            }
+
+            for (int i = 0; i < rows.size(); i++) {
+                auto [x_min, x_max, y_min, y_max] = get_limits(rows[i]);
+
+                if (!overlap(cell.yMin(), cell.yMax(), y_min, y_max)) continue;
+
+                int overlap = std::max<int>(
+                    0,
+                    std::min<int>(cell.xMax(), x_max) - std::max<int>(cell.xMin(), x_min)
+                );
+
+                free_spaces[i] -= overlap;
+            }
+        }
+
+        return free_spaces;
+    }
 }

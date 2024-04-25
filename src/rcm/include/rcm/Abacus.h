@@ -19,13 +19,17 @@ class Abacus {
 public:
     Abacus();
     
-    bool failed() { return failed_; };
     std::vector<odb::dbInst *> abacus(int x1, int y1, int x2, int y2);
     std::vector<odb::dbInst *> abacus(
         std::vector<Row> const& rows,
         std::vector<std::vector<Split>> const& splits_per_row,
         std::vector<Cell>* cells
     );
+
+    std::vector<int> get_free_spaces(int x1, int y1, int x2, int y2);
+
+    bool failed() { return failed_; };
+
 
 private:
     struct AbacusCluster {
