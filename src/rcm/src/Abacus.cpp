@@ -16,6 +16,27 @@ namespace rcm {
         db{ord::OpenRoad::openRoad()->getDb()}
         {}
 
+    void
+    Abacus::InitRowTree(){
+        //std::cout<<"Initializing Cell rtree..."<<std::endl;
+        rowTree_ = std::make_unique<RowTree>();
+
+        auto block = db->getChip()->getBlock();
+        auto rows = block->getRows();
+
+        for (auto row : rows) {
+            auto xll = row->getBBox().xMin();
+            auto xur = row->getBBox().xMax();
+            auto yll = row->getBBox().yMin();
+            auto yur = row->getBBox().yMax();
+
+            box_t row_box({xll, yll}, {xur, yur});
+            Rect Bbox = Rect(xll, yll, xur, yur);
+            RowElement el = make_pair(row_box, row->getBBox());
+            rowTree_->insert(el);
+        }
+    }
+
     std::vector<odb::dbInst *> Abacus::abacus(int x1, int y1, int x2, int y2) {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
@@ -454,12 +475,17 @@ namespace rcm {
             area_y_max = y1;
         }
 
+
         odb::dbBlock* block = db->getChip()->getBlock();
 
         auto overlap = [&](int d1_min, int d1_max, int d2_min, int d2_max) -> bool {
             return d1_min < d2_max && d2_min < d1_max;
         };
 
+        std::vector<RowElement> result;
+        rowTree_->query(bgi::intersects(box_t({area_x_min, area_y_min}, {area_x_max, area_y_max})),
+        std::back_inserter(result));
+        std::cout<<"Number of rows: "<<result.size()<<std::endl;
         std::vector<std::tuple<odb::Rect, int>> rows;
         odb::dbSet<odb::dbRow> rows_set = block->getRows();
         for (odb::dbRow* row : rows_set) {

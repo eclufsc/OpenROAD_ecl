@@ -1,13 +1,20 @@
 #pragma once
 
-#include "odb/db.h"
-
 #include <vector>
+#include <boost/geometry.hpp>
+#include <boost/geometry/index/rtree.hpp>
+#include <boost/graph/grid_graph.hpp>
+
+#include "odb/db.h"
 
 namespace odb {
   class dbDatabase;
   class dbInst;
 }
+
+namespace bg = boost::geometry;
+namespace bgi = boost::geometry::index;
+typedef bg::model::point<int64_t, 2, bg::cs::cartesian> point_t;
 
 namespace rcm {
 
@@ -32,6 +39,12 @@ public:
 
 
 private:
+    // Define a 2D cartesian point using geometry box of DBUs.
+    typedef bg::model::box<point_t> box_t;
+    // Define RTree type of DBU box using R-Star algorithm.
+    typedef std::pair<box_t, odb::Rect> RowElement;
+    typedef bgi::rtree<RowElement, bgi::rstar<16>> RowTree;
+
     struct AbacusCluster {
         double q;
         double weight;
@@ -45,6 +58,8 @@ private:
         odb::Rect global_pos;
         double weight;
     };
+
+    void InitRowTree();
 
     bool abacus_try_add_cell(
         odb::Rect row, int site_width,
@@ -69,6 +84,7 @@ private:
 
     // attributes
     bool failed_ = false;
+    std::unique_ptr<RowTree> rowTree_;
     odb::dbDatabase* db;
 };
 }

@@ -5,6 +5,7 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/graph/grid_graph.hpp>
+
 #include "rcm/Abacus.h"
 
 namespace odb {
@@ -13,6 +14,7 @@ namespace odb {
   class dbInst;
   class Rect;
   class Point;
+  class dbRow
 }
 
 namespace utl {

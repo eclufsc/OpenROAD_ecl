@@ -187,12 +187,12 @@ CellMoveRouter::Cell_Move_Rerout(){
   }
 
   InitCellsWeight();
-
-  int n_move_cells = std::floor(cells_weight.size() * 5/100);
-
   //Initalize Rtrees
   InitCellTree();
   InitGCellTree();
+  abacus_.InitRowTree();
+
+  int n_move_cells = std::floor(cells_weight.size() * 5/100);
 
   int n_cells = cells_weight.size();
   std::cout<<"Celulas a serem movidas  "<<n_move_cells<<std::endl;
