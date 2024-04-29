@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <vector>
 #include <iostream>
+#include <unordered_map>
 
 
 namespace rcm {
@@ -24,15 +25,14 @@ namespace rcm {
         auto block = db->getChip()->getBlock();
         auto rows = block->getRows();
 
-        for (auto row : rows) {
+        for (odb::dbRow* row : rows) {
             auto xll = row->getBBox().xMin();
             auto xur = row->getBBox().xMax();
             auto yll = row->getBBox().yMin();
             auto yur = row->getBBox().yMax();
 
             box_t row_box({xll, yll}, {xur, yur});
-            Rect Bbox = Rect(xll, yll, xur, yur);
-            RowElement el = make_pair(row_box, row->getBBox());
+            RowElement el = make_pair(row_box, row);
             rowTree_->insert(el);
         }
     }
@@ -458,7 +458,7 @@ namespace rcm {
         return splits_per_row;
     }
 
-    std::vector<int> Abacus::get_free_spaces(int x1, int y1, int x2, int y2) {
+    std::vector<std::pair<int, int>> Abacus::get_free_spaces(int x1, int y1, int x2, int y2) {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
             area_x_min = x1;
@@ -482,21 +482,20 @@ namespace rcm {
             return d1_min < d2_max && d2_min < d1_max;
         };
 
-        std::vector<RowElement> result;
+        std::vector<RowElement> intersectng_rows;
         rowTree_->query(bgi::intersects(box_t({area_x_min, area_y_min}, {area_x_max, area_y_max})),
-        std::back_inserter(result));
-        std::cout<<"Number of rows: "<<result.size()<<std::endl;
+        std::back_inserter(intersectng_rows));
+        if(intersectng_rows.size() < 3) {
+            box_t first_row_box = intersectng_rows[0].first;
+            intersectng_rows.clear();
+            rowTree_->query(bgi::intersects(first_row_box),
+            std::back_inserter(intersectng_rows));
+        }
         std::vector<std::tuple<odb::Rect, int>> rows;
-        odb::dbSet<odb::dbRow> rows_set = block->getRows();
-        for (odb::dbRow* row : rows_set) {
+
+        for (RowElement row_el : intersectng_rows) {
+            odb::dbRow* row = row_el.second;
             odb::Rect rect = row->getBBox();
-
-            if (   !overlap(rect.xMin(), rect.xMax(), area_x_min, area_x_max)
-                || !overlap(rect.yMin(), rect.yMax(), area_y_min, area_y_max)
-            ) {
-                continue;
-            }
-
             rows.emplace_back(row->getBBox(), row->getSite()->getWidth());
         }
 
@@ -517,16 +516,18 @@ namespace rcm {
             int x_min = (x_min_without_site_correction + site_width - 1) / site_width * site_width;
             int x_max = std::min<int>(area_x_max, row.xMax());
 
-            int y_min = std::max<int>(area_y_min, row.yMin());
-            int y_max = std::min<int>(area_y_max, row.yMax());
+            int y_min = row.yMin();
+            int y_max = row.yMax();
 
             return {x_min, x_max, y_min, y_max};
         };
 
-        std::vector<int> free_spaces;
+        std::vector<std::pair<int, int>> free_spaces;
+        int max_y = 0;
+        int min_y = 1000000000;
         for (auto& row_and_site_width : rows) {
             auto [x_min, x_max, y_min, y_max] = get_limits(row_and_site_width);
-            free_spaces.push_back(x_max - x_min);
+            free_spaces.push_back({y_min, x_max - x_min});
         }
 
         odb::dbSet<odb::dbInst> insts_set = block->getInsts();
@@ -549,7 +550,7 @@ namespace rcm {
                     std::min<int>(cell.xMax(), x_max) - std::max<int>(cell.xMin(), x_min)
                 );
 
-                free_spaces[i] -= overlap;
+                free_spaces[i].second -= overlap;
             }
         }
 

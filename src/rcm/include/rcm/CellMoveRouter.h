@@ -14,7 +14,7 @@ namespace odb {
   class dbInst;
   class Rect;
   class Point;
-  class dbRow
+  class dbRow;
 }
 
 namespace utl {

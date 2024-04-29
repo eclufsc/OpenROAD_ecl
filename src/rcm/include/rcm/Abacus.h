@@ -4,12 +4,14 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/graph/grid_graph.hpp>
+#include <unordered_map>
 
 #include "odb/db.h"
 
 namespace odb {
   class dbDatabase;
   class dbInst;
+  class dbRow;
 }
 
 namespace bg = boost::geometry;
@@ -33,16 +35,19 @@ public:
         std::vector<Cell>* cells
     );
 
-    std::vector<int> get_free_spaces(int x1, int y1, int x2, int y2);
+    std::vector<std::pair<int, int>> get_free_spaces(int x1, int y1, int x2, int y2);
 
     bool failed() { return failed_; };
+
+    void InitRowTree();
+
 
 
 private:
     // Define a 2D cartesian point using geometry box of DBUs.
     typedef bg::model::box<point_t> box_t;
     // Define RTree type of DBU box using R-Star algorithm.
-    typedef std::pair<box_t, odb::Rect> RowElement;
+    typedef std::pair<box_t, odb::dbRow*> RowElement;
     typedef bgi::rtree<RowElement, bgi::rstar<16>> RowTree;
 
     struct AbacusCluster {
@@ -58,8 +63,6 @@ private:
         odb::Rect global_pos;
         double weight;
     };
-
-    void InitRowTree();
 
     bool abacus_try_add_cell(
         odb::Rect row, int site_width,

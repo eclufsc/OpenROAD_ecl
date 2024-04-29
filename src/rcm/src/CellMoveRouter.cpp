@@ -204,6 +204,7 @@ CellMoveRouter::Cell_Move_Rerout(){
   }
 
   int cont = 0;
+  int cont2 = 0;
   while(!cells_to_move.empty()) {
     auto moving_cell = cells_to_move[0];
     //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
@@ -211,11 +212,13 @@ CellMoveRouter::Cell_Move_Rerout(){
     if(complete) {
       cont++;
     } else {
+      cont2++;
       cells_to_move.erase(cells_to_move.begin());
     }
   }
 
   std::cout<<"moved cells  "<<cont<<std::endl;
+  std::cout<<"rejected cells  "<<cont2<<std::endl;
   long after_wl = grt_->computeWirelength();
   std::cout<<"final wl  "<<after_wl<<std::endl;
 
@@ -230,7 +233,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
   std::vector<odb::dbNet*>  affected_nets;
   std::vector<int>  nets_Bbox_Xs;
   std::vector<int>  nets_Bbox_Ys;
-
+  int moving_cell_width = moving_cell->getBBox()->getDX();
   gui::Gui* gui = gui::Gui::get();
   //Finding the cell's nets bounding boxes
   int before_hwpl = 0;
@@ -287,24 +290,6 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
   int xur = ggrid_max_x_;
   int yur = ggrid_max_y_;
 
-  moving_cell->setLocation(Optimal_Region.first, Optimal_Region.second);
-
-  int after_hwpl = 0;
-  for(auto pin : moving_cell->getITerms())
-  {
-    auto net = pin->getNet();
-    if(net != NULL){
-      if (net->getSigType().isSupply()) {
-        continue;
-      }
-      after_hwpl += getNetHPWLFast(net);
-    }
-  }
-
-  if(after_hwpl > before_hwpl) {
-    return false;
-  }
-
   if(debug()) {
     std::cout<<"  New Position: ("<<Optimal_Region.first<<", "<<Optimal_Region.second<<")"<<std::endl;
   }
@@ -320,15 +305,51 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
   }
 
   // Expend Legalization Area to be 10x10 GCells
-  int gcell_length = result[0].second.xMax() - result[0].second.xMin();
   int gcell_height = result[0].second.yMax() - result[0].second.yMin();
 
   //Expanding legalization Area
-  xur = std::min(xur, result[0].second.xMax() + 14 * gcell_length);
-  yur = std::min(yur, result[0].second.yMax() + 14 * gcell_height);
-  xll = std::max(xll, result[0].second.xMin() - 14 * gcell_length);
-  yll = std::max(yll, result[0].second.yMin() - 14 * gcell_height);
+  xur = std::min(xur, result[0].second.xMax() + 14 * gcell_height);
+  yur = std::min(yur, result[0].second.yMax());
+  xll = std::max(xll, result[0].second.xMin() - 14 * gcell_height);
+  yll = std::max(yll, result[0].second.yMin());
+  auto free_spaces = abacus_.get_free_spaces(xll, yll, xur, yur);
 
+  int best_space = 0;
+  int best_y = 0;
+  int max_row_y = 0;
+  int min_row_y = 1000000000;
+  int prev_y = 0;
+  int row_height = 0;
+  for(auto space : free_spaces) {
+    if(space.second >= 2*moving_cell_width && space.second > best_space) {
+      best_y = space.first;
+      best_space = space.second;
+    }
+    row_height = prev_y - space.first;
+    max_row_y = std::max(max_row_y, space.first);
+    min_row_y = std::min(min_row_y, space.first);
+    prev_y = space.first;
+  }
+  if(best_space == 0) {
+    return false;
+  }
+  yll = min_row_y;
+  yur = max_row_y + row_height;
+  moving_cell->setLocation(Optimal_Region.first, best_y);
+  int after_hwpl = 0;
+  for(auto pin : moving_cell->getITerms())
+  {
+    auto net = pin->getNet();
+    if(net != NULL){
+      if (net->getSigType().isSupply()) {
+        continue;
+      }
+      after_hwpl += getNetHPWLFast(net);
+    }
+  }
+  if(after_hwpl > before_hwpl) {
+    return false;
+  }
 
   //Call abacus for legalization area
   auto changed_cells = abacus_.abacus(xll, yll, xur, yur);
@@ -340,7 +361,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
     std::cout<<"Number of moved cells by Abacus: "<<changed_cells.size()<<std::endl;
   }
 
-  if(debug() && moving_cell->getName() == "inst29545") {
+  if(debug() && abacus_.failed()) {
     rectangleRender_->addRectangle(odb::Rect(xur, yur, xll, yll));
     //drawRectangle(xur, yur, xll, yll);
   }
