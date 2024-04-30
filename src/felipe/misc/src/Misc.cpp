@@ -75,7 +75,7 @@ namespace misc {
             auto& [row, site_width] = row_and_site_width;
 
             int x_min_without_site_correction = std::max<int>(area_x_min, row.xMin());
-            int x_min = (x_min_without_site_correction + site_width - 1) / site_width * site_width;
+            int x_min = (x_min_without_site_correction - row.xMin() + site_width - 1) / site_width * site_width + row.xMin();
             int x_max = std::min<int>(area_x_max, row.xMax());
 
             int y_min = std::max<int>(area_y_min, row.yMin());
