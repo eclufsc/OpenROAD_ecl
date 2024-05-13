@@ -19,7 +19,7 @@ namespace misc {
         if (chip) return chip->getBlock();
         else      return 0;
     }
-    
+
     const char* Misc::error_message_from_get_block() {
         return "Block not available";
     }
@@ -117,6 +117,206 @@ namespace misc {
         return free_spaces;
     }
 
+    std::tuple<Misc::Row, int, bool> Misc::find_available_pos(int moving_cell_width, int x1, int y1, int x2, int y2) {
+        int area_x_min, area_x_max, area_y_min, area_y_max;
+        if (x1 < x2) {
+            area_x_min = x1;
+            area_x_max = x2;
+        } else {
+            area_x_min = x2;
+            area_x_max = x1;
+        }
+        if (y1 < y2) {
+            area_y_min = y1;
+            area_y_max = y2;
+        } else {
+            area_y_min = y2;
+            area_y_max = y1;
+        }
+
+        odb::dbBlock* block = db->getChip()->getBlock();
+
+        auto overlap = [&](int d1_min, int d1_max, int d2_min, int d2_max) -> bool {
+            return d1_min < d2_max && d2_min < d1_max;
+        };
+
+        std::vector<Row> rows;
+        odb::dbSet<odb::dbRow> rows_set = block->getRows();
+        for (odb::dbRow* row : rows_set) {
+            odb::Rect row_rect = row->getBBox();
+
+            if (   !overlap(row_rect.xMin(), row_rect.xMax(), area_x_min, area_x_max)
+                || !overlap(row_rect.yMin(), row_rect.yMax(), area_y_min, area_y_max)
+            ) {
+                continue;
+            }
+
+            int x_min = std::max<int>(area_x_min, row_rect.xMin());
+            int y_min = std::max<int>(area_y_min, row_rect.yMin());
+            int x_max = std::min<int>(area_x_max, row_rect.xMax());
+            int y_max = std::min<int>(area_y_max, row_rect.yMax());
+
+            Rect rect = Rect(x_min, y_min, x_max, y_max);
+            int site_width = row->getSite()->getWidth();
+
+            rows.emplace_back(rect, site_width);
+        }
+
+        odb::dbSet<odb::dbInst> insts_set = block->getInsts();
+        vector<odb::Rect> fixed_cells;
+        vector<odb::Rect> cells;
+        for (odb::dbInst* inst : insts_set) {
+            Rect rect = inst->getBBox()->getBox();
+            if (inst->isFixed()) fixed_cells.push_back(rect);
+            else                 cells.push_back(rect);
+        }
+
+        // Step 1: split by fixed_cells
+        vector<Row> segments;
+        {
+            vector<vector<Split>> splits_per_row = sort_and_get_splits(&rows, fixed_cells);
+
+            // Flatten list
+            for (int i = 0; i < rows.size(); i++) {
+                for (Split& split : splits_per_row[i]) {
+                    Rect rect = {
+                        split.first,
+                        rows[i].first.yMin(),
+                        split.second,
+                        rows[i].first.yMax()
+                    };
+                    int site_width = rows[i].second;
+
+                    segments.emplace_back(rect, site_width);
+                }
+            }
+        }
+
+        // Step 2: split by cells
+        vector<vector<Split>> free_spaces_per_segment = sort_and_get_splits(&segments, cells);
+
+        // Step 3: find largest free space
+        int best_space = -1;
+        int best_segment = -1;
+        int best_x = -1;
+        for (int i = 0; i < segments.size(); i++) {
+            for (Split& free_space : free_spaces_per_segment[i]) {
+                int curr_space = free_space.second - free_space.first;
+                if (curr_space > best_space) {
+                    best_space = curr_space;
+                    best_segment = i;
+                    best_x = free_space.first;
+                }
+            }
+        }
+
+        // Step 4: choose free space
+        if (best_space >= moving_cell_width) {
+            // Cell can fit in free space without legalizing
+            return {segments[best_segment], best_x, true};
+        } else {
+            // Cell cannot fit in free space without legalizing
+            // Check if is possible to place with legalization
+            // (This assumes that the segment with the largest individual free space
+            // probably has the biggest total free space)
+            int total_space = 0;
+            for (Split& free_space : free_spaces_per_segment[best_segment]) {
+                total_space += free_space.second - free_space.first;
+            }
+
+            if (total_space >= moving_cell_width) {
+                // NOTE: the best_x position probably moves the minimum amount of cells
+                return {segments[best_segment], best_x, false};
+            } else {
+                // Error
+                return {{}, 0, false};
+            }
+        }
+    }
+
+    auto Misc::sort_and_get_splits(
+        vector<Row>* rows,
+        vector<Rect> const& fixed_cells
+    ) -> vector<vector<Split>> {
+        sort(rows->begin(), rows->end(),
+            [&](Row const& a, Row const& b) {
+                return a.first.yMin() < b.first.yMin();
+            }
+        );
+
+        vector<vector<Split>> splits_per_row(rows->size());
+        for (int row_i = 0; row_i < rows->size(); row_i++) {
+            Rect const& rect = (*rows)[row_i].first;
+            splits_per_row[row_i].emplace_back(rect.xMin(), rect.xMax());
+        }
+
+        for (Rect const& fixed_cell : fixed_cells) {
+            int int_min = std::numeric_limits<int>::min();
+            int int_max = std::numeric_limits<int>::max();
+
+            Rect dummy_row1 = Rect(
+                int_min, int_min,
+                int_max, fixed_cell.yMin()
+            );
+            int row_start = std::upper_bound(rows->begin(), rows->end(),
+                std::make_pair(dummy_row1, 0),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMax() < b.first.yMax();
+                }
+            ) - rows->begin();
+
+            Rect dummy_row2 = Rect(
+                int_min, int_min,
+                int_max, fixed_cell.yMax()
+            );
+            int row_end_exc = std::upper_bound(rows->begin(), rows->end(),
+                std::make_pair(dummy_row2, 0),
+                [&](Row const& a, Row const& b) {
+                    return a.first.yMax() < b.first.yMax();
+                }
+            ) - rows->begin();
+
+            if (row_start == 0 && fixed_cell.yMax() <= rows->begin()->first.yMin()) continue;
+
+            for (int row_i = row_start; row_i < row_end_exc; row_i++) {
+                vector<Split>* splits = &splits_per_row[row_i];
+                auto const& [row, site_width] = (*rows)[row_i];
+
+                auto split = lower_bound(splits->begin(), splits->end(),
+                    std::make_pair(0, fixed_cell.xMin()),
+                    [&](Split const& a, Split const& b) {
+                        return a.second < b.second;
+                    }
+                );
+                if (split == splits->end()) continue;
+
+                auto [old_x_min, old_x_max] = *split;
+
+                if (!collide(fixed_cell.xMin(), fixed_cell.xMax(), old_x_min, old_x_max)) {
+                    continue;
+                }
+
+                int new_x_min =
+                    (fixed_cell.xMin() - row.xMin())
+                    / site_width * site_width + row.xMin();
+                int new_x_max = 
+                    ((fixed_cell.xMax() - row.xMin()) + site_width-1)
+                    / site_width * site_width + row.xMin();
+
+                splits->erase(split);
+
+                if (new_x_max < old_x_max) {
+                    splits->insert(split, std::make_pair(new_x_max, old_x_max));
+                }
+                if (old_x_min < new_x_min) {
+                    splits->insert(split, std::make_pair(old_x_min, new_x_min));
+                }
+            }
+        }
+
+        return splits_per_row;
+    }
+    
     void Misc::shuffle() {
         dbBlock* block = get_block();
         if (!block) {

@@ -18,6 +18,20 @@ using misc::Misc;
 
 namespace misc {
 
+void find_available_pos(int moving_cell_width, int x1, int y1, int x2, int y2) {
+  Misc* misc = getMisc();
+  auto [row, x, need_legalizer] = misc->find_available_pos(moving_cell_width, x1, y1, x2, y2);
+
+  using std::string;
+  using std::to_string;
+
+  misc->logger->report(
+    string("(") + to_string(row.first.xMin()) + ", " + to_string(row.first.yMin()) + "), "
+    + string("(") + to_string(row.first.xMax()) + ", " + to_string(row.first.yMax()) + "), "
+    + to_string(x)
+  );
+}
+
 void get_free_spaces(int x1, int y1, int x2, int y2) {
   Misc* misc = getMisc();
   std::vector<int> free_spaces = misc->get_free_spaces(x1, y1, x2, y2);

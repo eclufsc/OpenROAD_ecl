@@ -14,6 +14,8 @@ target_sources(misc
     src/MakeMisc.cpp
 )
 
+set_source_files_properties(src/Misc.cpp PROPERTIES COMPILE_FLAGS "-g -O0")
+
 target_include_directories(misc
   PUBLIC
     include

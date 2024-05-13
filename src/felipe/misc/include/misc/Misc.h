@@ -19,11 +19,22 @@ namespace misc {
 
     class Misc {
     public:
+        using Cell = std::pair<odb::Rect, odb::dbInst*>;
+        using Row = std::pair<odb::Rect, int>;
+        using Split = std::pair<int, int>;
+
         Misc();
         ~Misc();
 
         dbBlock* get_block();
         const char* error_message_from_get_block();
+
+        auto sort_and_get_splits(
+            std::vector<Row>* rows,
+            std::vector<odb::Rect> const& fixed_cells
+        ) -> std::vector<std::vector<Split>>;
+
+        std::tuple<Misc::Row, int, bool> find_available_pos(int moving_cell_width, int x1, int y1, int x2, int y2);
 
         std::vector<int> get_free_spaces(int x1, int y1, int x2, int y2);
 
