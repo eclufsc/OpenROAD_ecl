@@ -205,10 +205,11 @@ CellMoveRouter::Cell_Move_Rerout(){
 
   int cont = 0;
   int cont2 = 0;
+  int failed = 0;
   while(!cells_to_move.empty()) {
     auto moving_cell = cells_to_move[0];
     //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
-    bool complete = Swap_and_Rerout(moving_cell);
+    bool complete = Swap_and_Rerout(moving_cell, failed);
     if(complete) {
       cont++;
     } else {
@@ -228,7 +229,8 @@ CellMoveRouter::Cell_Move_Rerout(){
 }
 
 bool
-CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
+CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
+                                int& failed_legalization) {
   auto block = db_->getChip()->getBlock();
   std::vector<odb::dbNet*>  affected_nets;
   std::vector<int>  nets_Bbox_Xs;
@@ -236,6 +238,8 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
   int moving_cell_width = moving_cell->getBBox()->getDX();
   gui::Gui* gui = gui::Gui::get();
   //Finding the cell's nets bounding boxes
+  int original_x, original_y;
+  moving_cell->getLocation(original_x, original_y);
   int before_hwpl = 0;
   for(auto pin : moving_cell->getITerms())
   {
@@ -278,6 +282,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
     moving_cell->getLocation(icx, icy);
     std::cout<<"Cell to be moved: "<<moving_cell->getName()<<"\n";
     std::cout<<"  Intial Position: ("<<icx<<", "<<icy<<")"<<std::endl;
+    std::cout<<"  Cell width: ("<<moving_cell_width<<std::endl;
   }
 
   //Get median cell Point
@@ -312,30 +317,16 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
   yur = std::min(yur, result[0].second.yMax());
   xll = std::max(xll, result[0].second.xMin() - 14 * gcell_height);
   yll = std::max(yll, result[0].second.yMin());
-  auto free_spaces = abacus_.get_free_spaces(xll, yll, xur, yur);
+  auto [best_x, best_y, has_enoght_space] = abacus_.get_free_spaces(moving_cell_width, xll, yll, xur, yur);
 
-  int best_space = 0;
-  int best_y = 0;
-  int max_row_y = 0;
-  int min_row_y = 1000000000;
-  int prev_y = 0;
-  int row_height = 0;
-  for(auto space : free_spaces) {
-    if(space.second >= 2*moving_cell_width && space.second > best_space) {
-      best_y = space.first;
-      best_space = space.second;
-    }
-    row_height = prev_y - space.first;
-    max_row_y = std::max(max_row_y, space.first);
-    min_row_y = std::min(min_row_y, space.first);
-    prev_y = space.first;
-  }
-  if(best_space == 0) {
+  //abacus_.get_free_spaces_old(xll, yll, xur, yur);
+  
+  if(!has_enoght_space) {
+    //logger_->report("Sem espaço!");
     return false;
   }
-  yll = min_row_y;
-  yur = max_row_y + row_height;
-  moving_cell->setLocation(Optimal_Region.first, best_y);
+
+  moving_cell->setLocation(best_x, best_y.yMin());
   int after_hwpl = 0;
   for(auto pin : moving_cell->getITerms())
   {
@@ -348,22 +339,29 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell) {
     }
   }
   if(after_hwpl > before_hwpl) {
+    moving_cell->setLocation(original_x, original_y); 
     return false;
   }
 
   //Call abacus for legalization area
-  auto changed_cells = abacus_.abacus(xll, yll, xur, yur);
+  auto changed_cells = abacus_.abacus(xll, best_y.yMin(), xur, best_y.yMax());
 
   if(debug()) {
+    std::cout<<"Legalization area: ("<<xll<<", "<<yll<<")"<<"  ("<<xur<<", "<<yur<<")"<<std::endl;
     int icx, icy;
     moving_cell->getLocation(icx, icy);
     std::cout<<"Legalized Position: ("<<icx<<", "<<icy<<")"<<std::endl;
     std::cout<<"Number of moved cells by Abacus: "<<changed_cells.size()<<std::endl;
   }
 
-  if(debug() && abacus_.failed()) {
-    rectangleRender_->addRectangle(odb::Rect(xur, yur, xll, yll));
-    //drawRectangle(xur, yur, xll, yll);
+  if(abacus_.failed()) {
+    failed_legalization++;
+    if(debug()) {
+      rectangleRender_->addRectangle(odb::Rect(xll, best_y.yMin(), xur, best_y.yMax()));
+    std::cout<<"Legalization area: ("<<xll<<", "<<best_y.yMin()<<")"<<"  ("<<xur<<", "<<best_y.yMax()<<")"<<std::endl;
+      std::cout<<"Legalization area: ("<<xll<<", "<<yll<<")"<<"  ("<<xur<<", "<<yur<<")"<<std::endl;
+      //drawRectangle(xur, yur, xll, yll);
+    }
   }
 
   //Put back!!!!!!!!
@@ -515,6 +513,15 @@ CellMoveRouter::getNetHPWLFast(odb::dbNet * net) const
   const int height = std::abs(yur-yll);
   int hpwl = width + height;
   return hpwl;
+}
+
+void
+CellMoveRouter::report_nets_pins()
+{
+  auto block = db_->getChip()->getBlock();
+  for (auto net: block->getNets()){ //cálculo do delta hpwl-wl de uma net
+    logger_->report("{}  {}", net->getName(), net->getITerms().size() + net->getBTerms().size());
+  }
 }
 
 }

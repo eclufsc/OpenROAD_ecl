@@ -35,8 +35,10 @@ public:
         std::vector<Cell>* cells
     );
 
-    std::vector<std::pair<int, int>> get_free_spaces(int x1, int y1, int x2, int y2);
+    std::tuple<int, odb::Rect, bool> get_free_spaces(int moving_cell_width, int x1, int y1, int x2, int y2);
 
+    std::vector<std::pair<int, int>> get_free_spaces_old(int x1, int y1, int x2, int y2);
+    
     bool failed() { return failed_; };
 
     void InitRowTree();

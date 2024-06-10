@@ -391,15 +391,15 @@ namespace rcm {
         }
 
         for (Rect const& fixed_cell : fixed_cells) {
-            int int_min = numeric_limits<int>::min();
-            int int_max = numeric_limits<int>::max();
+            int int_min = std::numeric_limits<int>::min();
+            int int_max = std::numeric_limits<int>::max();
 
             Rect dummy_row1 = Rect(
                 int_min, int_min,
                 int_max, fixed_cell.yMin()
             );
             int row_start = std::upper_bound(rows->begin(), rows->end(),
-                make_pair(dummy_row1, 0),
+                std::make_pair(dummy_row1, 0),
                 [&](Row const& a, Row const& b) {
                     return a.first.yMax() < b.first.yMax();
                 }
@@ -409,22 +409,21 @@ namespace rcm {
                 int_min, int_min,
                 int_max, fixed_cell.yMax()
             );
-            int row_end = std::lower_bound(rows->begin(), rows->end(),
-                make_pair(dummy_row2, 0),
+            int row_end_exc = std::upper_bound(rows->begin(), rows->end(),
+                std::make_pair(dummy_row2, 0),
                 [&](Row const& a, Row const& b) {
                     return a.first.yMax() < b.first.yMax();
                 }
             ) - rows->begin();
 
-            if (row_end == rows->size()) row_end--;
-            if (row_start == 0 && (*rows)[row_start].first.yMin() >= fixed_cell.yMax()) continue;
+            if (row_start == 0 && fixed_cell.yMax() <= rows->begin()->first.yMin()) continue;
 
-            for (int row_i = row_start; row_i <= row_end; row_i++) {
+            for (int row_i = row_start; row_i < row_end_exc; row_i++) {
                 vector<Split>* splits = &splits_per_row[row_i];
                 auto const& [row, site_width] = (*rows)[row_i];
 
                 auto split = lower_bound(splits->begin(), splits->end(),
-                    make_pair(0, fixed_cell.xMin()),
+                    std::make_pair(0, fixed_cell.xMin()),
                     [&](Split const& a, Split const& b) {
                         return a.second < b.second;
                     }
@@ -447,10 +446,10 @@ namespace rcm {
                 splits->erase(split);
 
                 if (new_x_max < old_x_max) {
-                    splits->insert(split, make_pair(new_x_max, old_x_max));
+                    splits->insert(split, std::make_pair(new_x_max, old_x_max));
                 }
                 if (old_x_min < new_x_min) {
-                    splits->insert(split, make_pair(old_x_min, new_x_min));
+                    splits->insert(split, std::make_pair(old_x_min, new_x_min));
                 }
             }
         }
@@ -458,7 +457,132 @@ namespace rcm {
         return splits_per_row;
     }
 
-    std::vector<std::pair<int, int>> Abacus::get_free_spaces(int x1, int y1, int x2, int y2) {
+    /* best_x, best_y, has_enought_space?*/
+    std::tuple<int, odb::Rect, bool> Abacus::get_free_spaces(int moving_cell_width, int x1, int y1, int x2, int y2) {
+        int area_x_min, area_x_max, area_y_min, area_y_max;
+        if (x1 < x2) {
+            area_x_min = x1;
+            area_x_max = x2;
+        } else {
+            area_x_min = x2;
+            area_x_max = x1;
+        }
+        if (y1 < y2) {
+            area_y_min = y1;
+            area_y_max = y2;
+        } else {
+            area_y_min = y2;
+            area_y_max = y1;
+        }
+
+        odb::dbBlock* block = db->getChip()->getBlock();
+
+        std::vector<RowElement> intersectng_rows;
+        rowTree_->query(bgi::intersects(box_t({area_x_min, area_y_min}, {area_x_max, area_y_max})),
+        std::back_inserter(intersectng_rows));
+        if(intersectng_rows.size() < 3) {
+            box_t first_row_box = intersectng_rows[0].first;
+            intersectng_rows.clear();
+            rowTree_->query(bgi::intersects(first_row_box),
+            std::back_inserter(intersectng_rows));
+        }
+        std::vector<std::pair<odb::Rect, int>> rows;
+
+        for (RowElement row_el : intersectng_rows) {
+            odb::dbRow* row = row_el.second;
+            odb::Rect rect = row->getBBox();
+            int site_width = row->getSite()->getWidth();
+            int x_min_without_site_correction = std::max<int>(area_x_min, rect.xMin());
+            int x_min = (x_min_without_site_correction + site_width - 1) / site_width * site_width;
+            int x_max = std::min<int>(area_x_max, rect.xMax());
+            
+            rect.set_xlo(x_min);
+            rect.set_xhi(x_max);
+            rows.emplace_back(rect, site_width);
+        }
+
+        odb::dbSet<odb::dbInst> insts_set = block->getInsts();
+        vector<odb::Rect> fixed_cells;
+        vector<odb::Rect> cells;
+        for (odb::dbInst* inst : insts_set) {
+            Rect rect = inst->getBBox()->getBox();
+            if (inst->isFixed()) {
+                fixed_cells.push_back(rect);
+            } else {
+                 cells.push_back(rect);
+            }
+        }
+
+        // Step 1: split by fixed_cells
+        int best_space = -1;
+        int best_total_space = -1;
+        odb::Rect best_y;
+        odb::Rect best_total_y;
+        int best_x = -1;
+        int best_total_x = -1;
+        
+        vector<vector<Split>> splits_per_row = sort_and_get_splits(&rows, fixed_cells);
+        vector<Row> segments;
+        // Flatten list
+        for (int i = 0; i < rows.size(); i++) {
+            segments.clear();
+            for (Split& split : splits_per_row[i]) {
+                Rect rect = {
+                    split.first,
+                    rows[i].first.yMin(),
+                    split.second,
+                    rows[i].first.yMax()
+                };
+                int site_width = rows[i].second;
+
+                segments.emplace_back(rect, site_width);
+            }
+            vector<vector<Split>> free_spaces_per_segment = sort_and_get_splits(&segments, cells);
+            for (int i = 0; i < segments.size(); i++) {
+                int total_space = 0;
+                int best_segment_x = -1;
+                int best_segment_space = -1;
+                for (Split& free_space : free_spaces_per_segment[i]) {
+                    int curr_space = free_space.second - free_space.first;
+                    total_space += curr_space;
+                    if (curr_space > best_segment_space) {
+                        best_segment_space = curr_space;
+                        best_segment_x = free_space.first;
+                    }
+                }
+
+                if(total_space > best_total_space) {
+                    best_total_space = total_space;
+                    best_total_y = segments[i].first;
+                    best_total_x = best_segment_x;
+                }
+
+                if (best_segment_space > best_space) {
+                    best_space = best_segment_space;
+                    best_y = segments[i].first;
+                    best_x = best_segment_x;
+                }
+            }
+        }
+
+        // Step 4: choose free space
+        if (best_space >= moving_cell_width) {
+            // Cell can fit in free space without legalizing
+            return {best_x, best_y, true};
+        }
+        // Cell cannot fit in free space without legalizing
+        // Check if is possible to place with legalization
+        // (This assumes that the segment with the largest individual free space
+        // probably has the biggest total free space)
+        if(best_total_space >= 2*moving_cell_width) {
+            return {best_total_x, best_total_y, true};
+        }
+
+        // Cell cannot fit in any of the chosen rows, even if other cells are moved.
+        return {best_total_x, best_total_y, false};
+    }
+
+    std::vector<std::pair<int, int>> Abacus::get_free_spaces_old(int x1, int y1, int x2, int y2) {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
             area_x_min = x1;

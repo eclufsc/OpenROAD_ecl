@@ -44,6 +44,13 @@ set_debug_cmd(bool debug)
   cellMoveRouter->set_debug(debug);
 }
 
+void
+report_nets_pins()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->report_nets_pins();
+}
+
 
 } // namespace
 

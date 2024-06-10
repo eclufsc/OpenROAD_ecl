@@ -59,6 +59,8 @@ class CellMoveRouter {
     
     void set_debug(bool debug) { debug_ = debug; };
 
+    void report_nets_pins();
+
   private:
 
     void InitCellTree();
@@ -67,7 +69,7 @@ class CellMoveRouter {
 
     void InitAbacus();
   
-    bool Swap_and_Rerout(odb::dbInst * moving_cell);
+    bool Swap_and_Rerout(odb::dbInst * moving_cell, int& failed_legalization);
 
     int getNetHPWLFast(odb::dbNet * net) const;
 
