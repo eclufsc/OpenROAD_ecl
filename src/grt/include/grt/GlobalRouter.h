@@ -156,6 +156,9 @@ class GlobalRouter : public ant::GlobalRouteSource
 
   int num_nets();
 
+  void loadGuidesFromUser(odb::dbNet* net, GRoute& route_from_user);
+  GRoute& getNetRoute(odb::dbNet* net) { return routes_[net]; }
+
   void setAdjustment(const float adjustment);
   void setMinRoutingLayer(const int min_layer);
   void setMaxRoutingLayer(const int max_layer);

@@ -37,7 +37,8 @@ namespace rcm {
         }
     }
 
-    std::vector<odb::dbInst *> Abacus::abacus(int x1, int y1, int x2, int y2) {
+    std::vector<std::pair<odb::dbInst *, std::pair<int, int>>> Abacus::abacus(
+        int x1, int y1, int x2, int y2) {
         int area_x_min, area_x_max, area_y_min, area_y_max;
         if (x1 < x2) {
             area_x_min = x1;
@@ -112,7 +113,7 @@ namespace rcm {
         return abacus(rows, splits_per_row, &cells);
     }
 
-    std::vector<odb::dbInst *> Abacus::abacus(
+    std::vector<std::pair<odb::dbInst *, std::pair<int, int>>> Abacus::abacus(
         vector<Row> const& rows,
         vector<vector<Split>> const& splits_per_row,
         vector<Cell>* cells
@@ -253,7 +254,7 @@ namespace rcm {
                     .push_back(best_new_cluster);
             }
         }
-        std::vector<odb::dbInst *> retorno;
+        std::vector<std::pair<odb::dbInst *, std::pair<int, int>>> retorno;
         int accum_split_i = 0;
         for (int row_i = 0; row_i < rows.size(); row_i++) {
             vector<Split> const& splits = splits_per_row[row_i];
@@ -270,11 +271,14 @@ namespace rcm {
                         int cell_i = cells_in_row[split_cell_i];
                         auto const& [cell, inst] = (*cells)[cell_i];
 
+                        int prev_x, prev_y;
                         Rect const& row = rows[row_i].first;
-
-                        if(set_pos(inst, x, row.yMin())) {
-                            retorno.push_back(inst);
+                        inst->getLocation(prev_x, prev_y);
+                        if (prev_x != x || prev_y != row.yMin()) {
+                            set_pos(inst, x, row.yMin());
+                            retorno.push_back(std::make_pair(inst, std::make_pair(x, row.yMin())));
                         }
+
 
                         x += cell.dx();
                         split_cell_i++;
@@ -366,6 +370,7 @@ namespace rcm {
         int prev_x, prev_y;
         cell->getLocation(prev_x, prev_y);
         if (prev_x == x && prev_y == y) return false;
+        
         cell->setLocation(x, y);
         return true;
     };

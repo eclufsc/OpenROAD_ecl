@@ -544,7 +544,6 @@ void GlobalRouter::updateDirtyNets(std::vector<Net*>& dirty_nets)
   initRoutingLayers();
   for (odb::dbNet* db_net : dirty_nets_) {
     if (db_net_map_.find(db_net) == db_net_map_.end()) {
-      std::cout<<"ue: "<<db_net->getName()<<std::endl;
       continue;
     }
     Net* net = db_net_map_[db_net];
@@ -1588,6 +1587,28 @@ void GlobalRouter::loadGuidesFromDB()
     GRoute& route = net_route.second;
     mergeSegments(pins, route);
   }
+
+  updateEdgesUsage();
+  heatmap_->update();
+}
+
+void GlobalRouter::loadGuidesFromUser(odb::dbNet* net, grt::GRoute& route_from_user)
+{
+  /*initGridAndNets();
+  for (odb::dbNet* net : block_->getNets()) {
+    for (odb::dbGuide* guide : net->getGuides()) {
+      boxToGlobalRouting(
+          guide->getBox(), guide->getLayer()->getRoutingLevel(), routes_[net]);
+    }
+  }*/
+  routes_[net] = route_from_user;
+  updateVias();
+
+  /*for (auto& net_route : routes_) {
+    std::vector<Pin>& pins = db_net_map_[net_route.first]->getPins();
+    GRoute& route = net_route.second;
+    mergeSegments(pins, route);
+  }*/
 
   updateEdgesUsage();
   heatmap_->update();
@@ -2761,9 +2782,6 @@ std::vector<Net*> GlobalRouter::initNetlist()
 
   std::vector<Net*> clk_nets;
   for (odb::dbNet* db_net : block_->getNets()) {
-    if(db_net->getName() == "net35622") {
-      logger_->report("Achou ela");
-    }
     Net* net = addNet(db_net);
     // add clock nets not connected to a leaf first
     if (net) {

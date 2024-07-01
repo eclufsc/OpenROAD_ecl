@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <iostream>
+#include <unordered_map>
 
 namespace rcm {
 
@@ -170,6 +171,7 @@ CellMoveRouter::Cell_Move_Rerout(){
 
   auto block = db_->getChip()->getBlock();
   auto cells = block->getInsts();
+  std::unordered_map<odb::dbInst*,int> cells_movement;
 
   icr_grt_ = new grt::IncrementalGRoute(grt_, block);
 
@@ -194,34 +196,55 @@ CellMoveRouter::Cell_Move_Rerout(){
 
   int n_move_cells = std::floor(cells_weight.size() * 5/100);
 
-  int n_cells = cells_weight.size();
-  std::cout<<"Celulas a serem movidas  "<<n_move_cells<<std::endl;
-  for(int i = cells_weight.size() - 1; i >=0; i--) {
-    if(i < n_cells - n_move_cells) {
-      break;
+  int total_moved = 0;
+  int total_regected = 0;
+  int iterations = 0;
+  while(total_moved < n_move_cells){
+    InitCellsWeight();
+    int n_cells = cells_weight.size();
+    std::cout<<"Celulas a serem movidas  "<<n_move_cells<<std::endl;
+    for(int i = cells_weight.size() - 1; i >=0; i--) {
+      if(i < n_cells - n_move_cells) {
+        break;
+      }
+      cells_to_move.push_back(cells_weight[i].second);
     }
-    cells_to_move.push_back(cells_weight[i].second);
+
+    int cont = 0;
+    int cont2 = 0;
+    int failed = 0;
+    int worse = 0;
+    while(!cells_to_move.empty()) {
+      auto moving_cell = cells_to_move[0];
+      //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
+      bool complete = Swap_and_Rerout(moving_cell, failed, worse);
+      if(complete) {
+        cells_movement[moving_cell] += 1;
+        cont++;
+      } else {
+        cont2++;
+        cells_to_move.erase(cells_to_move.begin());
+      }
+    }
+    total_moved += cont;
+    total_regected += cont2;
+    iterations ++;
+    std::cout<<"Celulas movidas: "<<cont<<std::endl;
+    std::cout<<"Celulas rejeitadas: "<<cont2<<std::endl;
+    std::cout<<"Celulas movidas total: "<<total_moved<<std::endl;
+    std::cout<<"move worsed cells  "<<worse<<std::endl;
   }
 
-  int cont = 0;
-  int cont2 = 0;
-  int failed = 0;
-  while(!cells_to_move.empty()) {
-    auto moving_cell = cells_to_move[0];
-    //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
-    bool complete = Swap_and_Rerout(moving_cell, failed);
-    if(complete) {
-      cont++;
-    } else {
-      cont2++;
-      cells_to_move.erase(cells_to_move.begin());
-    }
-  }
-
-  std::cout<<"moved cells  "<<cont<<std::endl;
-  std::cout<<"rejected cells  "<<cont2<<std::endl;
+  std::cout<<"moved cells  "<<total_moved<<std::endl;
+  std::cout<<"rejected cells  "<<total_regected<<std::endl;
   long after_wl = grt_->computeWirelength();
   std::cout<<"final wl  "<<after_wl<<std::endl;
+  std::cout<<"iterations  "<<iterations<<std::endl;
+
+  for(auto [inst, count] : cells_movement) {
+    std::cout<<"Inst "<<inst->getName()<<" moved: "<<count<<" times"<< std::endl;
+  }
+  std::cout<<"Effectvly moved: "<< cells_movement.size()<<std::endl;
 
   delete icr_grt_;
   icr_grt_ = nullptr;
@@ -230,9 +253,10 @@ CellMoveRouter::Cell_Move_Rerout(){
 
 bool
 CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
-                                int& failed_legalization) {
+                                int& failed_legalization,
+                                int& worse_wl) {
   auto block = db_->getChip()->getBlock();
-  std::vector<odb::dbNet*>  affected_nets;
+  std::vector<std::pair<odb::dbNet*, grt::GRoute>>  affected_nets;
   std::vector<int>  nets_Bbox_Xs;
   std::vector<int>  nets_Bbox_Ys;
   int moving_cell_width = moving_cell->getBBox()->getDX();
@@ -241,6 +265,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   int original_x, original_y;
   moving_cell->getLocation(original_x, original_y);
   int before_hwpl = 0;
+
   for(auto pin : moving_cell->getITerms())
   {
     auto net = pin->getNet();
@@ -272,8 +297,9 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       nets_Bbox_Xs.push_back(xll);
       nets_Bbox_Ys.push_back(yur);
       nets_Bbox_Ys.push_back(yll);
-
-      affected_nets.push_back(net);
+      //wl_before_moving += grt_->computeNetWirelength(net);
+      grt::GRoute& net_init_route = grt_->getNetRoute(net);
+      affected_nets.push_back(std::make_pair(net, net_init_route));
     }
   }
 
@@ -338,7 +364,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       after_hwpl += getNetHPWLFast(net);
     }
   }
-  if(after_hwpl > before_hwpl) {
+  if(after_hwpl > before_hwpl || (best_x == original_x && best_y.yMin() == original_y)) {
     moving_cell->setLocation(original_x, original_y); 
     return false;
   }
@@ -358,14 +384,14 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
     failed_legalization++;
     if(debug()) {
       rectangleRender_->addRectangle(odb::Rect(xll, best_y.yMin(), xur, best_y.yMax()));
-    std::cout<<"Legalization area: ("<<xll<<", "<<best_y.yMin()<<")"<<"  ("<<xur<<", "<<best_y.yMax()<<")"<<std::endl;
+      std::cout<<"Legalization area: ("<<xll<<", "<<best_y.yMin()<<")"<<"  ("<<xur<<", "<<best_y.yMax()<<")"<<std::endl;
       std::cout<<"Legalization area: ("<<xll<<", "<<yll<<")"<<"  ("<<xur<<", "<<yur<<")"<<std::endl;
       //drawRectangle(xur, yur, xll, yll);
     }
   }
 
   //Put back!!!!!!!!
-  for(auto cell : changed_cells) {
+  for(auto [cell, original_location] : changed_cells) {
     if(cell == moving_cell) {
       continue;
     }
@@ -377,7 +403,9 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
         if (affected_net->getSigType().isSupply()) {
           continue;
         }
-        affected_nets.push_back(affected_net);
+        //wl_before_moving += grt_->computeNetWirelength(affected_net);
+        grt::GRoute& net_init_route = grt_->getNetRoute(affected_net);
+        affected_nets.push_back(std::make_pair(affected_net, net_init_route));
       }
     }
   }
@@ -403,10 +431,10 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   //clear dirty nets and update the new nets ot be rerouted
   grt_->clearDirtyNets();
   for (auto affected_net : affected_nets) {
-    if(affected_net->getSigType().isSupply()) {
+    if(affected_net.first->getSigType().isSupply()) {
       logger_->report("Erro nas nets afetadas");
     }
-    grt_->addDirtyNet(affected_net);
+    grt_->addDirtyNet(affected_net.first);
   }
 
   icr_grt_->updateRoutes();
@@ -440,7 +468,7 @@ std::pair<int, int> CellMoveRouter::nets_Bboxes_median(std::vector<int> Xs, std:
 void
 CellMoveRouter::InitCellsWeight()
 {
-
+  cells_weight.clear();
   odb::dbBlock *block = db_->getChip()->getBlock(); //pega o bloco
   auto cellNumber = block->getInsts().size();
   

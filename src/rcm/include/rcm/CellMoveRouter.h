@@ -7,6 +7,7 @@
 #include <boost/graph/grid_graph.hpp>
 
 #include "rcm/Abacus.h"
+#include "grt/GRoute.h"
 
 namespace odb {
   class dbDatabase;
@@ -69,7 +70,7 @@ class CellMoveRouter {
 
     void InitAbacus();
   
-    bool Swap_and_Rerout(odb::dbInst * moving_cell, int& failed_legalization);
+    bool Swap_and_Rerout(odb::dbInst * moving_cell, int& failed_legalization, int& worse_wl);
 
     int getNetHPWLFast(odb::dbNet * net) const;
 
