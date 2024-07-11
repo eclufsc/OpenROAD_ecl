@@ -45,8 +45,14 @@ class CellMoveRouter {
     typedef std::pair<box_t, odb::Rect> GCellElement;
     typedef bgi::rtree<CellElement, bgi::rstar<16>> CRTree;
     typedef bgi::rtree<GCellElement, bgi::rstar<16>> GRTree;
+
+    // Define Median as a pair (x, y)
+    using median = std::pair<int, int>;
+
   public:
     CellMoveRouter();
+
+    void test_error_cell();
 
     void helloWorld();
 
@@ -57,6 +63,8 @@ class CellMoveRouter {
     void Cell_Move_Rerout();
 
     void InitCellsWeight();
+
+    void InitNetsWeight();
     
     void set_debug(bool debug) { debug_ = debug; };
 
@@ -74,12 +82,21 @@ class CellMoveRouter {
 
     int getNetHPWLFast(odb::dbNet * net) const;
 
-    std::pair<int, int> nets_Bboxes_median(std::vector<int> Xs, std::vector<int> Ys);
+    void SelectCellsToMove();
 
+    
+    median nets_Bboxes_median(std::vector<int>& Xs, std::vector<int>& Ys);
+
+    median compute_cell_median(odb::dbInst* cell);
+
+    median compute_net_median(odb::dbNet* net);
+    int compute_manhattan_distance(median loc1, median loc2);
+    
     bool debug() {return debug_; };
 
-    std::vector<std::pair<int, odb::dbInst *>> cells_weight; //mapa de cells e deltas
-    std::vector<odb::dbInst *> cells_to_move;
+    std::vector<std::pair<int, odb::dbInst *>> cells_weight_; //mapa de cells e deltas
+    std::vector<std::pair<int, odb::dbNet *>> nets_weight_;
+    std::vector<odb::dbInst *> cells_to_move_;
     int ggrid_max_x_;
     int ggrid_min_x_;
     int ggrid_max_y_;

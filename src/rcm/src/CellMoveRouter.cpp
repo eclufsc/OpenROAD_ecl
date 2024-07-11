@@ -194,28 +194,27 @@ CellMoveRouter::Cell_Move_Rerout(){
   InitGCellTree();
   abacus_.InitRowTree();
 
-  int n_move_cells = std::floor(cells_weight.size() * 5/100);
-
   int total_moved = 0;
   int total_regected = 0;
   int iterations = 0;
+  int n_move_cells = std::floor(cells_weight_.size() * 5/100);
   while(total_moved < n_move_cells){
     InitCellsWeight();
-    int n_cells = cells_weight.size();
+    int n_cells = cells_weight_.size();
     std::cout<<"Celulas a serem movidas  "<<n_move_cells<<std::endl;
-    for(int i = cells_weight.size() - 1; i >=0; i--) {
+    for(int i = cells_weight_.size() - 1; i >=0; i--) {
       if(i < n_cells - n_move_cells) {
         break;
       }
-      cells_to_move.push_back(cells_weight[i].second);
+      cells_to_move_.push_back(cells_weight_[i].second);
     }
 
     int cont = 0;
     int cont2 = 0;
     int failed = 0;
     int worse = 0;
-    while(!cells_to_move.empty()) {
-      auto moving_cell = cells_to_move[0];
+    while(!cells_to_move_.empty()) {
+      auto moving_cell = cells_to_move_[0];
       //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
       bool complete = Swap_and_Rerout(moving_cell, failed, worse);
       if(complete) {
@@ -223,7 +222,7 @@ CellMoveRouter::Cell_Move_Rerout(){
         cont++;
       } else {
         cont2++;
-        cells_to_move.erase(cells_to_move.begin());
+        cells_to_move_.erase(cells_to_move_.begin());
       }
     }
     total_moved += cont;
@@ -284,7 +283,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
         int x=0, y=0;
         //Using Cell location (fast)
         odb::dbInst* inst = iterm->getInst();
-        if(inst && (inst != moving_cell))// is connected
+        if(inst)// is connected
         {
           inst->getLocation(x, y);
           xur = std::max(xur, x);
@@ -298,7 +297,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       nets_Bbox_Ys.push_back(yur);
       nets_Bbox_Ys.push_back(yll);
       //wl_before_moving += grt_->computeNetWirelength(net);
-      grt::GRoute& net_init_route = grt_->getNetRoute(net);
+      grt::GRoute net_init_route = grt_->getNetRoute(net);
       affected_nets.push_back(std::make_pair(net, net_init_route));
     }
   }
@@ -344,7 +343,6 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   xll = std::max(xll, result[0].second.xMin() - 14 * gcell_height);
   yll = std::max(yll, result[0].second.yMin());
   auto [best_x, best_y, has_enoght_space] = abacus_.get_free_spaces(moving_cell_width, xll, yll, xur, yur);
-
   //abacus_.get_free_spaces_old(xll, yll, xur, yur);
   
   if(!has_enoght_space) {
@@ -370,6 +368,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   }
 
   //Call abacus for legalization area
+  rectangleRender_->addRectangle(odb::Rect(xll, best_y.yMin(), xur, best_y.yMax()));
   auto changed_cells = abacus_.abacus(xll, best_y.yMin(), xur, best_y.yMax());
 
   if(debug()) {
@@ -404,11 +403,30 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
           continue;
         }
         //wl_before_moving += grt_->computeNetWirelength(affected_net);
-        grt::GRoute& net_init_route = grt_->getNetRoute(affected_net);
+        grt::GRoute net_init_route = grt_->getNetRoute(affected_net);
         affected_nets.push_back(std::make_pair(affected_net, net_init_route));
       }
     }
   }
+
+  //std::cout<<"Reroteando nets afetadas....."<<std::endl;
+  //clear dirty nets and update the new nets ot be rerouted
+  std::vector<odb::dbNet*>rerouted_nets;
+  grt_->clearDirtyNets();
+  for (auto affected_net : affected_nets) {
+    if(affected_net.first->getSigType().isSupply()) {
+      logger_->report("Erro nas nets afetadas");
+    }
+    rerouted_nets.push_back(affected_net.first);
+    grt_->addDirtyNet(affected_net.first);
+  }
+
+  icr_grt_->updateRoutes();
+  if(!grt_->getDirtyNets().empty()) {
+    grt_->clearDirtyNets();
+  }
+
+  gui->redraw();
 
   for(auto pin : moving_cell->getITerms())
   {
@@ -419,34 +437,19 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       }
       for (auto iterm : net->getITerms()) {
         auto inst = iterm->getInst();
-        auto erase = std::find(cells_to_move.begin(), cells_to_move.end(), inst);
-        if(erase != cells_to_move.end()) {
-          cells_to_move.erase(erase);
+        auto erase = std::find(cells_to_move_.begin(), cells_to_move_.end(), inst);
+        if(erase != cells_to_move_.end()) {
+          cells_to_move_.erase(erase);
         }
       }
     }
   }
-
-  //std::cout<<"Reroteando nets afetadas....."<<std::endl;
-  //clear dirty nets and update the new nets ot be rerouted
-  grt_->clearDirtyNets();
-  for (auto affected_net : affected_nets) {
-    if(affected_net.first->getSigType().isSupply()) {
-      logger_->report("Erro nas nets afetadas");
-    }
-    grt_->addDirtyNet(affected_net.first);
-  }
-
-  icr_grt_->updateRoutes();
-  if(!grt_->getDirtyNets().empty()) {
-    grt_->clearDirtyNets();
-  }
-  gui->redraw();
   //std::cout<<"nets afetadas reroteadas..."<<std::endl;
   return true;
 }
 
-std::pair<int, int> CellMoveRouter::nets_Bboxes_median(std::vector<int> Xs, std::vector<int> Ys) {
+std::pair<int, int>
+CellMoveRouter::nets_Bboxes_median(std::vector<int>& Xs, std::vector<int>& Ys) {
 
   int median_pos_X = std::floor(Xs.size()/2);
   std::sort(Xs.begin(), Xs.end());
@@ -462,13 +465,61 @@ std::pair<int, int> CellMoveRouter::nets_Bboxes_median(std::vector<int> Xs, std:
   int x = (xll + xur)/2;
   int y = (yll + yur)/2;
 
-  return std::pair<int, int> (x, y);
+  return median (x, y);
 }
+
+std::pair<int, int>
+CellMoveRouter::compute_cell_median(odb::dbInst* cell) {
+  std::vector<int>  nets_Bbox_Xs, nets_Bbox_Ys;
+
+  for(auto pin : cell->getITerms())
+  {
+    auto net = pin->getNet();
+    if(net != NULL) {
+      for(auto iterm : net->getITerms())
+      {
+        int x=0, y=0;
+        //Using Cell location (fast)
+        odb::dbInst* inst = iterm->getInst();
+        if(inst)// is connected
+        {
+          inst->getLocation(x, y);
+          nets_Bbox_Xs.push_back(x);
+          nets_Bbox_Ys.push_back(y);
+        }
+      }
+    }
+  }
+
+  return nets_Bboxes_median(nets_Bbox_Xs, nets_Bbox_Ys);
+}
+
+std::pair<int, int>
+CellMoveRouter::compute_net_median(odb::dbNet* net) {
+  std::vector<int>  nets_Bbox_Xs, nets_Bbox_Ys;
+
+  for(auto pin : net->getITerms())
+  {
+    int x=0, y=0;
+    //Using Cell location (fast)
+    odb::dbInst* inst = pin->getInst();
+    if(inst)// is connected
+    {
+      inst->getLocation(x, y);
+      nets_Bbox_Xs.push_back(x);
+      nets_Bbox_Ys.push_back(y);
+    }
+  }
+
+  return nets_Bboxes_median(nets_Bbox_Xs, nets_Bbox_Ys);
+}
+
 
 void
 CellMoveRouter::InitCellsWeight()
 {
-  cells_weight.clear();
+  cells_weight_.clear();
+  cells_to_move_.clear();
   odb::dbBlock *block = db_->getChip()->getBlock(); //pega o bloco
   auto cellNumber = block->getInsts().size();
   
@@ -488,12 +539,10 @@ CellMoveRouter::InitCellsWeight()
     netDeltaLookup[netName] = netDelta;
   }
 
-  odb::dbInst* test;
-
   for(auto cell : block->getInsts()) {
     int delta_sum = 0;
     if(cell->isFixed()) {
-      cells_weight.push_back(std::make_pair(delta_sum, cell));
+      cells_weight_.push_back(std::make_pair(delta_sum, cell));
       continue;
     }
     if(cell->isBlock()) {
@@ -509,11 +558,110 @@ CellMoveRouter::InitCellsWeight()
         delta_sum += netDeltaLookup[net->getName()];
       }
     }
-    cells_weight.push_back(std::make_pair(delta_sum, cell));
-    test = cell;
+    cells_weight_.push_back(std::make_pair(delta_sum, cell));
   }
-  std::sort(cells_weight.begin(),cells_weight.end());
+  std::sort(cells_weight_.begin(),cells_weight_.end());
   
+}
+
+void
+CellMoveRouter::InitNetsWeight() {
+  nets_weight_.clear();
+  odb::dbBlock *block = db_->getChip()->getBlock(); //pega o bloco
+  
+  std::map <std::string, int> netDeltaLookup; //mapa de nets e hpwl,stwl
+
+  for (auto net: block->getNets()){ //cálculo do delta hpwl-wl de uma net
+
+    int hpwl=0, routing_wl=0;
+  
+    hpwl = getNetHPWLFast(net);
+
+    routing_wl = grt_->computeNetWirelength(net); //transformei esse metodo pra public - WL da net
+
+
+    int delta = routing_wl - hpwl;
+    nets_weight_.push_back(std::make_pair(delta, net));
+  }
+  std::sort(nets_weight_.begin(),nets_weight_.end());
+}
+
+void
+CellMoveRouter::SelectCellsToMove() {
+  auto block = db_->getChip()->getBlock();
+  auto cells = block->getInsts();
+  std::unordered_map<odb::dbInst*,int> cells_movement;
+
+  // Init incremental global router
+  icr_grt_ = new grt::IncrementalGRoute(grt_, block);
+
+  //Initalize Rtrees
+  InitCellTree();
+  InitGCellTree();
+  abacus_.InitRowTree();
+
+  // Inital Global Rout by OpenROAD
+  grt_->globalRoute();
+  long init_wl = grt_->computeWirelength();
+  std::cout<<"initial wl  "<<init_wl<<std::endl;
+
+  InitNetsWeight();
+
+  for(int i = nets_weight_.size() - 1; i >=0; i--) {
+    odb::dbNet* net = nets_weight_[i].second;
+    median net_median = compute_net_median(net);
+
+    odb::dbInst* cell_to_move = nullptr;
+    int smalledt_dis = std::numeric_limits<int>::max();
+    
+    for(auto iterm : net->getITerms()) {
+      odb::dbInst* candidate_cell = iterm->getInst();
+
+      if(candidate_cell->isFixed() || candidate_cell->isBlock()) {
+        continue;
+      }
+
+      median candidate_cell_median = compute_cell_median(candidate_cell);
+      int distance = compute_manhattan_distance(net_median, candidate_cell_median);
+      if(distance < smalledt_dis) {
+        smalledt_dis = distance;
+        cell_to_move = candidate_cell;
+      }
+    }
+    if(cell_to_move != nullptr)
+    cells_to_move_.push_back(cell_to_move);
+  }
+}
+
+/*void
+CellMoveRouter::moveSelectedCells() {
+  int total_moved = 0;
+  int total_regected = 0;
+  int failed = 0;
+  int worse = 0;
+  std::cout<<"I"
+  while(!cells_to_move_.empty()) {
+    auto moving_cell = cells_to_move_[0];
+    //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
+    bool complete = Swap_and_Rerout(moving_cell, failed, worse);
+    if(complete) {
+      cells_movement[moving_cell] += 1;
+      total_moved++;
+    } else {
+      total_regected++;
+      cells_to_move_.erase(cells_to_move_.begin());
+    }
+  }
+  std::cout<<"Celulas movidas: "<<total_moved<<std::endl;
+  std::cout<<"Celulas rejeitadas: "<<total_regected<<std::endl;
+  std::cout<<"Celulas movidas total: "<<total_moved<<std::endl;
+  std::cout<<"move worsed cells  "<<worse<<std::endl;
+}*/
+
+int
+CellMoveRouter::compute_manhattan_distance(median loc1, median loc2) {
+  int distance = std::abs(loc1.first - loc2.first) + std::abs(loc1.second - loc2.second);
+  return distance;
 }
 
 int
