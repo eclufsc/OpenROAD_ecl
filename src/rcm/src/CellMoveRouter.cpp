@@ -198,23 +198,28 @@ CellMoveRouter::Cell_Move_Rerout(){
   int total_regected = 0;
   int iterations = 0;
   int n_move_cells = std::floor(cells_weight_.size() * 5/100);
-  while(total_moved < n_move_cells){
-    InitCellsWeight();
+  //while(total_moved < n_move_cells){
+  //  InitCellsWeight();
     int n_cells = cells_weight_.size();
     std::cout<<"Celulas a serem movidas  "<<n_move_cells<<std::endl;
     for(int i = cells_weight_.size() - 1; i >=0; i--) {
       if(i < n_cells - n_move_cells) {
         break;
       }
-      cells_to_move_.push_back(cells_weight_[i].second);
+      cells_to_move_.push_back(cells_weight_[i]);
     }
+
+    sortCellsToMoveMedian();
 
     int cont = 0;
     int cont2 = 0;
     int failed = 0;
     int worse = 0;
     while(!cells_to_move_.empty()) {
-      auto moving_cell = cells_to_move_[0];
+      auto moving_cell = cells_to_move_[0].inst;
+      if(moving_cell == nullptr) {
+        std::cout<<"ERRO FEIO"<<std::endl;
+      }
       //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
       bool complete = Swap_and_Rerout(moving_cell, failed, worse);
       if(complete) {
@@ -232,7 +237,7 @@ CellMoveRouter::Cell_Move_Rerout(){
     std::cout<<"Celulas rejeitadas: "<<cont2<<std::endl;
     std::cout<<"Celulas movidas total: "<<total_moved<<std::endl;
     std::cout<<"move worsed cells  "<<worse<<std::endl;
-  }
+  //}
 
   std::cout<<"moved cells  "<<total_moved<<std::endl;
   std::cout<<"rejected cells  "<<total_regected<<std::endl;
@@ -283,7 +288,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
         int x=0, y=0;
         //Using Cell location (fast)
         odb::dbInst* inst = iterm->getInst();
-        if(inst)// is connected
+        if(inst && inst != moving_cell) // is connected
         {
           inst->getLocation(x, y);
           xur = std::max(xur, x);
@@ -437,7 +442,8 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       }
       for (auto iterm : net->getITerms()) {
         auto inst = iterm->getInst();
-        auto erase = std::find(cells_to_move_.begin(), cells_to_move_.end(), inst);
+        //std::cout<<"Celula sendo procurada: "<<inst->getName()<<std::endl;
+        auto erase = findInstIterator(inst);
         if(erase != cells_to_move_.end()) {
           cells_to_move_.erase(erase);
         }
@@ -446,6 +452,20 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   }
   //std::cout<<"nets afetadas reroteadas..."<<std::endl;
   return true;
+}
+
+std::vector<RcmCell>::iterator
+CellMoveRouter::findInstIterator(const odb::dbInst* inst) {
+  std::vector<RcmCell>::iterator iterator;
+  for (iterator = cells_to_move_.begin(); iterator != cells_to_move_.end();) {
+    odb::dbInst* inst_check = iterator->inst;
+    if(inst_check == inst) {
+      //std::cout<<"Celula achada: "<<inst_check->getName()<<std::endl;
+      return iterator;
+    }
+    ++iterator;
+  }
+  return iterator;
 }
 
 std::pair<int, int>
@@ -476,18 +496,60 @@ CellMoveRouter::compute_cell_median(odb::dbInst* cell) {
   {
     auto net = pin->getNet();
     if(net != NULL) {
+      if (net->getSigType().isSupply()) {
+        continue;
+      }
       for(auto iterm : net->getITerms())
       {
         int x=0, y=0;
         //Using Cell location (fast)
         odb::dbInst* inst = iterm->getInst();
-        if(inst)// is connected
+        if(inst && inst != cell)// is connected
         {
           inst->getLocation(x, y);
           nets_Bbox_Xs.push_back(x);
           nets_Bbox_Ys.push_back(y);
         }
       }
+    }
+  }
+
+  return nets_Bboxes_median(nets_Bbox_Xs, nets_Bbox_Ys);
+}
+
+std::pair<int, int>
+CellMoveRouter::compute_cells_nets_median(odb::dbInst* cell) {
+  std::vector<int>  nets_Bbox_Xs, nets_Bbox_Ys;
+
+  for(auto pin : cell->getITerms())
+  {
+    auto net = pin->getNet();
+    if(net != NULL) {
+      if (net->getSigType().isSupply()) {
+        continue;
+      }
+      int xll = std::numeric_limits<int>::max();
+      int yll = std::numeric_limits<int>::max();
+      int xur = std::numeric_limits<int>::min();
+      int yur = std::numeric_limits<int>::min();
+      for(auto iterm : net->getITerms())
+      {
+        int x, y;
+        //Using Cell location (fast)
+        odb::dbInst* inst = iterm->getInst();
+        if(inst && inst != cell) // is connected
+        {
+          inst->getLocation(x, y);
+          xur = std::max(xur, x);
+          yur = std::max(yur, y);
+          xll = std::min(xll, x);
+          yll = std::min(yll, y);
+        }
+      }
+      nets_Bbox_Xs.push_back(xur);
+      nets_Bbox_Xs.push_back(xll);
+      nets_Bbox_Ys.push_back(yur);
+      nets_Bbox_Ys.push_back(yll);
     }
   }
 
@@ -542,7 +604,7 @@ CellMoveRouter::InitCellsWeight()
   for(auto cell : block->getInsts()) {
     int delta_sum = 0;
     if(cell->isFixed()) {
-      cells_weight_.push_back(std::make_pair(delta_sum, cell));
+      cells_weight_.push_back({cell, 0, {0,0}, 0});
       continue;
     }
     if(cell->isBlock()) {
@@ -558,9 +620,13 @@ CellMoveRouter::InitCellsWeight()
         delta_sum += netDeltaLookup[net->getName()];
       }
     }
-    cells_weight_.push_back(std::make_pair(delta_sum, cell));
+    RcmCell cell_weight = {cell, delta_sum, {0,0}, 0};
+    cells_weight_.push_back(cell_weight);
   }
-  std::sort(cells_weight_.begin(),cells_weight_.end());
+  std::sort(cells_weight_.begin(),cells_weight_.end(),
+            [](const RcmCell a, const RcmCell b) {
+                return a.weight < b.weight;
+            });
   
 }
 
@@ -587,6 +653,22 @@ CellMoveRouter::InitNetsWeight() {
 }
 
 void
+CellMoveRouter::sortCellsToMoveMedian() {
+  for (auto cell : cells_to_move_) {
+    int cell_x, cell_y;
+    cell.inst->getLocation(cell_x, cell_y);
+    median mediana = compute_cells_nets_median(cell.inst);
+    int dist_to_mediana = compute_manhattan_distance(mediana, {cell_x, cell_y});
+    cell.mediana = mediana;
+    cell.distance_to_mediana = dist_to_mediana;
+  }
+  std::sort(cells_to_move_.begin(),cells_to_move_.end(),
+          [](const RcmCell a, const RcmCell b) {
+              return a.distance_to_mediana > b.distance_to_mediana;
+          });
+}
+
+/*void
 CellMoveRouter::SelectCellsToMove() {
   auto block = db_->getChip()->getBlock();
   auto cells = block->getInsts();
@@ -631,7 +713,7 @@ CellMoveRouter::SelectCellsToMove() {
     if(cell_to_move != nullptr)
     cells_to_move_.push_back(cell_to_move);
   }
-}
+}*/
 
 /*void
 CellMoveRouter::moveSelectedCells() {

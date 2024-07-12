@@ -33,8 +33,17 @@ namespace bgi = boost::geometry::index;
 typedef bg::model::point<int64_t, 2, bg::cs::cartesian> point_t;
 
 namespace rcm {
+using median = std::pair<int, int>;
+
 class RectangleRender;
 class Abacus;
+
+struct RcmCell {
+  odb::dbInst* inst;
+  int weight;
+  median mediana;
+  int distance_to_mediana;
+};
 
 class CellMoveRouter {
   private:
@@ -50,6 +59,7 @@ class CellMoveRouter {
     using median = std::pair<int, int>;
 
   public:
+
     CellMoveRouter();
 
     void test_error_cell();
@@ -88,15 +98,19 @@ class CellMoveRouter {
     median nets_Bboxes_median(std::vector<int>& Xs, std::vector<int>& Ys);
 
     median compute_cell_median(odb::dbInst* cell);
+    median compute_cells_nets_median(odb::dbInst* cell);
+
+    void sortCellsToMoveMedian();
+    std::vector<RcmCell>::iterator findInstIterator(const odb::dbInst* inst);
 
     median compute_net_median(odb::dbNet* net);
     int compute_manhattan_distance(median loc1, median loc2);
     
     bool debug() {return debug_; };
 
-    std::vector<std::pair<int, odb::dbInst *>> cells_weight_; //mapa de cells e deltas
+    std::vector<RcmCell> cells_weight_; //mapa de cells e deltas
     std::vector<std::pair<int, odb::dbNet *>> nets_weight_;
-    std::vector<odb::dbInst *> cells_to_move_;
+    std::vector<RcmCell> cells_to_move_;
     int ggrid_max_x_;
     int ggrid_min_x_;
     int ggrid_max_y_;
