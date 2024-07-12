@@ -8,18 +8,20 @@ namespace utl {
   class Logger;
 }
 
-namespace leg {
+namespace dev {
 
-class Legalizer {
+class Dev {
 public:
-    Legalizer();
-    ~Legalizer();
+    Dev();
+    ~Dev();
 
     void log();
+    void global_route_and_print_vias();
 
     // attributes
     odb::dbDatabase* db;
     utl::Logger* logger;
+//    MakeWireParasitics parasitics;
 };
 
 }

@@ -232,6 +232,13 @@ getMisc()
   return openroad->getMisc();
 }
 
+dev::Dev*
+getDev()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getDev();
+}
+
 drw::Drawing*
 getDrawing()
 {

@@ -261,6 +261,9 @@ class GlobalRouter : public ant::GlobalRouteSource
   odb::dbDatabase* db() const { return db_; }
   FastRouteCore* fastroute() const { return fastroute_; }
 
+  // FEPS
+  int getViaCount();
+
  private:
   // Net functions
   Net* addNet(odb::dbNet* db_net);

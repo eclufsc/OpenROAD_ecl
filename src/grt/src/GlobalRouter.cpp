@@ -2077,6 +2077,24 @@ int GlobalRouter::computeNetWirelength(odb::dbNet* db_net)
   return net_wl;
 }
 
+int GlobalRouter::getViaCount() {
+  int via_count = 0;
+
+  for (auto& net_route : routes_) {
+    odb::dbNet* db_net = net_route.first;
+
+    auto iter = routes_.find(db_net);
+    if (iter == routes_.end()) continue;
+
+    const GRoute& route = iter->second;
+    for (const GSegment& segment : route) {
+      via_count += std::abs(segment.final_layer - segment.init_layer);
+    }
+  }
+
+  return via_count;
+}
+
 void GlobalRouter::computeWirelength()
 {
   long total_wirelength = 0;

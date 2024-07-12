@@ -62,6 +62,17 @@ target_sources(grt
     src/fastroute/src/FastRouteRenderer.cpp
 )
 
+set_source_files_properties(src/Grid.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/Net.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/Pin.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/MakeWireParasitics.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/RepairAntennas.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/GlobalRouter.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/MakeGlobalRouter.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/heatMap.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/GrouteRenderer.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+set_source_files_properties(src/fastroute/src/FastRouteRenderer.cpp PROPERTIES COMPILE_FLAGS "-g -fno-inline-small-functions")
+
 target_include_directories(grt_lib
   PUBLIC
     include

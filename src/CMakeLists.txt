@@ -268,6 +268,7 @@ add_subdirectory(drt)
 add_subdirectory(upf)
 add_subdirectory(felipe/leg)
 add_subdirectory(felipe/misc)
+add_subdirectory(felipe/dev)
 add_subdirectory(felipe/drw)
 add_subdirectory(felipe/cng)
 add_subdirectory(utl)
@@ -334,6 +335,7 @@ target_link_libraries(openroad
   upf
   leg
   misc
+  dev
   drw
   cng
   utl

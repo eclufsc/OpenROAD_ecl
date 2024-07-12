@@ -1,20 +1,20 @@
-#include "leg/Legalizer.h"
+#include "feps_subs/FepsSubstitute.h"
 #include "odb/db.h"
 #include "ord/OpenRoad.hh"
 #include "utl/Logger.h"
 
 #include <iostream>
 
-namespace leg {
+namespace feps_subs {
 
-Legalizer::Legalizer() :
+FepsSubstitute::FepsSubstitute() :
   db{ord::OpenRoad::openRoad()->getDb()},
   logger{ord::OpenRoad::openRoad()->getLogger()}
 {}
 
-Legalizer::~Legalizer() {}
+FepsSubstitute::~FepsSubstitute() {}
 
-void Legalizer::log() {
+void FepsSubstitute::log() {
     logger->report("log");
 }
 
