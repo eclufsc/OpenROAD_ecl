@@ -35,13 +35,13 @@ include("openroad")
 
 add_subdirectory(src/ParquetFP)
 
-swig_lib(NAME      mpl
-         NAMESPACE mpl
+swig_lib(NAME      mpl3
+         NAMESPACE mpl3
          I_FILE    src/MacroPlacer.i
          SCRIPTS   src/MacroPlacer.tcl
 )
 
-target_sources(mpl
+target_sources(mpl3
   PRIVATE
     src/Partition.cpp
     src/MacroPlacer.cpp
@@ -49,12 +49,12 @@ target_sources(mpl
     src/graphics.cpp
 )
 
-target_include_directories(mpl
+target_include_directories(mpl3
   PUBLIC
     include
 )
 
-target_link_libraries(mpl
+target_link_libraries(mpl3
   PRIVATE
     ParquetFP
     dbSta
@@ -62,18 +62,19 @@ target_link_libraries(mpl
     odb
     utl
     gui
+    ppl
 )
 
 messages(
-  TARGET mpl
+  TARGET mpl3
 )
 
 if (Python3_FOUND AND BUILD_PYTHON)
   swig_lib(NAME          mpl_py
-           NAMESPACE     mpl
+           NAMESPACE     mpl3
            LANGUAGE      python
            I_FILE        src/MacroPlacer-py.i
-           SWIG_INCLUDES ${PROJECT_SOURCE_DIR}/include/mpl
+           SWIG_INCLUDES ${PROJECT_SOURCE_DIR}/include/mpl3
                          ${ODB_HOME}/src/swig/common
                          ${ODB_HOME}/src/swig/python
            SCRIPTS       ${CMAKE_CURRENT_BINARY_DIR}/mpl_py.py
@@ -81,9 +82,10 @@ if (Python3_FOUND AND BUILD_PYTHON)
 
   target_link_libraries(mpl_py
     PUBLIC
-      mpl
+      mpl3
       OpenSTA
       odb
+      ppl
   )
 
 endif()
