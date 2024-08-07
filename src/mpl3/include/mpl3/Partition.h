@@ -55,7 +55,7 @@ using std::vector;
 
 namespace pfp = parquetfp;
 
-class MacroPlacer;
+class MacroPlacer3;
 class Macro;
 
 enum PartClass
@@ -85,7 +85,7 @@ class Partition
             double _ly,
             double _width,
             double _height,
-            MacroPlacer* macro_placer,
+            MacroPlacer3* macro_placer,
             utl::Logger* log);
   Partition(const Partition& prev) = default;
 
@@ -110,7 +110,7 @@ class Partition
                 pfp::Nets* pfp_nets);
 
   utl::Logger* logger_;
-  MacroPlacer* macro_placer_;
+  MacroPlacer3* macro_placer_;
 };
 
 }  // namespace mpl

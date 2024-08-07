@@ -52,7 +52,7 @@ Partition::Partition(PartClass _partClass,
                      double _ly,
                      double _width,
                      double _height,
-                     MacroPlacer* macro_placer,
+                     MacroPlacer3* macro_placer,
                      utl::Logger* log)
     : partClass(_partClass),
       lx(_lx),

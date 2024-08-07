@@ -50,6 +50,7 @@
 #include "sta/Sequential.hh"
 #include "sta/Sta.hh"
 #include "utl/Logger.h"
+#include "ppl/IOPlacer.h"
 
 namespace mpl3 {
 
@@ -84,7 +85,7 @@ static CoreEdge getCoreEdge(int cx,
 
 ////////////////////////////////////////////////////////////////
 
-MacroPlacer::MacroPlacer()
+MacroPlacer3::MacroPlacer3()
     : db_(nullptr),
       sta_(nullptr),
       logger_(nullptr),
@@ -101,35 +102,35 @@ MacroPlacer::MacroPlacer()
 {
 }
 
-void MacroPlacer::init(odb::dbDatabase* db, sta::dbSta* sta, utl::Logger* log)
+void MacroPlacer3::init(odb::dbDatabase* db, sta::dbSta* sta, utl::Logger* log)
 {
   db_ = db;
   sta_ = sta;
   logger_ = log;
 }
 
-void MacroPlacer::setDebug(bool partitions)
+void MacroPlacer3::setDebug(bool partitions)
 {
   gui_debug_ = true;
   gui_debug_partitions_ = partitions;
 }
 
-void MacroPlacer::setHalo(double halo_x, double halo_y)
+void MacroPlacer3::setHalo(double halo_x, double halo_y)
 {
   default_macro_spacings_.setHalo(halo_x, halo_y);
 }
 
-void MacroPlacer::setChannel(double channel_x, double channel_y)
+void MacroPlacer3::setChannel(double channel_x, double channel_y)
 {
   default_macro_spacings_.setChannel(channel_x, channel_y);
 }
 
-void MacroPlacer::setVerboseLevel(int verbose)
+void MacroPlacer3::setVerboseLevel(int verbose)
 {
   verbose_ = verbose;
 }
 
-void MacroPlacer::setFenceRegion(double lx, double ly, double ux, double uy)
+void MacroPlacer3::setFenceRegion(double lx, double ly, double ux, double uy)
 {
   lx_ = lx;
   ly_ = ly;
@@ -137,17 +138,17 @@ void MacroPlacer::setFenceRegion(double lx, double ly, double ux, double uy)
   uy_ = uy;
 }
 
-void MacroPlacer::setSnapLayer(odb::dbTechLayer* snap_layer)
+void MacroPlacer3::setSnapLayer(odb::dbTechLayer* snap_layer)
 {
   snap_layer_ = snap_layer;
 }
 
-int MacroPlacer::getSolutionCount()
+int MacroPlacer3::getSolutionCount()
 {
   return solution_count_;
 }
 
-bool MacroPlacer::init()
+bool MacroPlacer3::init()
 {
   if (!findMacros()) {
     return false;
@@ -169,7 +170,7 @@ bool MacroPlacer::init()
   return true;
 }
 
-bool MacroPlacer::isMissingLiberty()
+bool MacroPlacer3::isMissingLiberty()
 {
   sta::Network* network = sta_->network();
   sta::LeafInstanceIterator* instIter = network->leafInstanceIterator();
@@ -184,7 +185,7 @@ bool MacroPlacer::isMissingLiberty()
   return false;
 }
 
-void MacroPlacer::reportEdgePinCounts()
+void MacroPlacer3::reportEdgePinCounts()
 {
   int counts[core_edge_count] = {0};
   for (dbBTerm* bterm : db_->getChip()->getBlock()->getBTerms()) {
@@ -198,7 +199,7 @@ void MacroPlacer::reportEdgePinCounts()
 }
 
 // Use parquefp on all the macros in the lower left corner.
-void MacroPlacer::placeMacrosCornerMinWL()
+void MacroPlacer3::placeMacrosCornerMinWL()
 {
   if (!init()) {
     return;
@@ -232,7 +233,7 @@ void MacroPlacer::placeMacrosCornerMinWL()
     logger_->warn(MPL, 66, "Partitioning failed.");
 }
 
-void MacroPlacer::setDbInstLocations(Partition& partition)
+void MacroPlacer3::setDbInstLocations(Partition& partition)
 {
   odb::dbTech* tech = db_->getTech();
   const int dbu = tech->getDbUnitsPerMicron();
@@ -269,7 +270,7 @@ void MacroPlacer::setDbInstLocations(Partition& partition)
 // into regions and try all combinations of something or other.
 // Pick the one that maximizes (yes, really)
 // wire lengths of connections between the macros to force them to the corners.
-/* void MacroPlacer::placeMacrosCornerMaxWl()
+/* void MacroPlacer3::placeMacrosCornerMaxWl()
 {
   if (!init()) {
     return;
@@ -490,13 +491,13 @@ void MacroPlacer::setDbInstLocations(Partition& partition)
 }
 */
 
-int MacroPlacer::weight(int idx1, int idx2)
+int MacroPlacer3::weight(int idx1, int idx2)
 {
   return macro_weights_[idx1][idx2];
 }
 
 // Update opendb instance locations from macros.
-void MacroPlacer::updateDbInstLocations()
+void MacroPlacer3::updateDbInstLocations()
 {
   odb::dbTech* tech = db_->getTech();
   const int dbu = tech->getDbUnitsPerMicron();
@@ -507,7 +508,7 @@ void MacroPlacer::updateDbInstLocations()
   }
 }
 
-void MacroPlacer::cutRoundUp(const Layout& layout,
+void MacroPlacer3::cutRoundUp(const Layout& layout,
                              double& cutLine,
                              bool horizontal)
 {
@@ -543,7 +544,7 @@ void MacroPlacer::cutRoundUp(const Layout& layout,
 //
 // first: macro partition class info
 // second: macro candidates.
-void MacroPlacer::makeMacroPartMap(const Partition& part,
+void MacroPlacer3::makeMacroPartMap(const Partition& part,
                                    MacroPartMap& macroPartMap) const
 {
   // This does not look like it actually does anything -cherry
@@ -568,7 +569,7 @@ static bool segLxLyLess(const std::pair<int, double>& p1,
 // second : upper part
 //
 // cutLine is sweeping from lower to upper coordinates in x / y
-vector<pair<Partition, Partition>> MacroPlacer::getPartitions(
+vector<pair<Partition, Partition>> MacroPlacer3::getPartitions(
     const Layout& layout,
     const Partition& partition,
     bool horizontal)
@@ -784,19 +785,19 @@ vector<pair<Partition, Partition>> MacroPlacer::getPartitions(
   return partitions;
 }
 
-double MacroPlacer::paddedWidth(const Macro& macro)
+double MacroPlacer3::paddedWidth(const Macro& macro)
 {
   MacroSpacings& spacings = getSpacings(macro);
   return macro.w + spacings.getSpacingX() * 2;
 }
 
-double MacroPlacer::paddedHeight(const Macro& macro)
+double MacroPlacer3::paddedHeight(const Macro& macro)
 {
   MacroSpacings& spacings = getSpacings(macro);
   return macro.h + spacings.getSpacingY() * 2;
 }
 
-bool MacroPlacer::findMacros()
+bool MacroPlacer3::findMacros()
 {
   dbBlock* block = db_->getChip()->getBlock();
   const int dbu = db_->getTech()->getDbUnitsPerMicron();
@@ -846,7 +847,7 @@ static float getRoundUpFloat(float x, float unit)
   return round(x / unit) * unit;
 }
 
-void MacroPlacer::updateMacroLocations(Partition& part)
+void MacroPlacer3::updateMacroLocations(Partition& part)
 {
   dbTech* tech = db_->getTech();
   const float pitchX = static_cast<float>(snap_layer_->getPitchX())
@@ -872,7 +873,7 @@ void MacroPlacer::updateMacroLocations(Partition& part)
 #define NORTH_IDX (macros_.size() + coreEdgeIndex(CoreEdge::North))
 #define SOUTH_IDX (macros_.size() + coreEdgeIndex(CoreEdge::South))
 
-double MacroPlacer::getWeightedWL()
+double MacroPlacer3::getWeightedWL()
 {
   double wwl = 0.0f;
 
@@ -1012,7 +1013,7 @@ static CoreEdge getCoreEdge(int cx,
 // Use OpenSTA graph to find macro adjacencies.
 // No delay calculation or arrival search is required,
 // just gate connectivity in the levelized graph.
-void MacroPlacer::findAdjacencies()
+void MacroPlacer3::findAdjacencies()
 {
   sta_->ensureLevelized();
   sta_->ensureClkNetwork();
@@ -1035,7 +1036,7 @@ void MacroPlacer::findAdjacencies()
   fillMacroWeights(adj_map);
 }
 
-void MacroPlacer::seedFaninBfs(sta::BfsFwdIterator& bfs,
+void MacroPlacer3::seedFaninBfs(sta::BfsFwdIterator& bfs,
                                VertexFaninMap& vertex_fanins)
 {
   sta::dbNetwork* network = sta_->getDbNetwork();
@@ -1066,7 +1067,7 @@ void MacroPlacer::seedFaninBfs(sta::BfsFwdIterator& bfs,
 // BFS search forward union-ing fanins.
 // BFS stops at register inputs because there are no timing arcs
 // from register D->Q.
-void MacroPlacer::findFanins(sta::BfsFwdIterator& bfs,
+void MacroPlacer3::findFanins(sta::BfsFwdIterator& bfs,
                              VertexFaninMap& vertex_fanins)
 {
   sta::dbNetwork* network = sta_->getDbNetwork();
@@ -1094,7 +1095,7 @@ void MacroPlacer::findFanins(sta::BfsFwdIterator& bfs,
   }
 }
 
-void MacroPlacer::copyFaninsAcrossRegisters(sta::BfsFwdIterator& bfs,
+void MacroPlacer3::copyFaninsAcrossRegisters(sta::BfsFwdIterator& bfs,
                                             VertexFaninMap& vertex_fanins)
 {
   sta::dbNetwork* network = sta_->getDbNetwork();
@@ -1131,7 +1132,7 @@ void MacroPlacer::copyFaninsAcrossRegisters(sta::BfsFwdIterator& bfs,
 // Sequential outputs are generally to internal pins that are not physically
 // part of the instance. Find the output port with a function that uses
 // the internal port.
-sta::Pin* MacroPlacer::findSeqOutPin(sta::Instance* inst,
+sta::Pin* MacroPlacer3::findSeqOutPin(sta::Instance* inst,
                                      sta::LibertyPort* out_port)
 {
   sta::dbNetwork* network = sta_->getDbNetwork();
@@ -1157,7 +1158,7 @@ sta::Pin* MacroPlacer::findSeqOutPin(sta::Instance* inst,
     return network->findPin(inst, out_port);
 }
 
-void MacroPlacer::findAdjWeights(VertexFaninMap& vertex_fanins,
+void MacroPlacer3::findAdjWeights(VertexFaninMap& vertex_fanins,
                                  AdjWeightMap& adj_map)
 {
   sta::dbNetwork* network = sta_->getDbNetwork();
@@ -1211,7 +1212,7 @@ void MacroPlacer::findAdjWeights(VertexFaninMap& vertex_fanins,
 }
 
 // Fill macro_weights_ array.
-void MacroPlacer::fillMacroWeights(AdjWeightMap& adj_map)
+void MacroPlacer3::fillMacroWeights(AdjWeightMap& adj_map)
 {
   size_t weight_size = macros_.size() + core_edge_count;
   macro_weights_.resize(weight_size);
@@ -1240,7 +1241,7 @@ void MacroPlacer::fillMacroWeights(AdjWeightMap& adj_map)
   }
 }
 
-std::string MacroPlacer::faninName(Macro* macro)
+std::string MacroPlacer3::faninName(Macro* macro)
 {
   intptr_t edge_index = reinterpret_cast<intptr_t>(macro);
   if (edge_index < core_edge_count)
@@ -1250,7 +1251,7 @@ std::string MacroPlacer::faninName(Macro* macro)
 }
 
 // This has to be consistent with the accessors in EAST_IDX
-int MacroPlacer::macroIndex(Macro* macro)
+int MacroPlacer3::macroIndex(Macro* macro)
 {
   intptr_t edge_index = reinterpret_cast<intptr_t>(macro);
   if (edge_index < core_edge_count)
@@ -1259,7 +1260,7 @@ int MacroPlacer::macroIndex(Macro* macro)
     return macro - &macros_[0];
 }
 
-string MacroPlacer::macroIndexName(int index)
+string MacroPlacer3::macroIndexName(int index)
 {
   if (index < macros_.size())
     return macros_[index].name();
@@ -1267,12 +1268,12 @@ string MacroPlacer::macroIndexName(int index)
     return coreEdgeString(static_cast<CoreEdge>(index - macros_.size()));
 }
 
-int MacroPlacer::macroIndex(dbInst* inst)
+int MacroPlacer3::macroIndex(dbInst* inst)
 {
   return macro_inst_map_.at(inst);
 }
 
-bool MacroPlacer::macroIndexIsEdge(Macro* macro)
+bool MacroPlacer3::macroIndexIsEdge(Macro* macro)
 {
   intptr_t edge_index = reinterpret_cast<intptr_t>(macro);
   return edge_index < core_edge_count;
@@ -1280,7 +1281,7 @@ bool MacroPlacer::macroIndexIsEdge(Macro* macro)
 
 // This assumes the pins straddle the die/fence boundary.
 // It should look for the nearest edge to the pin center. -cherry
-CoreEdge MacroPlacer::findNearestEdge(dbBTerm* bTerm)
+CoreEdge MacroPlacer3::findNearestEdge(dbBTerm* bTerm)
 {
   dbPlacementStatus status = bTerm->getFirstPinPlacementStatus();
   if (status == dbPlacementStatus::UNPLACED
@@ -1336,7 +1337,7 @@ CoreEdge MacroPlacer::findNearestEdge(dbBTerm* bTerm)
 
 ////////////////////////////////////////////////////////////////
 
-MacroSpacings& MacroPlacer::getSpacings(const Macro& macro)
+MacroSpacings& MacroPlacer3::getSpacings(const Macro& macro)
 {
   auto itr = macro_spacings_.find(macro.dbInstPtr);
   if (itr == macro_spacings_.end())

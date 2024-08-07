@@ -38,7 +38,7 @@
 #include <unordered_map>
 #include <vector>
 #include "ppl/IOPlacer.h"
-#include "mpl/Partition.h"
+#include "mpl3/Partition.h"
 #include "odb/db.h"
 #include "sta/GraphClass.hh"
 #include "sta/NetworkClass.hh"
@@ -63,7 +63,7 @@ namespace ppl {
 class IOPlacer;
 } // namespace ppl
 
-namespace mpl {
+namespace mpl3 {
 
 class Layout;
 
@@ -130,10 +130,10 @@ class MacroSpacings
   double halo_x_, halo_y_, channel_x_, channel_y_;
 };
 
-class MacroPlacer
+class MacroPlacer3
 {
  public:
-  MacroPlacer();
+  MacroPlacer3();
   void init(odb::dbDatabase* db, sta::dbSta* sta, utl::Logger* log);
   void setDebug(bool partitions);
 
