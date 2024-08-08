@@ -259,6 +259,7 @@ add_subdirectory(grt)
 add_subdirectory(tap)
 add_subdirectory(mpl)
 #add_subdirectory(mpl2)
+add_subdirectory(mpl3)
 add_subdirectory(rcx)
 add_subdirectory(psm)
 #add_subdirectory(par)
@@ -326,6 +327,7 @@ target_link_libraries(openroad
   drt
   dst
   mpl
+  mpl3
   psm
   ant
   upf
@@ -393,6 +395,7 @@ if (Python3_FOUND AND BUILD_PYTHON)
     gpl_py
     dpl_py
     mpl_py
+    mpl3_py
     ppl_py
     tap_py
     cts_py

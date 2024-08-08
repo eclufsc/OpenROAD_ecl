@@ -61,6 +61,7 @@
 // mpl2 aborts with link error on darwin
 #include "mpl2/MakeMacroPlacer.h"
 #endif
+#include "mpl3/MakeMacroPlacer.h"
 #include "dft/MakeDft.hh"
 #include "odb/cdl.h"
 #include "odb/db.h"
@@ -141,6 +142,7 @@ OpenRoad::~OpenRoad()
 #ifdef ENABLE_MPL2
   deleteMacroPlacer2(macro_placer2_);
 #endif
+  deleteMacroPlacer3(macro_placer3_);
   deleteOpenRCX(extractor_);
   deleteTritonRoute(detailed_router_);
   deleteReplace(replace_);
@@ -201,6 +203,7 @@ void OpenRoad::init(Tcl_Interp* tcl_interp)
 #ifdef ENABLE_MPL2
   macro_placer2_ = makeMacroPlacer2();
 #endif
+  macro_placer3_ = makeMacroPlacer3();
   extractor_ = makeOpenRCX();
   detailed_router_ = makeTritonRoute();
   replace_ = makeReplace();
@@ -242,6 +245,7 @@ void OpenRoad::init(Tcl_Interp* tcl_interp)
 #ifdef ENABLE_MPL2
   initMacroPlacer2(this);
 #endif
+  initMacroPlacer3(this);
   initOpenRCX(this);
   initICeWall(this);
   initRestructure(this);

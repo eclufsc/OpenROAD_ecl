@@ -37,7 +37,7 @@
 #include <vector>
 
 #include "gui/gui.h"
-#include "mpl/MacroPlacer.h"
+#include "mpl3/MacroPlacer.h"
 
 namespace utl {
 class Logger;
@@ -47,7 +47,7 @@ namespace odb {
 class dbDatabase;
 }
 
-namespace mpl {
+namespace mpl3 {
 
 // This class draws debugging graphics on the layout
 class Graphics : public gui::Renderer

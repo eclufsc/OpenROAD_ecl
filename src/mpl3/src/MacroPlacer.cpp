@@ -170,6 +170,12 @@ bool MacroPlacer3::init()
   return true;
 }
 
+bool MacroPlacer3::test()
+{
+  ppl::IOPlacer* placer = new ppl::IOPlacer();
+  return true;
+}
+
 bool MacroPlacer3::isMissingLiberty()
 {
   sta::Network* network = sta_->network();

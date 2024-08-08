@@ -59,7 +59,7 @@ void initMacroPlacer(OpenRoad* openroad)
   Tcl_Interp* tcl_interp = openroad->tclInterp();
   Mpl_Init(tcl_interp);
   sta::evalTclInit(tcl_interp, sta::mpl_tcl_inits);
-  openroad->getMacroPlacer()->init(
+  openroad->getMacroPlacer3()->init(
       openroad->getDb(), openroad->getSta(), openroad->getLogger());
 }
 

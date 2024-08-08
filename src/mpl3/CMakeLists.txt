@@ -70,17 +70,17 @@ messages(
 )
 
 if (Python3_FOUND AND BUILD_PYTHON)
-  swig_lib(NAME          mpl_py
+  swig_lib(NAME          mpl3_py
            NAMESPACE     mpl3
            LANGUAGE      python
            I_FILE        src/MacroPlacer-py.i
            SWIG_INCLUDES ${PROJECT_SOURCE_DIR}/include/mpl3
                          ${ODB_HOME}/src/swig/common
                          ${ODB_HOME}/src/swig/python
-           SCRIPTS       ${CMAKE_CURRENT_BINARY_DIR}/mpl_py.py
+           SCRIPTS       ${CMAKE_CURRENT_BINARY_DIR}/mpl3_py.py
   )
 
-  target_link_libraries(mpl_py
+  target_link_libraries(mpl3_py
     PUBLIC
       mpl3
       OpenSTA

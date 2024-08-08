@@ -38,11 +38,11 @@
 
 namespace ord {
 // Defined in OpenRoad.i
-mpl3::MacroPlacer*
-getMacroPlacer();
+mpl3::MacroPlacer3*
+getMacroPlacer3();
 }
 
-using ord::getMacroPlacer;
+using ord::getMacroPlacer3;
 
 %}
 
@@ -55,35 +55,35 @@ namespace mpl3 {
 void
 set_halo(double halo_v, double halo_h)
 {
-  MacroPlacer* macro_placer = getMacroPlacer();
+  MacroPlacer3* macro_placer = getMacroPlacer();
   macro_placer->setHalo(halo_v, halo_h);
 }
 
 void
 set_channel(double channel_v, double channel_h)
 {
-  MacroPlacer* macro_placer = getMacroPlacer();
+  MacroPlacer3* macro_placer = getMacroPlacer();
   macro_placer->setChannel(channel_v, channel_h); 
 }
 
 void
 set_fence_region(double lx, double ly, double ux, double uy)
 {
-  MacroPlacer* macro_placer = getMacroPlacer();
+  MacroPlacer3* macro_placer = getMacroPlacer();
   macro_placer->setFenceRegion(lx, ly, ux, uy); 
 }
 
 void
 set_snap_layer(odb::dbTechLayer *snap_layer)
 {
-  MacroPlacer* macro_placer = getMacroPlacer();
+  MacroPlacer3* macro_placer = getMacroPlacer();
   macro_placer->setSnapLayer(snap_layer);
 }
 
 void
 place_macros_corner_min_wl()
 {
-  MacroPlacer* macro_placer = getMacroPlacer();
+  MacroPlacer3* macro_placer = getMacroPlacer();
   macro_placer->placeMacrosCornerMinWL(); 
 } 
 
@@ -96,7 +96,7 @@ place_macros_corner_max_wl()
 
 void set_debug_cmd(bool partitions)
 {
-  MacroPlacer* macro_placer = getMacroPlacer();
+  MacroPlacer3* macro_placer = getMacroPlacer();
   macro_placer->setDebug(partitions);
 }
 
