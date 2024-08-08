@@ -33,7 +33,7 @@
 
 include("openroad")
 
-add_subdirectory(src/ParquetFP)
+add_subdirectory(src/ParquetFP2)
 
 swig_lib(NAME      mpl3
          NAMESPACE mpl3
@@ -56,7 +56,7 @@ target_include_directories(mpl3
 
 target_link_libraries(mpl3
   PRIVATE
-    ParquetFP
+    ParquetFP2
     dbSta
     OpenSTA
     odb

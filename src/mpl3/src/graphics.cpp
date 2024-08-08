@@ -35,7 +35,7 @@
 
 #include "utl/Logger.h"
 
-namespace mpl {
+namespace mpl3 {
 
 Graphics::Graphics(odb::dbDatabase* db)
     : partition_relative_coords_(false), db_(db)

@@ -49,12 +49,12 @@ extern int Mpl_Init(Tcl_Interp* interp);
 
 namespace ord {
 
-mpl::MacroPlacer* makeMacroPlacer()
+mpl3::MacroPlacer3* makeMacroPlacer3()
 {
-  return new mpl::MacroPlacer;
+  return new mpl3::MacroPlacer3;
 }
 
-void initMacroPlacer(OpenRoad* openroad)
+void initMacroPlacer3(OpenRoad* openroad)
 {
   Tcl_Interp* tcl_interp = openroad->tclInterp();
   Mpl_Init(tcl_interp);
@@ -63,7 +63,7 @@ void initMacroPlacer(OpenRoad* openroad)
       openroad->getDb(), openroad->getSta(), openroad->getLogger());
 }
 
-void deleteMacroPlacer(mpl::MacroPlacer* macro_placer)
+void deleteMacroPlacer3(mpl3::MacroPlacer3* macro_placer)
 {
   delete macro_placer;
 }

@@ -275,7 +275,7 @@ class OpenRoad
   fin::Finale* finale_ = nullptr;
   mpl::MacroPlacer* macro_placer_ = nullptr;
   mpl2::MacroPlacer2* macro_placer2_ = nullptr;
-  mpl3::MacroPlacer3* macro_placer3 = nullptr;
+  mpl3::MacroPlacer3* macro_placer3_ = nullptr;
   grt::GlobalRouter* global_router_ = nullptr;
   rmp::Restructure* restructure_ = nullptr;
   cts::TritonCTS* tritonCts_ = nullptr;

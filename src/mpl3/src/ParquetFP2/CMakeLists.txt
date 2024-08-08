@@ -32,11 +32,11 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##
 
-project(ParquetFP
+project(ParquetFP2
   LANGUAGES CXX 
 )
 
-add_library(ParquetFP
+add_library(ParquetFP2
   src/AnalytSolve.cxx
   src/baseannealer.cxx
   src/basepacking.cxx
@@ -65,12 +65,12 @@ add_library(ParquetFP
   src/SPeval.cxx
 )
 
-target_include_directories(ParquetFP
+target_include_directories(ParquetFP2
   PUBLIC
   ${PARQUET_HOME}
   )
 
-target_include_directories(ParquetFP
+target_include_directories(ParquetFP2
   PUBLIC
     src
 )

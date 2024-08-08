@@ -39,7 +39,7 @@ def macro_placement(design, *, halo=None, channel=None, fence_region=None, snap_
             utl.error(utl.MPL, 192, f"halo receives a list with 2 values, {len(halo)} given.")
         halo_x, halo_y = halo
         if is_pos_float(halo_x) and is_pos_float(halo_y):
-            design.getMacroPlacer().setHalo(halo_x, halo_y)
+            design.getMacroPlacer3().setHalo(halo_x, halo_y)
 
     if channel != None:
         if length(channel) != 2:
@@ -47,7 +47,7 @@ def macro_placement(design, *, halo=None, channel=None, fence_region=None, snap_
 
         channel_x, channel_y = channel
         if is_pos_float(channel_x) and is_pos_float(channel_y):
-            design.getMacroPlacer().setChannel(channel_x, channel_y)
+            design.getMacroPlacer3().setChannel(channel_x, channel_y)
 
     if len(design.getBlock().getRows()) < 1:
         utl.error(utl.MPL, 189, "No rows found. Use initialize_floorplan to add rows.")
@@ -67,11 +67,11 @@ def macro_placement(design, *, halo=None, channel=None, fence_region=None, snap_
 
         if lx < core_lx or ly < core_ly or ux > core_ux or uy > core_uy:
             utl.warn(utl.MPL, 185, "fence_region outside of core area. Using core area.")
-            design.getMacroPlacer().setFenceRegion(core_lx, core_ly, core_ux, core_uy)
+            design.getMacroPlacer3().setFenceRegion(core_lx, core_ly, core_ux, core_uy)
         else:
-            design.getMacroPlacer().setFenceRegion(lx, ly, ux, uy)
+            design.getMacroPlacer3().setFenceRegion(lx, ly, ux, uy)
     else:
-        design.getMacroPlacer().setFenceRegion(core_lx, core_ly, core_ux, core_uy)
+        design.getMacroPlacer3().setFenceRegion(core_lx, core_ly, core_ux, core_uy)
 
     if not is_pos_int(snap_layer):
         snap_layer = 4
@@ -82,15 +82,15 @@ def macro_placement(design, *, halo=None, channel=None, fence_region=None, snap_
     if layer == None:
         utl.error(utl.MPL, 195, f"Snap layer {snap_layer} is not a routing layer.")
 
-    design.getMacroPlacer().setSnapLayer(layer)
+    design.getMacroPlacer3().setSnapLayer(layer)
 
     if style == None:
         style = "corner_max_wl"
 
     if style == "corner_max_wl":
-        design.getMacroPlacer().placeMacrosCornerMaxWl()
+        design.getMacroPlacer3().placeMacrosCornerMaxWl()
     elif style == "corner_min_wl":
-        design.getMacroPlacer().placeMacrosCornerMinWL()
+        design.getMacroPlacer3().placeMacrosCornerMinWL()
     else:
         utl.error(utl.MPL, 196, "Unknown placement style. Use one of 'corner_max_wl' or 'corner_min_wl'.")
 
