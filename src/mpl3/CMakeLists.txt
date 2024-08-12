@@ -37,14 +37,14 @@ add_subdirectory(src/ParquetFP2)
 
 swig_lib(NAME      mpl3
          NAMESPACE mpl3
-         I_FILE    src/MacroPlacer.i
-         SCRIPTS   src/MacroPlacer.tcl
+         I_FILE    src/MacroPlacer3.i
+         SCRIPTS   src/MacroPlacer3.tcl
 )
 
 target_sources(mpl3
   PRIVATE
     src/Partition.cpp
-    src/MacroPlacer.cpp
+    src/MacroPlacer3.cpp
     src/MakeMacroPlacer.cpp
     src/graphics.cpp
 )
@@ -73,7 +73,7 @@ if (Python3_FOUND AND BUILD_PYTHON)
   swig_lib(NAME          mpl3_py
            NAMESPACE     mpl3
            LANGUAGE      python
-           I_FILE        src/MacroPlacer-py.i
+           I_FILE        src/MacroPlacer3-py.i
            SWIG_INCLUDES ${PROJECT_SOURCE_DIR}/include/mpl3
                          ${ODB_HOME}/src/swig/common
                          ${ODB_HOME}/src/swig/python

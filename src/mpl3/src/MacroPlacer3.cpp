@@ -31,9 +31,10 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "mpl3/MacroPlacer.h"
+#include "mpl3/MacroPlacer3.h"
 
 #include <string>
+#include <iostream>
 
 #include "db_sta/dbNetwork.hh"
 #include "db_sta/dbSta.hh"
@@ -173,6 +174,7 @@ bool MacroPlacer3::init()
 bool MacroPlacer3::test()
 {
   ppl::IOPlacer* placer = new ppl::IOPlacer();
+  std::cout<<"ppl criado"<<std::endl;
   return true;
 }
 

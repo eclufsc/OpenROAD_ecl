@@ -35,7 +35,7 @@
 
 #include "btreeanneal.h"
 #include "mixedpackingfromdb.h"
-#include "mpl3/MacroPlacer.h"
+#include "mpl3/MacroPlacer3.h"
 #include "utl/Logger.h"
 
 namespace mpl3 {

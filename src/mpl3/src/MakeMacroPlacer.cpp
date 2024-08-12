@@ -35,7 +35,7 @@
 
 #include <tcl.h>
 
-#include "mpl3/MacroPlacer.h"
+#include "mpl3/MacroPlacer3.h"
 #include "ord/OpenRoad.hh"
 #include "sta/StaMain.hh"
 
