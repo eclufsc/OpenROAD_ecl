@@ -2,6 +2,8 @@ include("openroad")
 
 project(tut)
 
+add_subdirectory(src/ParquetFP2)
+
 swig_lib(NAME      tut
          NAMESPACE tut
          I_FILE    src/Tutorial.i
@@ -23,6 +25,10 @@ target_link_libraries(tut
     utl
     odb
     OpenSTA
+    ParquetFP2
+    dbSta
+    gui
+    ppl
 )
 
 messages(

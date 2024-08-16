@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // BSD 3-Clause License
 //
-// Copyright (c) 2019-2020, The Regents of the University of California
+// Copyright (c) 2021, The Regents of the University of California
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,83 +31,47 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
 
-%{
+#pragma once
 
-#include "ord/OpenRoad.hh"
-#include "mpl3/MacroPlacer3.h"
+#include <memory>
+#include <vector>
 
-namespace ord {
-// Defined in OpenRoad.i
-mpl3::MacroPlacer3* getMacroPlacer3();
-OpenRoad *getOpenRoad();
+#include "gui/gui.h"
+#include "tut/Tutorial.h"
+
+namespace utl {
+class Logger;
 }
 
-using ord::getMacroPlacer3;
-using mpl3::MacroPlacer3;
+namespace odb {
+class dbDatabase;
+}
 
-%}
+namespace tut {
 
-%include "../../Exception.i"
-
-%inline %{
-
-namespace mpl3 {
-
-void
-set_halo(double halo_v, double halo_h)
+// This class draws debugging graphics on the layout
+class Graphics : public gui::Renderer
 {
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setHalo(halo_v, halo_h);
-}
+ public:
+  Graphics(odb::dbDatabase* db);
 
-void
-set_channel(double channel_v, double channel_h)
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setChannel(channel_v, channel_h); 
-}
+  // Draw the partition
+  void set_partitions(const std::vector<Partition>& partitions,
+                      bool relative_coords);
 
-void
-set_fence_region(double lx, double ly, double ux, double uy)
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setFenceRegion(lx, ly, ux, uy); 
-}
+  // Show a message in the status bar
+  void status(const std::string& message);
 
-void
-set_snap_layer(odb::dbTechLayer *snap_layer)
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setSnapLayer(snap_layer);
-}
+  // From Renderer API
+  virtual void drawObjects(gui::Painter& painter) override;
 
-void
-place_macros_corner_min_wl()
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->placeMacrosCornerMinWL(); 
-} 
+  // Is the GUI being displayed (true) or are we in batch mode (false)
+  static bool guiActive();
 
-void
-test()
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->test();
-}
+ private:
+  std::vector<Partition> partitions_;
+  bool partition_relative_coords_;
+  odb::dbDatabase* db_;
+};
 
-void
-place_macros_corner_max_wl()
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->placeMacrosCornerMaxWl(); 
-}
-
-void set_debug_cmd(bool partitions)
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setDebug(partitions);
-}
-
-}
-
-%} // inline
+}  // namespace mpl

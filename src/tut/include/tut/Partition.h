@@ -31,83 +31,86 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
 
-%{
+#pragma once
 
-#include "ord/OpenRoad.hh"
-#include "mpl3/MacroPlacer3.h"
+#include <array>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-namespace ord {
-// Defined in OpenRoad.i
-mpl3::MacroPlacer3* getMacroPlacer3();
-OpenRoad *getOpenRoad();
+namespace utl {
+class Logger;
 }
 
-using ord::getMacroPlacer3;
-using mpl3::MacroPlacer3;
+namespace parquetfp {
+class Nets;
+}
 
-%}
+namespace tut {
 
-%include "../../Exception.i"
+using std::array;
+using std::pair;
+using std::string;
+using std::vector;
 
-%inline %{
+namespace pfp = parquetfp;
 
-namespace mpl3 {
+class Tutorial;
+class Macro;
 
-void
-set_halo(double halo_v, double halo_h)
+enum PartClass
 {
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setHalo(halo_v, halo_h);
-}
+  S,
+  N,
+  W,
+  E,
+  NW,
+  NE,
+  SW,
+  SE,
+  ALL,
+  None
+};
 
-void
-set_channel(double channel_v, double channel_h)
+constexpr int part_class_count = None + 1;
+
+// PartClass -> global macro indices
+typedef array<vector<int>, part_class_count> MacroPartMap;
+
+class Partition
 {
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setChannel(channel_v, channel_h); 
-}
+ public:
+  Partition(PartClass _partClass,
+            double _lx,
+            double _ly,
+            double _width,
+            double _height,
+            Tutorial* macro_placer,
+            utl::Logger* log);
+  Partition(const Partition& prev) = default;
 
-void
-set_fence_region(double lx, double ly, double ux, double uy)
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setFenceRegion(lx, ly, ux, uy); 
-}
+  void fillNetlistTable(MacroPartMap& macroPartMap);
+  // Call Parquet to have annealing solution
+  bool anneal();
 
-void
-set_snap_layer(odb::dbTechLayer *snap_layer)
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setSnapLayer(snap_layer);
-}
+  PartClass partClass;
+  vector<Macro> macros_;
+  double lx, ly;
+  double width, height;
+  double solution_width, solution_height;
+  vector<double> net_tbl_;
 
-void
-place_macros_corner_min_wl()
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->placeMacrosCornerMinWL(); 
-} 
+ private:
+  string getName(int macroIdx);
+  int globalIndex(int macro_idx);
+  void makePins(int macro_idx1,
+                int macro_idx2,
+                int cost,
+                int pnet_idx,
+                pfp::Nets* pfp_nets);
 
-void
-test()
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->test();
-}
+  utl::Logger* logger_;
+  Tutorial* macro_placer_;
+};
 
-void
-place_macros_corner_max_wl()
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->placeMacrosCornerMaxWl(); 
-}
-
-void set_debug_cmd(bool partitions)
-{
-  MacroPlacer3* macro_placer = getMacroPlacer3();
-  macro_placer->setDebug(partitions);
-}
-
-}
-
-%} // inline
+}  // namespace mpl

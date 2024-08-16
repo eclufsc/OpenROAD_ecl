@@ -2,6 +2,7 @@
 #include "tut/Tutorial.h"
 #include "ord/OpenRoad.hh"
 #include "sta/StaMain.hh"
+#include <tcl.h>
 
 namespace sta {
 // Tcl files encoded into strings.

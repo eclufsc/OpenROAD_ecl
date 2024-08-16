@@ -171,11 +171,10 @@ bool MacroPlacer3::init()
   return true;
 }
 
-bool MacroPlacer3::test()
+void MacroPlacer3::test()
 {
   ppl::IOPlacer* placer = new ppl::IOPlacer();
   std::cout<<"ppl criado"<<std::endl;
-  return true;
 }
 
 bool MacroPlacer3::isMissingLiberty()
@@ -278,7 +277,7 @@ void MacroPlacer3::setDbInstLocations(Partition& partition)
 // into regions and try all combinations of something or other.
 // Pick the one that maximizes (yes, really)
 // wire lengths of connections between the macros to force them to the corners.
-/* void MacroPlacer3::placeMacrosCornerMaxWl()
+void MacroPlacer3::placeMacrosCornerMaxWl()
 {
   if (!init()) {
     return;
@@ -497,7 +496,6 @@ void MacroPlacer3::setDbInstLocations(Partition& partition)
   } else
     logger_->warn(MPL, 72, "No partition solutions found.");
 }
-*/
 
 int MacroPlacer3::weight(int idx1, int idx2)
 {

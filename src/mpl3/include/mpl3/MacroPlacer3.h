@@ -154,7 +154,7 @@ class MacroPlacer3
   MacroSpacings& getSpacings(const Macro& macro);
   double paddedWidth(const Macro& macro);
   double paddedHeight(const Macro& macro);
-  bool test();
+  void test();
 
   Macro& macro(int idx) { return macros_[idx]; }
   size_t macroCount() { return macros_.size(); }

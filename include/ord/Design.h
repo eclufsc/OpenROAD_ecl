@@ -69,6 +69,10 @@ namespace mpl {
 class MacroPlacer;
 }
 
+// namespace mpl3 {
+// class MacroPlacer3;
+// }
+
 namespace ppl {
 class IOPlacer;
 }
@@ -158,6 +162,7 @@ class Design
   gpl::Replace* getReplace();
   dpl::Opendp* getOpendp();
   mpl::MacroPlacer* getMacroPlacer();
+  // mpl3::MacroPlacer3* getMacroPlacer3();
   ppl::IOPlacer* getIOPlacer();
   tap::Tapcell* getTapcell();
   cts::TritonCTS* getTritonCts();

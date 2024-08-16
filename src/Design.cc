@@ -181,6 +181,12 @@ mpl::MacroPlacer* Design::getMacroPlacer()
   return app->getMacroPlacer();
 }
 
+// mpl3::MacroPlacer3* Design::getMacroPlacer3()
+// {
+//   auto app = OpenRoad::openRoad();
+//   return app->getMacroPlacer3();
+// }
+
 ppl::IOPlacer* Design::getIOPlacer()
 {
   auto app = OpenRoad::openRoad();

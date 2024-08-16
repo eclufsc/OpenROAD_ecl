@@ -104,7 +104,7 @@ class MacroPlacer2;
 }
 
 namespace mpl3 {
-  class MacroPlacer3;
+class MacroPlacer3;
 }
 
 namespace gpl {

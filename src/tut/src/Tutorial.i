@@ -51,6 +51,13 @@ printHPWLs()
   tutorial->printHPWLs();
 }
 
+void
+test()
+{
+  Tutorial* tutorial = getTutorial();
+  tutorial->test();
+}
+
 } // namespace
 
 %} // inline
