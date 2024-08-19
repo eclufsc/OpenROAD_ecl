@@ -14,6 +14,8 @@ target_sources(tut
   PRIVATE
     src/Tutorial.cpp
     src/MakeTutorial.cpp
+    src/Partition.cpp
+    src/graphics.cpp
 )
 
 target_include_directories(tut

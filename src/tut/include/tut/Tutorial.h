@@ -142,8 +142,6 @@ class Tutorial {
 
     void test();
   private:
-    odb::dbDatabase* db_;
-    utl::Logger* logger_;
     bool findMacros();
     bool isMissingLiberty();
 

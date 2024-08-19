@@ -2,6 +2,7 @@
 #include "odb/db.h"
 #include "ord/OpenRoad.hh"
 #include "utl/Logger.h"
+#include "graphics.h"
 #include "ppl/IOPlacer.h"
 #include "db_sta/dbNetwork.hh"
 #include "db_sta/dbSta.hh"
