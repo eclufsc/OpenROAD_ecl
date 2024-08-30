@@ -101,7 +101,7 @@ class Tutorial {
   public:
     Tutorial();
     ~Tutorial();
-    void init(odb::dbDatabase* db, sta::dbSta* sta, utl::Logger* log);
+    void init(odb::dbDatabase* db, sta::dbSta* sta, utl::Logger* log, ppl::IOPlacer* placer);
     void setDebug(bool partitions);
 
     void setHalo(double halo_x, double halo_y);
@@ -112,6 +112,9 @@ class Tutorial {
 
     void placeMacrosCornerMinWL();
     void placeMacrosCornerMaxWl();
+
+    void placeMacrosCornerMinWL2();
+    void placeMacrosCornerMaxWl2();
     int getSolutionCount();
 
     // return weighted wire-length to get best solution
@@ -141,6 +144,9 @@ class Tutorial {
     void printHPWLs();
 
     void test();
+    //Função TCC
+    void cyclePlacers();
+
   private:
     bool findMacros();
     bool isMissingLiberty();
@@ -149,6 +155,7 @@ class Tutorial {
     // Update Macro Location from Partition info
     void updateMacroLocations(Partition& part);
     void updateDbInstLocations();
+    void updateBTermsLocations();
     void makeMacroPartMap(const Partition& part,
                           MacroPartMap& macroPartMap) const;
     vector<pair<Partition, Partition>> getPartitions(const Layout& layout,
@@ -180,13 +187,15 @@ class Tutorial {
     sta::dbSta* sta_;
     utl::Logger* logger_;
     odb::dbTechLayer* snap_layer_;
-
+    ppl::IOPlacer* pPlacer_;
     bool connection_driven_;
 
     // macro idx/idx pair -> give each
     vector<vector<int>> macro_weights_;
     // macro Information
     vector<Macro> macros_;
+    // bterm Information
+    vector<odb::dbBTerm> bterms_;
     // dbInst* --> macros_'s index
     unordered_map<odb::dbInst*, int> macro_inst_map_;
 

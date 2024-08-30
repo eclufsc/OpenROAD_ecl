@@ -108,9 +108,9 @@ proc macro_placement { args } {
     set style $keys(-style)
   }
   if { $style == "corner_max_wl" } {
-    mpl::place_macros_corner_max_wl
+    tut::place_macros_corner_max_wl
   } elseif { $style == "corner_min_wl" } {
-    mpl::place_macros_corner_min_wl
+    tut::place_macros_corner_min_wl
   } else {
     utl::error MPL 96 "Unknown placement style. Use one of corner_max_wl or corner_min_wl."
   }

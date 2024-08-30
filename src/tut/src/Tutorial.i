@@ -90,14 +90,14 @@ void
 place_macros_corner_min_wl()
 {
   Tutorial* macro_placer = getTutorial();
-  macro_placer->placeMacrosCornerMinWL(); 
+  macro_placer->placeMacrosCornerMinWL2(); 
 } 
 
 void
 place_macros_corner_max_wl()
 {
   Tutorial* macro_placer = getTutorial();
-  macro_placer->placeMacrosCornerMaxWl(); 
+  macro_placer->placeMacrosCornerMaxWl2(); 
 } 
 
 void set_debug_cmd(bool partitions)

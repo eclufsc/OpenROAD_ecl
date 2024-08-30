@@ -75,15 +75,17 @@ Tutorial::Tutorial() :
   verbose_(1),
   solution_count_(0),
   gui_debug_(false),
-  gui_debug_partitions_(false)
+  gui_debug_partitions_(false),
+  pPlacer_{nullptr}
 {
 }
 
-void Tutorial::init(odb::dbDatabase* db, sta::dbSta* sta, utl::Logger* log)
+void Tutorial::init(odb::dbDatabase* db, sta::dbSta* sta, utl::Logger* log, ppl::IOPlacer* placer)
 {
   db_ = db;
   sta_ = sta;
   logger_ = log;
+  pPlacer_ = placer;
 }
 
 void Tutorial::setDebug(bool partitions)
@@ -181,7 +183,7 @@ void Tutorial::placeMacrosCornerMinWL()
   if (!init()) {
     return;
   }
-
+  updateBTermsLocations();
   double wl = getWeightedWL();
   logger_->info(MPL, 67, "Initial weighted wire length {:g}.", wl);
 
@@ -197,7 +199,7 @@ void Tutorial::placeMacrosCornerMinWL()
   makeMacroPartMap(partition, globalMacroPartMap);
 
   if (connection_driven_) {
-    partition.fillNetlistTable(globalMacroPartMap);
+    partition.fillNetlistTable(globalMacroPartMap, bterms_);
   }
 
   // Annealing based on ParquetFP Engine
@@ -252,7 +254,7 @@ void Tutorial::placeMacrosCornerMaxWl()
   if (!init()) {
     return;
   }
-
+  updateBTermsLocations();
   double wl = getWeightedWL();
   logger_->info(MPL, 69, "Initial weighted wire length {:g}.", wl);
 
@@ -275,7 +277,7 @@ void Tutorial::placeMacrosCornerMaxWl()
   makeMacroPartMap(top_partition, globalMacroPartMap);
 
   if (connection_driven_) {
-    top_partition.fillNetlistTable(globalMacroPartMap);
+    top_partition.fillNetlistTable(globalMacroPartMap, bterms_);
   }
 
   // push to the outer vector
@@ -317,7 +319,7 @@ void Tutorial::placeMacrosCornerMaxWl()
 
           if (connection_driven_) {
             for (auto& partition : partition_set2) {
-              partition.fillNetlistTable(macroPartMap);
+              partition.fillNetlistTable(macroPartMap, bterms_);
             }
           }
 
@@ -342,7 +344,7 @@ void Tutorial::placeMacrosCornerMaxWl()
 
           if (connection_driven_) {
             for (auto& partition : partition_set2) {
-              partition.fillNetlistTable(macroPartMap);
+              partition.fillNetlistTable(macroPartMap, bterms_);
             }
           }
 
@@ -367,7 +369,7 @@ void Tutorial::placeMacrosCornerMaxWl()
 
             if (connection_driven_) {
               for (auto& partition : partition_set2) {
-                partition.fillNetlistTable(macroPartMap);
+                partition.fillNetlistTable(macroPartMap, bterms_);
               }
             }
             allSets.push_back(partition_set2);
@@ -1516,8 +1518,41 @@ Tutorial::printHPWLs()
 void 
 Tutorial::test()
 {
-  ppl::IOPlacer* placer = new ppl::IOPlacer();
-  std::cout<<"ppl criado"<<std::endl;
+  int countBTerms = 0;
+  auto block = db_->getChip()->getBlock();
+  for(auto bterm : block->getBTerms())
+  {
+    countBTerms++;
+  }
+  std::cout<<"BTerms = "<<countBTerms<<std::endl;
+}
+
+void
+Tutorial::updateBTermsLocations()
+{
+  int countBTerms = 0;
+  auto block = db_->getChip()->getBlock();
+  bterms_.clear();
+  // bterms_.resize(block->getBTerms().size());
+  for(auto bterm : block->getBTerms())
+  {
+    bterms_.push_back(*bterm);
+  }
+}
+
+
+void
+Tutorial::placeMacrosCornerMinWL2()
+{
+  pPlacer_->run(false);
+  placeMacrosCornerMinWL();
+}
+
+void
+Tutorial::placeMacrosCornerMaxWl2()
+{
+  pPlacer_->run(false);
+  placeMacrosCornerMaxWl();
 }
 
 Tutorial::~Tutorial()

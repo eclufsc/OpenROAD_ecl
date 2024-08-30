@@ -32,6 +32,7 @@ initTutorial(OpenRoad *openroad)
   // Define swig TCL commands.
   Tut_Init(tcl_interp);
   sta::evalTclInit(tcl_interp, sta::tut_tcl_inits);
+  openroad->getTutorial()->init(openroad->getDb(), openroad->getSta(), openroad->getLogger(), openroad->getIOPlacer());
 }
 
 void
