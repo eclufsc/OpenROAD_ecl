@@ -89,11 +89,133 @@ string Partition::getName(int macroIdx)
   }
 }
 
-void Partition::fillNetlistTable(MacroPartMap& macroPartMap)
-{
-  int macro_edge_count = macros_.size() + core_edge_count;
-  net_tbl_.resize(macro_edge_count * macro_edge_count);
+// void Partition::fillNetlistTable(MacroPartMap& macroPartMap, vector<odb::dbBTerm>& bterms)
+// {
+//   int macro_edge_count = macros_.size() + core_edge_count;
+//   net_tbl_.resize(macro_edge_count * macro_edge_count);
 
+//   if (partClass == ALL) {
+//     for (size_t i = 0; i < macro_edge_count; i++) {
+//       for (size_t j = 0; j < macro_edge_count; j++) {
+//         // Note that net_tbl only entries for i < j.
+//         net_tbl_[i * macro_edge_count + j] = macro_placer_->weight(i, j);
+//       }
+//     }
+//   } else {
+//     for (size_t i = 0; i < net_tbl_.size(); i++) {
+//       net_tbl_[i] = 0.0;
+//     }
+
+//     // row
+//     for (size_t i = 0; i < macro_edge_count; i++) {
+//       // column
+//       for (size_t j = 0; j < macro_edge_count; j++) {
+//         if (i == j)
+//           continue;
+//         // from: macro case
+//         if (i < macros_.size()) {
+//           int global_idx1 = globalIndex(i);
+//           // to macro case
+//           if (j < macros_.size()) {
+//             int global_idx2 = globalIndex(j);
+//             net_tbl_[i * macro_edge_count + j]
+//                 = macro_placer_->weight(global_idx1, global_idx2);
+//           }
+//           // to IO-west case
+//           else if (j == WEST_IDX) {
+//             int weight = macro_placer_->weight(global_idx1, GLOBAL_WEST_IDX);
+//             if (partClass == PartClass::NE) {
+//               for (auto& macro_idx : macroPartMap[PartClass::NW]) {
+//                 weight += macro_placer_->weight(global_idx1, macro_idx);
+//               }
+//             }
+//             if (partClass == PartClass::SE) {
+//               for (auto& macro_idx : macroPartMap[PartClass::SW]) {
+//                 weight += macro_placer_->weight(global_idx1, macro_idx);
+//               }
+//             }
+//             net_tbl_[i * macro_edge_count + j] = weight;
+//           } else if (j == EAST_IDX) {
+//             int weight = macro_placer_->weight(global_idx1, GLOBAL_EAST_IDX);
+//             if (partClass == PartClass::NW) {
+//               for (auto& macro_idx : macroPartMap[PartClass::NE]) {
+//                 weight += macro_placer_->weight(global_idx1, macro_idx);
+//               }
+//             }
+//             if (partClass == PartClass::SW) {
+//               for (auto& macro_idx : macroPartMap[PartClass::SE]) {
+//                 weight += macro_placer_->weight(global_idx1, macro_idx);
+//               }
+//             }
+//             net_tbl_[i * macro_edge_count + j] = weight;
+//           } else if (j == NORTH_IDX) {
+//             int weight = macro_placer_->weight(global_idx1, GLOBAL_NORTH_IDX);
+//             if (partClass == PartClass::SE) {
+//               for (auto& macro_idx : macroPartMap[PartClass::SE]) {
+//                 weight += macro_placer_->weight(global_idx1, macro_idx);
+//               }
+//             }
+//             if (partClass == PartClass::SW) {
+//               for (auto& macro_idx : macroPartMap[PartClass::NW]) {
+//                 weight += macro_placer_->weight(global_idx1, macro_idx);
+//               }
+//             }
+//             net_tbl_[i * macro_edge_count + j] = weight;
+//           } else if (j == SOUTH_IDX) {
+//             int weight = macro_placer_->weight(global_idx1, GLOBAL_SOUTH_IDX);
+
+//             if (partClass == PartClass::NE) {
+//               for (auto& macro_idx : macroPartMap[PartClass::SE]) {
+//                 weight += macro_placer_->weight(global_idx1, macro_idx);
+//               }
+//             }
+//             if (partClass == PartClass::NW) {
+//               for (auto& macro_idx : macroPartMap[PartClass::SW]) {
+//                 weight += macro_placer_->weight(global_idx1, macro_idx);
+//               }
+//             }
+//             net_tbl_[i * macro_edge_count + j] = weight;
+//           }
+//         }
+//         // from IO
+//         else if (i == WEST_IDX) {
+//           // to Macro
+//           if (j < macros_.size()) {
+//             int global_idx2 = globalIndex(j);
+//             net_tbl_[i * macro_edge_count + j]
+//                 = macro_placer_->weight(GLOBAL_WEST_IDX, global_idx2);
+//           }
+//         } else if (i == EAST_IDX) {
+//           // to Macro
+//           if (j < macros_.size()) {
+//             int global_idx2 = globalIndex(j);
+//             net_tbl_[i * macro_edge_count + j]
+//                 = macro_placer_->weight(GLOBAL_EAST_IDX, global_idx2);
+//           }
+//         } else if (i == NORTH_IDX) {
+//           // to Macro
+//           if (j < macros_.size()) {
+//             int global_idx2 = globalIndex(j);
+//             net_tbl_[i * macro_edge_count + j]
+//                 = macro_placer_->weight(GLOBAL_NORTH_IDX, global_idx2);
+//           }
+//         } else if (i == SOUTH_IDX) {
+//           // to Macro
+//           if (j < macros_.size()) {
+//             int global_idx2 = globalIndex(j);
+//             net_tbl_[i * macro_edge_count + j]
+//                 = macro_placer_->weight(GLOBAL_SOUTH_IDX, global_idx2);
+//           }
+//         }
+//       }
+//     }
+//   }
+// }
+
+void Partition::fillNetlistTable(MacroPartMap& macroPartMap, vector<odb::dbBTerm>& bterms)
+{
+  int macro_edge_count = macros_.size() + bterms.size();
+  net_tbl_.resize(macro_edge_count * macro_edge_count);
   if (partClass == ALL) {
     for (size_t i = 0; i < macro_edge_count; i++) {
       for (size_t j = 0; j < macro_edge_count; j++) {
@@ -122,89 +244,17 @@ void Partition::fillNetlistTable(MacroPartMap& macroPartMap)
                 = macro_placer_->weight(global_idx1, global_idx2);
           }
           // to IO-west case
-          else if (j == WEST_IDX) {
-            int weight = macro_placer_->weight(global_idx1, GLOBAL_WEST_IDX);
-            if (partClass == PartClass::NE) {
-              for (auto& macro_idx : macroPartMap[PartClass::NW]) {
-                weight += macro_placer_->weight(global_idx1, macro_idx);
-              }
-            }
-            if (partClass == PartClass::SE) {
-              for (auto& macro_idx : macroPartMap[PartClass::SW]) {
-                weight += macro_placer_->weight(global_idx1, macro_idx);
-              }
-            }
-            net_tbl_[i * macro_edge_count + j] = weight;
-          } else if (j == EAST_IDX) {
-            int weight = macro_placer_->weight(global_idx1, GLOBAL_EAST_IDX);
-            if (partClass == PartClass::NW) {
-              for (auto& macro_idx : macroPartMap[PartClass::NE]) {
-                weight += macro_placer_->weight(global_idx1, macro_idx);
-              }
-            }
-            if (partClass == PartClass::SW) {
-              for (auto& macro_idx : macroPartMap[PartClass::SE]) {
-                weight += macro_placer_->weight(global_idx1, macro_idx);
-              }
-            }
-            net_tbl_[i * macro_edge_count + j] = weight;
-          } else if (j == NORTH_IDX) {
-            int weight = macro_placer_->weight(global_idx1, GLOBAL_NORTH_IDX);
-            if (partClass == PartClass::SE) {
-              for (auto& macro_idx : macroPartMap[PartClass::SE]) {
-                weight += macro_placer_->weight(global_idx1, macro_idx);
-              }
-            }
-            if (partClass == PartClass::SW) {
-              for (auto& macro_idx : macroPartMap[PartClass::NW]) {
-                weight += macro_placer_->weight(global_idx1, macro_idx);
-              }
-            }
-            net_tbl_[i * macro_edge_count + j] = weight;
-          } else if (j == SOUTH_IDX) {
-            int weight = macro_placer_->weight(global_idx1, GLOBAL_SOUTH_IDX);
-
-            if (partClass == PartClass::NE) {
-              for (auto& macro_idx : macroPartMap[PartClass::SE]) {
-                weight += macro_placer_->weight(global_idx1, macro_idx);
-              }
-            }
-            if (partClass == PartClass::NW) {
-              for (auto& macro_idx : macroPartMap[PartClass::SW]) {
-                weight += macro_placer_->weight(global_idx1, macro_idx);
-              }
-            }
-            net_tbl_[i * macro_edge_count + j] = weight;
+          else {
+            int weight = macro_placer_->weight(global_idx1, int(j));
           }
         }
         // from IO
-        else if (i == WEST_IDX) {
+        else {
           // to Macro
           if (j < macros_.size()) {
             int global_idx2 = globalIndex(j);
             net_tbl_[i * macro_edge_count + j]
-                = macro_placer_->weight(GLOBAL_WEST_IDX, global_idx2);
-          }
-        } else if (i == EAST_IDX) {
-          // to Macro
-          if (j < macros_.size()) {
-            int global_idx2 = globalIndex(j);
-            net_tbl_[i * macro_edge_count + j]
-                = macro_placer_->weight(GLOBAL_EAST_IDX, global_idx2);
-          }
-        } else if (i == NORTH_IDX) {
-          // to Macro
-          if (j < macros_.size()) {
-            int global_idx2 = globalIndex(j);
-            net_tbl_[i * macro_edge_count + j]
-                = macro_placer_->weight(GLOBAL_NORTH_IDX, global_idx2);
-          }
-        } else if (i == SOUTH_IDX) {
-          // to Macro
-          if (j < macros_.size()) {
-            int global_idx2 = globalIndex(j);
-            net_tbl_[i * macro_edge_count + j]
-                = macro_placer_->weight(GLOBAL_SOUTH_IDX, global_idx2);
+                = macro_placer_->weight(int(i), global_idx2);
           }
         }
       }

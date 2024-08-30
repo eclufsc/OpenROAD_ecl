@@ -37,6 +37,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "odb/db.h"
 
 namespace utl {
 class Logger;
@@ -89,7 +90,7 @@ class Partition
             utl::Logger* log);
   Partition(const Partition& prev) = default;
 
-  void fillNetlistTable(MacroPartMap& macroPartMap);
+  void fillNetlistTable(MacroPartMap& macroPartMap, vector<odb::dbBTerm>& bterms);
   // Call Parquet to have annealing solution
   bool anneal();
 

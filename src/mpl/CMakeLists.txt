@@ -62,6 +62,7 @@ target_link_libraries(mpl
     odb
     utl
     gui
+    tut
 )
 
 messages(
@@ -84,6 +85,7 @@ if (Python3_FOUND AND BUILD_PYTHON)
       mpl
       OpenSTA
       odb
+      tut
   )
 
 endif()
