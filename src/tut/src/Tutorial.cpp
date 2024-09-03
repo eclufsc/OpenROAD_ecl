@@ -183,6 +183,7 @@ void Tutorial::placeMacrosCornerMinWL()
   if (!init()) {
     return;
   }
+
   updateBTermsLocations();
   double wl = getWeightedWL();
   logger_->info(MPL, 67, "Initial weighted wire length {:g}.", wl);
@@ -200,6 +201,7 @@ void Tutorial::placeMacrosCornerMinWL()
 
   if (connection_driven_) {
     partition.fillNetlistTable(globalMacroPartMap, bterms_);
+    logger_->warn(MPL, 1337, "fillNetList");
   }
 
   // Annealing based on ParquetFP Engine
@@ -254,6 +256,15 @@ void Tutorial::placeMacrosCornerMaxWl()
   if (!init()) {
     return;
   }
+
+
+  if (!connection_driven_) {
+    logger_->report("Not connection driven.");
+  } else {
+    logger_->report("Connection driven");
+  }
+
+
   updateBTermsLocations();
   double wl = getWeightedWL();
   logger_->info(MPL, 69, "Initial weighted wire length {:g}.", wl);
@@ -278,6 +289,7 @@ void Tutorial::placeMacrosCornerMaxWl()
 
   if (connection_driven_) {
     top_partition.fillNetlistTable(globalMacroPartMap, bterms_);
+    logger_->warn(MPL, 1334, "fillNetList");
   }
 
   // push to the outer vector
@@ -320,6 +332,7 @@ void Tutorial::placeMacrosCornerMaxWl()
           if (connection_driven_) {
             for (auto& partition : partition_set2) {
               partition.fillNetlistTable(macroPartMap, bterms_);
+              logger_->warn(MPL, 1339, "fillNetList");
             }
           }
 
@@ -345,6 +358,7 @@ void Tutorial::placeMacrosCornerMaxWl()
           if (connection_driven_) {
             for (auto& partition : partition_set2) {
               partition.fillNetlistTable(macroPartMap, bterms_);
+              logger_->warn(MPL, 1340, "fillNetList");
             }
           }
 
@@ -370,6 +384,7 @@ void Tutorial::placeMacrosCornerMaxWl()
             if (connection_driven_) {
               for (auto& partition : partition_set2) {
                 partition.fillNetlistTable(macroPartMap, bterms_);
+                logger_->warn(MPL, 1341, "fillNetList");
               }
             }
             allSets.push_back(partition_set2);
@@ -806,7 +821,7 @@ bool Tutorial::findMacros()
   }
 
   if (macros_.empty()) {
-    logger_->warn(MPL, 100, "No macros found.");
+    logger_->warn(MPL, 100, "No macros found. Its tut btw");
     return false;
   }
 
@@ -1530,6 +1545,7 @@ Tutorial::test()
 void
 Tutorial::updateBTermsLocations()
 {
+  logger_->info(MPL,103,"BTerms updated");
   int countBTerms = 0;
   auto block = db_->getChip()->getBlock();
   bterms_.clear();
@@ -1551,6 +1567,11 @@ Tutorial::placeMacrosCornerMinWL2()
 void
 Tutorial::placeMacrosCornerMaxWl2()
 {
+  if (!connection_driven_) {
+    logger_->warn(MPL, 1444, "Not connection driven.");
+  } else {
+    logger_->warn(MPL, 78, "Connection driven");
+  }
   pPlacer_->run(false);
   placeMacrosCornerMaxWl();
 }

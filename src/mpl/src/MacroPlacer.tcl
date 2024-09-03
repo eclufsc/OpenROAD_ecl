@@ -51,7 +51,7 @@ proc macro_placement { args } {
     lassign $halo halo_x halo_y
     sta::check_positive_float "-halo x" $halo_x
     sta::check_positive_float "-halo y" $halo_y
-    mpl::set_halo $halo_x $halo_y
+    tut::set_halo $halo_x $halo_y
   }
 
   if { [info exists keys(-channel)] } {
@@ -62,7 +62,7 @@ proc macro_placement { args } {
     lassign $channel channel_x channel_y
     sta::check_positive_float "-channel x" $channel_x
     sta::check_positive_float "-channel y" $channel_y
-    mpl::set_channel $channel_x $channel_y
+    tut::set_channel $channel_x $channel_y
   }
 
   if { ![ord::db_has_rows] } {
@@ -83,12 +83,12 @@ proc macro_placement { args } {
 
     if { $lx < $core_lx || $ly < $core_ly || $ux > $core_ux || $uy > $core_uy } {
       utl::warn "MPL" 85 "fence_region outside of core area. Using core area."
-      mpl::set_fence_region $core_lx $core_ly $core_ux $core_uy
+      tut::set_fence_region $core_lx $core_ly $core_ux $core_uy
     } else {
-      mpl::set_fence_region $lx $ly $ux $uy
+      tut::set_fence_region $lx $ly $ux $uy
     }
   } else {
-    mpl::set_fence_region $core_lx $core_ly $core_ux $core_uy
+    tut::set_fence_region $core_lx $core_ly $core_ux $core_uy
   }
 
   set snap_layer 4
@@ -101,7 +101,7 @@ proc macro_placement { args } {
   if { $layer == "NULL" } {
     utl::error "MPL" 95 "Snap layer $snap_layer is not a routing layer."
   }
-  mpl::set_snap_layer $layer
+  tut::set_snap_layer $layer
 
   set style "corner_max_wl"
   if { [info exists keys(-style)] } {
@@ -128,5 +128,5 @@ proc macro_placement_debug { args } {
 
   set partitions [info exists flags(-partitions)]
 
-  mpl::set_debug_cmd $partitions
+  tut::set_debug_cmd $partitions
 }

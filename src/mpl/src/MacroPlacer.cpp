@@ -275,6 +275,12 @@ void MacroPlacer::placeMacrosCornerMaxWl()
     return;
   }
 
+  if (!connection_driven_) {
+    logger_->report("MPL NOT TUT! Not connection driven");
+  } else {
+    logger_->report("MPL NOT TUT! Connection driven");
+  }
+
   double wl = getWeightedWL();
   logger_->info(MPL, 69, "Initial weighted wire length {:g}.", wl);
 
@@ -830,7 +836,7 @@ bool MacroPlacer::findMacros()
     return false;
   }
 
-  logger_->info(MPL, 101, "Found {} macros.", macros_.size());
+  logger_->info(MPL, 101, "Found {} macros. Its mpl btw", macros_.size());
   logger_->metric("floorplan__design__instance__count__macros", macros_.size());
   return true;
 }

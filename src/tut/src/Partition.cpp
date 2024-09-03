@@ -216,7 +216,6 @@ void Partition::fillNetlistTable(MacroPartMap& macroPartMap, vector<odb::dbBTerm
 {
   int macro_edge_count = macros_.size() + bterms.size();
   net_tbl_.resize(macro_edge_count * macro_edge_count);
-
   if (partClass == ALL) {
     for (size_t i = 0; i < macro_edge_count; i++) {
       for (size_t j = 0; j < macro_edge_count; j++) {
