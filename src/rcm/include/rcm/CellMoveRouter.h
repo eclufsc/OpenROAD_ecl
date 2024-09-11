@@ -28,6 +28,11 @@ namespace grt {
   struct GSegment;
 }
 
+namespace stt {
+class SteinerTreeBuilder;
+class Tree;
+}
+
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 typedef bg::model::point<int64_t, 2, bg::cs::cartesian> point_t;
@@ -41,8 +46,9 @@ class Abacus;
 struct RcmCell {
   odb::dbInst* inst;
   int weight;
-  median mediana;
   int distance_to_mediana;
+  int init_stwl;
+  median mediana;
 };
 
 class CellMoveRouter {
@@ -64,6 +70,12 @@ class CellMoveRouter {
 
     void test_error_cell();
 
+    void testRevertingRouting();
+
+    void runAbacus();
+
+    void shuffleAbacus() { abacus_.shuffle(); };
+
     void helloWorld();
 
     void drawRectangle(int x1, int y1, int x2, int y2);
@@ -78,7 +90,17 @@ class CellMoveRouter {
     
     void set_debug(bool debug) { debug_ = debug; };
 
+    void setUseSteiner(bool use_steiner) { use_steiner_ = use_steiner; };
+    
+    void setCompareSteiner(bool compare_steiner) { compare_stiener_ = compare_steiner; };
+
     void report_nets_pins();
+
+    void RunCMRO();
+
+    void SelectCellsToMove();
+
+    void SelectCandidateCells();
 
   private:
 
@@ -88,12 +110,11 @@ class CellMoveRouter {
 
     void InitAbacus();
   
-    bool Swap_and_Rerout(odb::dbInst * moving_cell, int& failed_legalization, int& worse_wl);
+    bool Swap_and_Rerout(odb::dbInst * moving_cell, int& failed_legalization, int& worse_wl, int before_estimate);
 
     int getNetHPWLFast(odb::dbNet * net) const;
 
-    void SelectCellsToMove();
-
+    bool MoveCell(RcmCell cell, int& worse_wl);
     
     median nets_Bboxes_median(std::vector<int>& Xs, std::vector<int>& Ys);
 
@@ -102,9 +123,14 @@ class CellMoveRouter {
 
     void sortCellsToMoveMedian();
     std::vector<RcmCell>::iterator findInstIterator(const odb::dbInst* inst);
+    std::vector<RcmCell>::iterator findInstIteratorWeight(const odb::dbInst* inst);
 
     median compute_net_median(odb::dbNet* net);
     int compute_manhattan_distance(median loc1, median loc2);
+
+    int getTreeWl(const stt::Tree &tree);
+
+    stt::Tree buildSteinerTree(odb::dbNet * net);
     
     bool debug() {return debug_; };
 
@@ -124,6 +150,9 @@ class CellMoveRouter {
     std::unique_ptr<CRTree> cellrTree_;
     std::unique_ptr<GRTree> gcellTree_;
     bool debug_ = false;
+    bool use_steiner_ = true;
+    bool compare_stiener_ = true;
     Abacus abacus_;
+    stt::SteinerTreeBuilder *stt_ = nullptr;
 };
 }

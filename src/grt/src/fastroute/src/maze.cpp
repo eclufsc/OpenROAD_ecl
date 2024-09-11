@@ -2569,6 +2569,9 @@ void FastRouteCore::InitLastUsage(const int upType)
 void FastRouteCore::SaveLastRouteLen()
 {
   for (int netID = 0; netID < netCount(); netID++) {
+    if(nets_[netID]->isRouted()) {
+      continue;
+    }
     auto& treeedges = sttrees_[netID].edges;
     // loop for all the tree edges
     const int num_edges = sttrees_[netID].num_edges();

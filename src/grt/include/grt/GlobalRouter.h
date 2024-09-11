@@ -156,8 +156,12 @@ class GlobalRouter : public ant::GlobalRouteSource
 
   int num_nets();
 
+  std::vector<odb::dbNet *> updateNetsIncr(std::vector<odb::dbNet*>& nets);
+
+  std::pair<std::pair<int, int>, std::pair<int, int>> reportTotalUsages();
+
   void loadGuidesFromUser(odb::dbNet* net, GRoute& route_from_user);
-  GRoute& getNetRoute(odb::dbNet* net) { return routes_[net]; }
+  GRoute getNetRoute(odb::dbNet* net) { return routes_[net]; }
 
   void setAdjustment(const float adjustment);
   void setMinRoutingLayer(const int min_layer);
@@ -249,6 +253,7 @@ class GlobalRouter : public ant::GlobalRouteSource
   // Report wire length
   int computeNetWirelength(odb::dbNet* db_net);
   long computeWirelength();
+  long getViaCount();
   void reportNetWireLength(odb::dbNet* net,
                            bool global_route,
                            bool detailed_route,
@@ -349,6 +354,7 @@ class GlobalRouter : public ant::GlobalRouteSource
   void reportResources();
   void reportCongestion();
   void updateEdgesUsage();
+  void updateEdgesUsage(odb::dbNet* net, grt::GRoute& route_from_user);
   void updateDbCongestionFromGuides();
 
   // check functions

@@ -276,7 +276,7 @@ namespace rcm {
                         inst->getLocation(prev_x, prev_y);
                         if (prev_x != x || prev_y != row.yMin()) {
                             set_pos(inst, x, row.yMin());
-                            retorno.push_back(std::make_pair(inst, std::make_pair(x, row.yMin())));
+                            retorno.push_back(std::make_pair(inst, std::make_pair(prev_x, prev_y)));
                         }
 
 
@@ -496,11 +496,13 @@ namespace rcm {
         for (RowElement row_el : intersectng_rows) {
             odb::dbRow* row = row_el.second;
             odb::Rect rect = row->getBBox();
+            if(area_x_min >= rect.xMax() || area_x_max <= rect.xMin()) {
+                continue;
+            }
             int site_width = row->getSite()->getWidth();
             int x_min_without_site_correction = std::max<int>(area_x_min, rect.xMin());
             int x_min = (x_min_without_site_correction + site_width - 1) / site_width * site_width;
             int x_max = std::min<int>(area_x_max, rect.xMax());
-            
             rect.set_xlo(x_min);
             rect.set_xhi(x_max);
             rows.emplace_back(rect, site_width);
@@ -525,7 +527,6 @@ namespace rcm {
         odb::Rect best_total_y;
         int best_x = -1;
         int best_total_x = -1;
-        
         vector<vector<Split>> splits_per_row = sort_and_get_splits(&rows, fixed_cells);
         vector<Row> segments;
         // Flatten list
@@ -541,6 +542,9 @@ namespace rcm {
                 int site_width = rows[i].second;
 
                 segments.emplace_back(rect, site_width);
+            }
+            if(segments.empty()) {
+                continue;
             }
             vector<vector<Split>> free_spaces_per_segment = sort_and_get_splits(&segments, cells);
             for (int i = 0; i < segments.size(); i++) {
@@ -684,5 +688,21 @@ namespace rcm {
         }
 
         return free_spaces;
+    }
+
+    void Abacus::shuffle() {
+        auto block = db->getChip()->getBlock();
+        odb::Rect area = block->getCoreArea();
+        int dx = abs(area.xMax() - area.xMin());
+        int dy = abs(area.yMax() - area.yMin());
+        for(auto cell : block->getInsts()) {
+            if(cell->isFixed()) {
+                continue;
+            }
+            int new_x = area.xMin() + rand() % dx;
+            int new_y = area.yMin() + rand() % dy;
+            cell->setLocation(new_x, new_y);
+            std::cout<<"Cell height: "<<cell->getBBox()->yMax() - cell->getBBox()->yMin()<<std::endl;
+        }
     }
 }

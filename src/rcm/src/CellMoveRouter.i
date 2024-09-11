@@ -38,6 +38,48 @@ move_rerout()
 }
 
 void
+test_init_cells_wight()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->InitCellsWeight();
+}
+
+void
+run_cmro()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->RunCMRO();
+}
+
+void
+select_cells_by_net()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->SelectCellsToMove();
+}
+
+void
+test_revert()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->testRevertingRouting();
+}
+
+void
+run_abacus()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->runAbacus();
+}
+
+void
+shuffle()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->shuffleAbacus();
+}
+
+void
 set_debug_cmd(bool debug)
 {
   CellMoveRouter* cellMoveRouter = getCellMoveRouter();

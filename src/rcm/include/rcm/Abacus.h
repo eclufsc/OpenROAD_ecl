@@ -44,6 +44,8 @@ public:
 
     void InitRowTree();
 
+    void shuffle();
+
 
 
 private:

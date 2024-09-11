@@ -341,6 +341,37 @@ void FastRouteCore::initEdges()
   }
 }
 
+std::pair<std::pair<int, int>, std::pair<int, int>>
+FastRouteCore::computeTotoalUsage() {
+  long total_usage_h_2d = 0;
+  long total_usage_v_2d = 0;
+  long total_usage_h_3d = 0;
+  long total_usage_v_3d = 0;
+  for (int i = 0; i < y_grid_; i++) {
+    for (int j = 0; j < x_grid_ - 1; j++) {
+      // 2D edge initialization
+      total_usage_h_2d += h_edges_[i][j].usage;
+
+      // 3D edge initialization
+      for (int k = 0; k < num_layers_; k++) {
+        total_usage_h_3d += h_edges_3D_[k][i][j].usage;
+      }
+    }
+  }
+  for (int i = 0; i < y_grid_ - 1; i++) {
+    for (int j = 0; j < x_grid_; j++) {
+      // 2D edge initialization
+      total_usage_v_2d += v_edges_[i][j].usage;
+
+      // 3D edge initialization
+      for (int k = 0; k < num_layers_; k++) {
+        total_usage_v_3d += v_edges_3D_[k][i][j].usage;
+      }
+    }
+  }
+  return {{total_usage_h_2d, total_usage_v_2d}, {total_usage_h_3d, total_usage_v_3d}};
+}
+
 void FastRouteCore::setNumAdjustments(int nAdjustments)
 {
   num_adjust_ = nAdjustments;
@@ -349,6 +380,12 @@ void FastRouteCore::setNumAdjustments(int nAdjustments)
 void FastRouteCore::setMaxNetDegree(int deg)
 {
   max_degree_ = deg;
+}
+
+void FastRouteCore::setNetIsRouted(odb::dbNet* net, bool routed)
+{
+  int netID = db_net_id_map_[net];
+  nets_[netID]->setIsRouted(routed);
 }
 
 void FastRouteCore::addAdjustment(int x1,
@@ -602,21 +639,26 @@ int FastRouteCore::getEdgeCapacity(FrNet* net,
   return cap;
 }
 
-void FastRouteCore::incrementEdge3DUsage(int x1,
+void FastRouteCore::incrementEdge3DUsage(odb::dbNet* net,
+                                         int x1,
                                          int y1,
                                          int x2,
                                          int y2,
                                          int layer)
 {
+  int netID = db_net_id_map_[net];
+  int edge_cost = nets_[netID]->getEdgeCost();
   const int k = layer - 1;
 
   if (y1 == y2) {  // horizontal edge
     for (int x = x1; x < x2; x++) {
-      h_edges_3D_[k][y1][x].usage++;
+      h_edges_3D_[k][y1][x].usage += edge_cost;
+      h_edges_[y1][x].usage++;
     }
   } else if (x1 == x2) {  // vertical edge
     for (int y = y1; y < y2; y++) {
-      v_edges_3D_[k][y][x1].usage++;
+      v_edges_3D_[k][y][x1].usage += edge_cost;
+      v_edges_[y][x1].usage++;
     }
   }
 }

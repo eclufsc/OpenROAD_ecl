@@ -115,7 +115,9 @@ class FastRouteCore
                 int max_layer,
                 float slack,
                 std::vector<int>* edge_cost_per_layer);
+  void setNetIsRouted(odb::dbNet* net, bool routed);
   void initEdges();
+  std::pair<std::pair<int, int>, std::pair<int, int>> computeTotoalUsage();
   void setNumAdjustments(int nAdjustements);
   void addAdjustment(int x1,
                      int y1,
@@ -162,7 +164,7 @@ class FastRouteCore
   int getEdgeCapacity(int x1, int y1, int x2, int y2, int layer);
   const multi_array<Edge3D, 3>& getHorizontalEdges3D() { return h_edges_3D_; }
   const multi_array<Edge3D, 3>& getVerticalEdges3D() { return v_edges_3D_; }
-  void incrementEdge3DUsage(int x1, int y1, int x2, int y2, int layer);
+  void incrementEdge3DUsage(odb::dbNet* net, int x1, int y1, int x2, int y2, int layer);
   void setMaxNetDegree(int);
   void setVerbose(bool v);
   void setUpdateSlack(int u);

@@ -464,10 +464,10 @@ void FastRouteCore::releaseNetResources(const int netID)
   // without creating treeedges inside the core code.
   if (treeedges != nullptr) {
     for (int edgeID = 0; edgeID < num_edges; edgeID++) {
-      const TreeEdge* treeedge = &(treeedges[edgeID]);
-      const std::vector<short>& gridsX = treeedge->route.gridsX;
-      const std::vector<short>& gridsY = treeedge->route.gridsY;
-      const std::vector<short>& gridsL = treeedge->route.gridsL;
+      TreeEdge* treeedge = &(treeedges[edgeID]);
+      std::vector<short>& gridsX = treeedge->route.gridsX;
+      std::vector<short>& gridsY = treeedge->route.gridsY;
+      std::vector<short>& gridsL = treeedge->route.gridsL;
       const int routeLen = treeedge->route.routelen;
       Edge* edge;
       Edge3D* edge_3D;
@@ -489,6 +489,10 @@ void FastRouteCore::releaseNetResources(const int netID)
           edge_3D->usage -= nets_[netID]->getLayerEdgeCost(gridsL[i]);
         }
       }
+      treeedge->route.routelen = 0;
+      gridsL.clear();
+      gridsX.clear();
+      gridsY.clear(); 
     }
   }
 }

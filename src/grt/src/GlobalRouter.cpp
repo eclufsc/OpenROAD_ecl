@@ -1594,15 +1594,20 @@ void GlobalRouter::loadGuidesFromDB()
 
 void GlobalRouter::loadGuidesFromUser(odb::dbNet* net, grt::GRoute& route_from_user)
 {
-  /*initGridAndNets();
-  for (odb::dbNet* net : block_->getNets()) {
+  //initGridAndNets();
+  /*for (odb::dbNet* net : block_->getNets()) {
     for (odb::dbGuide* guide : net->getGuides()) {
       boxToGlobalRouting(
           guide->getBox(), guide->getLayer()->getRoutingLevel(), routes_[net]);
     }
   }*/
-  routes_[net] = route_from_user;
-  updateVias();
+
+  grt::GRoute& route = routes_[net];
+  route.clear();
+
+  for (auto guide : route_from_user) {
+    route.push_back(guide);
+  }
 
   /*for (auto& net_route : routes_) {
     std::vector<Pin>& pins = db_net_map_[net_route.first]->getPins();
@@ -1610,8 +1615,8 @@ void GlobalRouter::loadGuidesFromUser(odb::dbNet* net, grt::GRoute& route_from_u
     mergeSegments(pins, route);
   }*/
 
-  updateEdgesUsage();
-  heatmap_->update();
+  updateEdgesUsage(net, route);
+  fastroute_->setNetIsRouted(net, true);
 }
 
 void GlobalRouter::updateVias()
@@ -1656,8 +1661,30 @@ void GlobalRouter::updateEdgesUsage()
       x1 = std::min(x1, grid_->getXGrids() - 1);
       y1 = std::min(y1, grid_->getYGrids() - 1);
 
-      fastroute_->incrementEdge3DUsage(x0, y0, x1, y1, l0);
+      fastroute_->incrementEdge3DUsage(net, x0, y0, x1, y1, l0);
     }
+  }
+}
+
+void GlobalRouter::updateEdgesUsage(odb::dbNet* net, grt::GRoute& route_from_user)
+{
+  for (const GSegment& seg : route_from_user) {
+    if(seg.init_layer != seg.final_layer) {
+      continue;
+    }
+    int x0 = (seg.init_x - grid_->getXMin()) / grid_->getTileSize();
+    int y0 = (seg.init_y - grid_->getYMin()) / grid_->getTileSize();
+    int l0 = seg.init_layer;
+
+    int x1 = (seg.final_x - grid_->getXMin()) / grid_->getTileSize();
+    int y1 = (seg.final_y - grid_->getYMin()) / grid_->getTileSize();
+
+    // The last gcell is oversized and includes space that the above
+    // calculation doesn't represent so correct it:
+    x1 = std::min(x1, grid_->getXGrids() - 1);
+    y1 = std::min(y1, grid_->getYGrids() - 1);
+
+    fastroute_->incrementEdge3DUsage(net, x0, y0, x1, y1, l0);
   }
 }
 
@@ -2128,6 +2155,24 @@ long GlobalRouter::computeWirelength()
                   "Total wirelength: {} um",
                   total_wirelength / block_->getDefUnits());
   return total_wirelength / block_->getDefUnits();
+}
+
+long GlobalRouter::getViaCount() {
+  long via_count = 0;
+
+  for (auto& net_route : routes_) {
+    odb::dbNet* db_net = net_route.first;
+
+    auto iter = routes_.find(db_net);
+    if (iter == routes_.end()) continue;
+
+    const GRoute& route = iter->second;
+    for (const GSegment& segment : route) {
+      via_count += std::abs(segment.final_layer - segment.init_layer);
+    }
+  }
+
+  return via_count;
 }
 
 void GlobalRouter::mergeSegments(const std::vector<Pin>& pins, GRoute& route)
@@ -3971,7 +4016,6 @@ void GlobalRouter::updateDirtyRoutes()
 
     std::vector<Net*> dirty_nets;
     updateDirtyNets(dirty_nets);
-
     if (dirty_nets.empty()) {
       return;
     }
@@ -3984,6 +4028,7 @@ void GlobalRouter::updateDirtyRoutes()
 
     bool reroutingOverflow = true;
     if (fastroute_->has2Doverflow() && !allow_congestion_) {
+      //logger_->report("nova iteração do incremental");
       // The maximum number of times that the nets traversing the congestion
       // area will be added
       int add_max = 30;
@@ -4023,6 +4068,36 @@ void GlobalRouter::initFastRouteIncr(std::vector<Net*>& nets)
 {
   initNets(nets);
   fastroute_->initAuxVar();
+}
+
+std::pair<std::pair<int, int>, std::pair<int, int>> GlobalRouter::reportTotalUsages()
+{
+  auto total_usages = fastroute_->computeTotoalUsage();
+  //logger_->report("H 2d usages: {}", total_usages.first.first);
+  //logger_->report("V 2d usages: {}", total_usages.first.second);
+  //logger_->report("H 3d usages: {}", total_usages.second.first);
+  //logger_->report("V 3d usages: {}", total_usages.second.second);
+  return total_usages;
+}
+
+std::vector<odb::dbNet *> GlobalRouter::updateNetsIncr(std::vector<odb::dbNet*>& nets)
+{
+  dirty_nets_.clear();
+  for(odb::dbNet* net : nets) {
+    dirty_nets_.insert(net);
+  }
+  std::vector<Net*> dirty_nets;
+  updateDirtyNets(dirty_nets);
+
+  if (!dirty_nets.empty()) {
+    initNets(dirty_nets);
+  }
+
+  std::vector<odb::dbNet *> return_nets;
+  for (grt::Net* net : dirty_nets) {
+    return_nets.push_back(net->getDbNet());
+  }
+  return return_nets;
 }
 
 GRouteDbCbk::GRouteDbCbk(GlobalRouter* grouter) : grouter_(grouter)
