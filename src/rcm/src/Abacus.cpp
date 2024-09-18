@@ -485,6 +485,9 @@ namespace rcm {
         std::vector<RowElement> intersectng_rows;
         rowTree_->query(bgi::intersects(box_t({area_x_min, area_y_min}, {area_x_max, area_y_max})),
         std::back_inserter(intersectng_rows));
+        if(intersectng_rows.empty()) {
+            return {0, odb::Rect(0, 0, 0, 0),  false};
+        }
         if(intersectng_rows.size() < 3) {
             box_t first_row_box = intersectng_rows[0].first;
             intersectng_rows.clear();
