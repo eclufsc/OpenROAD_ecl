@@ -19,6 +19,7 @@
 #include "sta/Sta.hh"
 
 #include <iostream>
+#include <fstream>
 #include <math.h>
 #include <string>
 
@@ -139,6 +140,7 @@ bool Tutorial::init()
 
   if (connection_driven_) {
     reportEdgePinCounts();
+    updateBTermsLocations();
     findAdjacencies();
   } else {
     logger_->warn(MPL,
@@ -180,81 +182,10 @@ void Tutorial::reportEdgePinCounts()
 // Use parquefp on all the macros in the lower left corner.
 void Tutorial::placeMacrosCornerMinWL()
 {
-  if (!init()) {
-    return;
-  }
-
-  updateBTermsLocations();
-  double wl = getWeightedWL();
-  logger_->info(MPL, 67, "Initial weighted wire length {:g}.", wl);
-
-  // All of this partitioning garbage is unnecessary but survives to support
-  // the multiple partition algorithm.
-
-  Layout layout(lx_, ly_, ux_, uy_);
-  Partition partition(
-      PartClass::ALL, lx_, ly_, ux_ - lx_, uy_ - ly_, this, logger_);
-  partition.macros_ = macros_;
-
-  MacroPartMap globalMacroPartMap;
-  makeMacroPartMap(partition, globalMacroPartMap);
-
-  if (connection_driven_) {
-    partition.fillNetlistTable(globalMacroPartMap, bterms_);
-    logger_->warn(MPL, 1337, "fillNetList");
-  }
-
-  // Annealing based on ParquetFP Engine
-  if (partition.anneal()) {
-    setDbInstLocations(partition);
-
-    double curWwl = getWeightedWL();
-    logger_->info(MPL, 68, "Placed weighted wire length {:g}.", curWwl);
-  } else
-    logger_->warn(MPL, 66, "Partitioning failed.");
-}
-
-void Tutorial::setDbInstLocations(Partition& partition)
-{
-  odb::dbTech* tech = db_->getTech();
-  const int dbu = tech->getDbUnitsPerMicron();
-  const float pitch_x = static_cast<float>(snap_layer_->getPitchX()) / dbu;
-  const float pitch_y = static_cast<float>(snap_layer_->getPitchY()) / dbu;
-
-  int macro_idx = 0;
-  for (Macro& pmacro : partition.macros_) {
-    // partition macros are 1:1 with macros_.
-    Macro& macro = macros_[macro_idx];
-
-    double x = pmacro.lx;
-    double y = pmacro.ly;
-
-    // Snap to routing grid.
-    x = round(x / pitch_x) * pitch_x;
-    y = round(y / pitch_y) * pitch_y;
-
-    // Snap macro location to grid.
-    macro.lx = x;
-    macro.ly = y;
-
-    // Update db inst location.
-    dbInst* db_inst = macro.dbInstPtr;
-    db_inst->setLocation(round(x * dbu), round(y * dbu));
-    db_inst->setPlacementStatus(odb::dbPlacementStatus::LOCKED);
-    macro_idx++;
-  }
-}
-
-////////////////////////////////////////////////////////////////
-
-// Use some undocumented method with cut lines to break the design
-// into regions and try all combinations of something or other.
-// Pick the one that maximizes (yes, really)
-// wire lengths of connections between the macros to force them to the corners.
-void Tutorial::placeMacrosCornerMaxWl()
-{
-  if (!init()) {
-    return;
+  if (first_time_){
+    if (!init()) {
+      return;
+    }
   }
 
 
@@ -267,7 +198,7 @@ void Tutorial::placeMacrosCornerMaxWl()
 
   updateBTermsLocations();
   double wl = getWeightedWL();
-  logger_->info(MPL, 69, "Initial weighted wire length {:g}.", wl);
+  logger_->info(MPL, 62, "Initial weighted wire length {:g}.", wl);
 
   Layout layout(lx_, ly_, ux_, uy_);
   bool horizontal = true;
@@ -289,7 +220,7 @@ void Tutorial::placeMacrosCornerMaxWl()
 
   if (connection_driven_) {
     top_partition.fillNetlistTable(globalMacroPartMap, bterms_);
-    logger_->warn(MPL, 1334, "fillNetList");
+    // logger_->warn(MPL, 1335, "fillNetList");
   }
 
   // push to the outer vector
@@ -332,7 +263,7 @@ void Tutorial::placeMacrosCornerMaxWl()
           if (connection_driven_) {
             for (auto& partition : partition_set2) {
               partition.fillNetlistTable(macroPartMap, bterms_);
-              logger_->warn(MPL, 1339, "fillNetList");
+              // logger_->warn(MPL, 1342, "fillNetList");
             }
           }
 
@@ -358,7 +289,7 @@ void Tutorial::placeMacrosCornerMaxWl()
           if (connection_driven_) {
             for (auto& partition : partition_set2) {
               partition.fillNetlistTable(macroPartMap, bterms_);
-              logger_->warn(MPL, 1340, "fillNetList");
+              // logger_->warn(MPL, 1343, "fillNetList");
             }
           }
 
@@ -384,7 +315,279 @@ void Tutorial::placeMacrosCornerMaxWl()
             if (connection_driven_) {
               for (auto& partition : partition_set2) {
                 partition.fillNetlistTable(macroPartMap, bterms_);
-                logger_->warn(MPL, 1341, "fillNetList");
+                // logger_->warn(MPL, 1344, "fillNetList");
+              }
+            }
+            allSets.push_back(partition_set2);
+          }
+        }
+      }
+      logger_->report("End horizontal partition.");
+    } else {
+      // Vertical partition support MIA
+    }
+  }
+  logger_->info(MPL, 75, "Using {} partition sets.", allSets.size() - 1);
+
+  std::unique_ptr<Graphics> graphics;
+  if (gui_debug_ && Graphics::guiActive()) {
+    graphics = std::make_unique<Graphics>(db_);
+  }
+
+  solution_count_ = 0;
+  bool found_best = false;
+  int best_setIdx = 0;
+  double bestWwl = std::numeric_limits<double>::lowest();
+  for (auto& partition_set : allSets) {
+    // skip for top partition
+    if (partition_set.size() == 1) {
+      continue;
+    }
+
+    if (gui_debug_) {
+      graphics->status("Pre-anneal");
+      graphics->set_partitions(partition_set, true);
+    }
+
+    // For each of the 4 partitions
+    bool isFailed = false;
+    for (auto& curPart : partition_set) {
+      // Annealing based on ParquetFP Engine
+      bool success = curPart.anneal();
+      if (!success) {
+        logger_->warn(
+            MPL,
+            81,
+            "Parquet area {:g} x {:g} exceeds the partition area {:g} x {:g}.",
+            curPart.solution_width,
+            curPart.solution_height,
+            curPart.width,
+            curPart.height);
+        isFailed = true;
+        break;
+      }
+      // Update mckt frequently
+      updateMacroLocations(curPart);
+    }
+
+    if (isFailed) {
+      continue;
+    }
+
+    double curWwl = getWeightedWL();
+    logger_->info(MPL,
+                  82,
+                  "Solution {} weighted wire length {:g}.",
+                  solution_count_ + 1,
+                  curWwl);
+    bool is_best = false;
+    if (!found_best
+        // Note that this MAXIMIZES wirelength.
+        // That is they way mingyu wrote it.
+        // This is the only thing that keeps all the macros from ending
+        // up in one clump. -cherry
+        || curWwl < bestWwl) {
+      bestWwl = curWwl;
+      best_setIdx = &partition_set - &allSets[0];
+      found_best = true;
+      is_best = true;
+    }
+    solution_count_++;
+
+    if (gui_debug_) {
+      auto msg("Post-anneal WL: " + std::to_string(curWwl));
+      if (is_best) {
+        msg += " [BEST]";
+      }
+      graphics->status(msg);
+      graphics->set_partitions(partition_set, false);
+    }
+  }
+
+  if (found_best) {
+    logger_->info(MPL, 83, "Best weighted wire length {:g}.", bestWwl);
+    std::vector<Partition> best_set = allSets[best_setIdx];
+    for (auto& best_partition : best_set) {
+      updateMacroLocations(best_partition);
+    }
+    updateDbInstLocations();
+  } else
+    logger_->warn(MPL, 84, "No partition solutions found.");
+}
+
+void Tutorial::setDbInstLocations(Partition& partition)
+{
+  odb::dbTech* tech = db_->getTech();
+  const int dbu = tech->getDbUnitsPerMicron();
+  const float pitch_x = static_cast<float>(snap_layer_->getPitchX()) / dbu;
+  const float pitch_y = static_cast<float>(snap_layer_->getPitchY()) / dbu;
+
+  int macro_idx = 0;
+  for (Macro& pmacro : partition.macros_) {
+    // partition macros are 1:1 with macros_.
+    Macro& macro = macros_[macro_idx];
+
+    double x = pmacro.lx;
+    double y = pmacro.ly;
+
+    // Snap to routing grid.
+    x = round(x / pitch_x) * pitch_x;
+    y = round(y / pitch_y) * pitch_y;
+
+    // Snap macro location to grid.
+    macro.lx = x;
+    macro.ly = y;
+
+    // Update db inst location.
+    dbInst* db_inst = macro.dbInstPtr;
+    db_inst->setLocation(round(x * dbu), round(y * dbu));
+    db_inst->setPlacementStatus(odb::dbPlacementStatus::LOCKED);
+    macro_idx++;
+  }
+}
+
+////////////////////////////////////////////////////////////////
+
+// Use some undocumented method with cut lines to break the design
+// into regions and try all combinations of something or other.
+// Pick the one that maximizes (yes, really)
+// wire lengths of connections between the macros to force them to the corners.
+void Tutorial::placeMacrosCornerMaxWl()
+{
+  if (first_time_) {
+    if (!init()) {
+      return;
+    }
+  }
+
+
+  if (!connection_driven_) {
+    logger_->report("Not connection driven.");
+  } else {
+    logger_->report("Connection driven");
+  }
+
+
+  updateBTermsLocations();
+  double wl = getWeightedWL();
+  logger_->info(MPL, 69, "Initial weighted wire length {:g}.", wl);
+
+  Layout layout(lx_, ly_, ux_, uy_);
+  bool horizontal = true;
+  Partition top_partition(
+      PartClass::ALL, lx_, ly_, ux_ - lx_, uy_ - ly_, this, logger_);
+  top_partition.macros_ = macros_;
+
+  logger_->report("Begin one level partition.");
+
+  TwoPartitions oneLevelPart = getPartitions(layout, top_partition, horizontal);
+
+  logger_->report("End one level partition.");
+  TwoPartitions east_partitions, west_partitions;
+
+  vector<vector<Partition>> allSets;
+
+  MacroPartMap globalMacroPartMap;
+  makeMacroPartMap(top_partition, globalMacroPartMap);
+
+  if (connection_driven_) {
+    top_partition.fillNetlistTable(globalMacroPartMap, bterms_);
+    // logger_->warn(MPL, 1334, "fillNetList");
+  }
+
+  // push to the outer vector
+  vector<Partition> layoutSet;
+  layoutSet.push_back(top_partition);
+
+  allSets.push_back(layoutSet);
+  for (auto& partition_set : oneLevelPart) {
+    if (horizontal) {
+      logger_->report("Begin horizontal partition.");
+      Layout eastInfo(layout, partition_set.first);
+      Layout westInfo(layout, partition_set.second);
+
+      logger_->report("Begin east partition.");
+      TwoPartitions east_partitions
+          = getPartitions(eastInfo, partition_set.first, !horizontal);
+      logger_->report("End east partition.");
+
+      logger_->report("Begin west partition.");
+      TwoPartitions west_partitions
+          = getPartitions(westInfo, partition_set.second, !horizontal);
+      logger_->report("End west partition.");
+
+      // Zero case handling when east_partitions = 0
+      if (east_partitions.empty() && !west_partitions.empty()) {
+        for (size_t i = 0; i < west_partitions.size(); i++) {
+          vector<Partition> partition_set2;
+
+          // one set is composed of two subblocks
+          partition_set2.push_back(west_partitions[i].first);
+          partition_set2.push_back(west_partitions[i].second);
+
+          // Fill Macro Netlist
+          // update macroPartMap
+          MacroPartMap macroPartMap;
+          for (auto& partition : partition_set2) {
+            makeMacroPartMap(partition, macroPartMap);
+          }
+
+          if (connection_driven_) {
+            for (auto& partition : partition_set2) {
+              partition.fillNetlistTable(macroPartMap, bterms_);
+              // logger_->warn(MPL, 1339, "fillNetList");
+            }
+          }
+
+          allSets.push_back(partition_set2);
+        }
+      }
+      // Zero case handling when west_partitions = 0
+      else if (!east_partitions.empty() && west_partitions.empty()) {
+        for (size_t i = 0; i < east_partitions.size(); i++) {
+          vector<Partition> partition_set2;
+
+          // one set is composed of two subblocks
+          partition_set2.push_back(east_partitions[i].first);
+          partition_set2.push_back(east_partitions[i].second);
+
+          // Fill Macro Netlist
+          // update macroPartMap
+          MacroPartMap macroPartMap;
+          for (auto& partition : partition_set2) {
+            makeMacroPartMap(partition, macroPartMap);
+          }
+
+          if (connection_driven_) {
+            for (auto& partition : partition_set2) {
+              partition.fillNetlistTable(macroPartMap, bterms_);
+              // logger_->warn(MPL, 1340, "fillNetList");
+            }
+          }
+
+          allSets.push_back(partition_set2);
+        }
+      } else {
+        // for all possible partition combinations
+        for (size_t i = 0; i < east_partitions.size(); i++) {
+          for (size_t j = 0; j < west_partitions.size(); j++) {
+            vector<Partition> partition_set2;
+
+            // one set is composed of four subblocks
+            partition_set2.push_back(east_partitions[i].first);
+            partition_set2.push_back(east_partitions[i].second);
+            partition_set2.push_back(west_partitions[j].first);
+            partition_set2.push_back(west_partitions[j].second);
+
+            MacroPartMap macroPartMap;
+            for (auto& partition : partition_set2) {
+              makeMacroPartMap(partition, macroPartMap);
+            }
+
+            if (connection_driven_) {
+              for (auto& partition : partition_set2) {
+                partition.fillNetlistTable(macroPartMap, bterms_);
+                // logger_->warn(MPL, 1341, "fillNetList");
               }
             }
             allSets.push_back(partition_set2);
@@ -1207,7 +1410,7 @@ void Tutorial::findAdjWeights(VertexFaninMap& vertex_fanins,
 // Fill macro_weights_ array.
 void Tutorial::fillMacroWeights(AdjWeightMap& adj_map)
 {
-  size_t weight_size = macros_.size() + core_edge_count;
+  size_t weight_size = macros_.size() + bterms_.size();
   macro_weights_.resize(weight_size);
   for (size_t i = 0; i < weight_size; i++) {
     macro_weights_[i].resize(weight_size);
@@ -1216,7 +1419,7 @@ void Tutorial::fillMacroWeights(AdjWeightMap& adj_map)
   for (const auto& [from_to, weight] : adj_map) {
     Macro* from = from_to.first;
     Macro* to = from_to.second;
-    if (!(macroIndexIsEdge(from) && macroIndexIsEdge(to))) {
+    if (!(macroIndexIsIO(from) && macroIndexIsIO(to))) {
       int idx1 = macroIndex(from);
       int idx2 = macroIndex(to);
       // Note macro_weights only has entries for idx1 < idx2.
@@ -1270,6 +1473,12 @@ bool Tutorial::macroIndexIsEdge(Macro* macro)
 {
   intptr_t edge_index = reinterpret_cast<intptr_t>(macro);
   return edge_index < core_edge_count;
+}
+
+bool Tutorial::macroIndexIsIO(Macro* macro)
+{
+  intptr_t edge_index = reinterpret_cast<intptr_t>(macro);
+  return edge_index < bterms_.size();
 }
 
 // This assumes the pins straddle the die/fence boundary.
@@ -1503,31 +1712,6 @@ Tutorial::printHPWLs()
 {
   //TODO
   //Challenge: Traverse all nets printing the total HPWL
-  /*
-  std::cout<<"Total HPWL: "<<std::end;
-  auto block = db_->getChip()->getBlock();
-  double HPWL=0;
-  int HX,HY,LX,LY;
-  int x, y;
-  for(auto net : block->getNets()) {
-    HX=-1; HY=-1; LX=-1; LY=-1;
-    for(auto iterm : net->getITerms()) {
-      x=0; y=0;
-      iterm->getAvgXY(&x,&y);
-      if((x<LX)||(LX==-1))
-        LX = x;
-      if((x>HX)||(LX==-1))
-        HX = x;
-      if((y<LY)||(LY==-1))
-        LY = y;
-      if((y>HY)||(HY==-1))
-        HY = y;
-    }
-    HPWL+=((HX-LX)+(HY-LY));
-  }
-  std::cout<<std::to_string(HPWL)<<std::endl;
-  logger_->report("Total HPWL: "+std::to_string(HPWL));
-  */
 }
 
 void 
@@ -1556,24 +1740,152 @@ Tutorial::updateBTermsLocations()
   }
 }
 
+PinParser Tutorial::parserArguments(string filepath)
+{
+  PinParser newParser;
+  std::ifstream inputData;
+  inputData.open(filepath);
+  std::string line;
+  std::string currentCategory;
+  
+  // Regex to match exclude patterns like left:500-800 or top:*
+  std::regex excludePattern(R"((\w+):(?:([\d]+|\*)\-([\d]+|\*)|(\*)))");
+  std::smatch match;
+
+  while (std::getline(inputData, line)) {
+      if (line.empty()) continue;
+
+      // Identify category markers starting with '-'
+      if (line[0] == '-') {
+          if (line == "-hor_layer") {
+              currentCategory = "horizontal";
+          } else if (line == "-ver_layer") {
+              currentCategory = "vertical";
+          } else if (line == "-exclude") {
+              currentCategory = "exclude";
+          } else if (line == "-random") {
+              // Ignore random inputs
+              currentCategory = "";
+          }
+      } else {
+          // Process based on the current category
+          if (currentCategory == "horizontal") {
+            newParser.horizontal_layers.push_back(db_->getTech()->findLayer(line.c_str()));
+          } else if (currentCategory == "vertical") {
+            newParser.vertical_layers.push_back(db_->getTech()->findLayer(line.c_str()));
+          } else if (currentCategory == "exclude") {
+            if (std::regex_match(line, match, excludePattern)) {
+              exclude_struct exclude_item;
+              exclude_item.edge = pPlacer_->getEdge(match[1]);
+                if(match[2]!="*"&&match[5]!="*") {
+                  // std::cout<<match[2]<<" "<<typeid(match[2].str().c_str()).name()<<std::endl;
+                  exclude_item.begin = atoi(match[2].str().c_str());
+                }
+                else {
+                  if(match[1]=="top"||match[1]=="bottom")
+                    exclude_item.begin = db_->getChip()->getBlock()->getDieArea().xMin();
+                  else
+                    exclude_item.begin = db_->getChip()->getBlock()->getDieArea().yMin();
+                }
+                if(match[3]!="*"&&match[5]!="*") {
+                  // std::cout<<match[3]<<" "<<typeid(match[3].str().c_str()).name()<<std::endl;
+                  exclude_item.end = atoi(match[3].str().c_str());
+                }
+                else {
+                  if(match[1]=="top"||match[1]=="bottom")
+                    exclude_item.end = db_->getChip()->getBlock()->getDieArea().xMax();
+                  else
+                    exclude_item.end = db_->getChip()->getBlock()->getDieArea().yMax();
+                }
+              newParser.exclude_list.push_back(exclude_item);
+            }
+          }
+      }
+  }
+  inputData.close();
+  return newParser;
+}
+
+void
+Tutorial::resetIoplacer()
+{
+  logger_->report("Reseting IOPlacer");
+  auto inputFlags = parserArguments("args_input.txt");
+  auto tech = db_->getTech();
+  pPlacer_->getParameters()->setRandSeed(std::round(42 * tech->getLefUnits()));
+  pPlacer_->getParameters()->setCornerAvoidance(std::round(1 * tech->getLefUnits()));
+  pPlacer_->getParameters()->setMinDistance(0);
+  pPlacer_->getParameters()->setMinDistanceInTracks(false);
+  for (auto hor_layer : inputFlags.horizontal_layers)
+  {
+    pPlacer_->addHorLayer(hor_layer);
+  }
+  for (auto ver_layer : inputFlags.vertical_layers)
+  {
+    pPlacer_->addVerLayer(ver_layer);
+  }
+  for (auto exclude : inputFlags.exclude_list)
+  {
+    pPlacer_->excludeInterval(exclude.edge, exclude.begin, exclude.end);
+  }
+  auto terms = db_->getChip()->getBlock()->getBTerms();
+  // for (auto term : terms) {
+  //   term->get
+  // }
+}
+
+void
+Tutorial::unlockMacros()
+{
+  logger_->report("Unlocking Macros");
+  int counter = 1;
+  
+  for(Macro inst_macro : macros_) {
+    inst_macro.dbInstPtr->setPlacementStatus("PLACED");
+    inst_macro.dbInstPtr->setDoNotTouch(false);
+    logger_->info(MPL, 999, "Macro {} unlocked", counter);
+    counter++;
+  }
+}
 
 void
 Tutorial::placeMacrosCornerMinWL2()
 {
-  pPlacer_->run(false);
+  logger_->report("Initial Macro Placement");
   placeMacrosCornerMinWL();
+  first_time_ = false;
+  resetIoplacer();
+  logger_->report("Running IOPlacer");
+  pPlacer_->run(false);
+  double wirelenght = getWeightedWL();
+  for (int i = 0; i < 3 ; i++){
+    unlockMacros();
+    placeMacrosCornerMinWL();
+    resetIoplacer();
+    pPlacer_->run(false);
+    double wirelenght2 = getWeightedWL();
+    if (wirelenght < wirelenght2) {
+       break;
+    }
+  }
 }
 
 void
 Tutorial::placeMacrosCornerMaxWl2()
 {
-  if (!connection_driven_) {
-    logger_->warn(MPL, 1444, "Not connection driven.");
-  } else {
-    logger_->warn(MPL, 78, "Connection driven");
-  }
-  pPlacer_->run(false);
   placeMacrosCornerMaxWl();
+  resetIoplacer();
+  pPlacer_->run(false);
+  double wirelenght = getWeightedWL();
+  for (int i = 0; i < 3 ; i++){
+    placeMacrosCornerMaxWl(); 
+    resetIoplacer();
+    pPlacer_->run(false);
+    double wirelenght2 = getWeightedWL();
+    if (wirelenght < wirelenght2) {
+       break;
+    }
+  }
 }
 
 Tutorial::~Tutorial()

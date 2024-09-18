@@ -62,6 +62,12 @@ const char* coreEdgeString(CoreEdge edge);
 CoreEdge coreEdgeFromIndex(int edge_index);
 int coreEdgeIndex(CoreEdge edge);
 
+struct exclude_struct {
+      ppl::Edge edge;
+      int begin;
+      int end;
+};
+
 class Macro
 {
  public:
@@ -95,6 +101,13 @@ class MacroSpacings
 
  private:
   double halo_x_, halo_y_, channel_x_, channel_y_;
+};
+
+class PinParser {
+  public:
+    std::vector<odb::dbTechLayer*> horizontal_layers;
+    std::vector<odb::dbTechLayer*> vertical_layers;
+    std::vector<exclude_struct> exclude_list;
 };
 
 class Tutorial {
@@ -177,9 +190,14 @@ class Tutorial {
     string faninName(Macro* macro);
     int macroIndex(Macro* macro);
     bool macroIndexIsEdge(Macro* macro);
+    bool macroIndexIsIO(Macro* macro);
     string macroIndexName(int index);
 
     void reportEdgePinCounts();
+
+    void resetIoplacer();
+    void unlockMacros();
+    PinParser parserArguments(string filepath);
 
     ////////////////////////////////////////////////////////////////
 
@@ -189,6 +207,7 @@ class Tutorial {
     odb::dbTechLayer* snap_layer_;
     ppl::IOPlacer* pPlacer_;
     bool connection_driven_;
+    bool first_time_ = true;
 
     // macro idx/idx pair -> give each
     vector<vector<int>> macro_weights_;
