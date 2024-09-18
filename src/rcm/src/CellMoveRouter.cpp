@@ -284,13 +284,16 @@ CellMoveRouter::Cell_Move_Rerout(){
   int total_regected = 0;
   int total_worse = 0;
   int iterations = 0;
-  int n_move_cells = std::floor(cells_weight_.size() * 5/100);
+  int n_move_cells = 0;
   for(int j = 0; j < 20; j++) {
     InitCellsWeight();
-    int n_cells = cells_weight_.size();
+    if(limit_candidate_size_) {
+      n_move_cells = std::floor(cells_weight_.size() * candidate_percentage_);
+    }
     
     for(int i = cells_weight_.size() - 1; i >=0; i--) {
-      if(cells_to_move_.size() == n_move_cells || cells_weight_[i].weight <= 0) {
+      if((limit_candidate_size_ && cells_to_move_.size() == n_move_cells) ||
+         (!limit_candidate_size_ && cells_weight_[i].weight <= 0)) {
         break;
       }
       cells_to_move_.push_back(cells_weight_[i]);
@@ -867,17 +870,13 @@ CellMoveRouter::InitCellsWeight()
       cell->getLocation(original_x, original_y);
       
       median cell_nets_median = compute_cells_nets_median(cell);
-      if(cell->getName() == "inst35975") {
-        logger_->report("Median computed during wight: ({}, {})", cell_nets_median.first, cell_nets_median.second);
-      }
       cell->setLocation(cell_nets_median.first, cell_nets_median.second);
       if(cell_nets_median.first == 0 && cell_nets_median.second == 0) {
         cells_weight_.push_back({cell, 0, 0, 0,{0,0}});
         continue;
       }
     }
-    //logger_->report("Cell: {}", cell->getName());
-    //logger_->report("Original pos: {}, {}\nMoved pos: {}, {}", original_x, original_y, cell_nets_median.first, cell_nets_median.second);
+
     for (auto pin : cell->getITerms()) {
       auto net = pin->getNet();
       if(net != nullptr) {

@@ -152,6 +152,8 @@ class CellMoveRouter {
     bool debug_ = false;
     bool use_steiner_ = true;
     bool compare_stiener_ = true;
+    int candidate_percentage_ = 0.05;
+    bool limit_candidate_size_ = false;
     Abacus abacus_;
     stt::SteinerTreeBuilder *stt_ = nullptr;
 };
