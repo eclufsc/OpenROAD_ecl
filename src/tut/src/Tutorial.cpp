@@ -1810,6 +1810,15 @@ void
 Tutorial::resetIoplacer()
 {
   logger_->report("Reseting IOPlacer");
+  auto terms = db_->getChip()->getBlock()->getBTerms();
+  for (auto term : terms) {
+    auto pins = term->getBPins();
+    for (auto pin : pins) {
+      pin->setPlacementStatus("UNPLACED");
+    }
+  }
+  pPlacer_->clear();
+  pPlacer_->clearConstraints();
   auto inputFlags = parserArguments("args_input.txt");
   auto tech = db_->getTech();
   pPlacer_->getParameters()->setRandSeed(std::round(42 * tech->getLefUnits()));
@@ -1828,10 +1837,6 @@ Tutorial::resetIoplacer()
   {
     pPlacer_->excludeInterval(exclude.edge, exclude.begin, exclude.end);
   }
-  auto terms = db_->getChip()->getBlock()->getBTerms();
-  // for (auto term : terms) {
-  //   term->get
-  // }
 }
 
 void
@@ -1858,13 +1863,17 @@ Tutorial::placeMacrosCornerMinWL2()
   logger_->report("Running IOPlacer");
   pPlacer_->run(false);
   double wirelenght = getWeightedWL();
+  logger_->report("Current wWL = {}", wirelenght);
   for (int i = 0; i < 3 ; i++){
+    logger_->report("Iteration {} starting", i);
     unlockMacros();
     placeMacrosCornerMinWL();
     resetIoplacer();
     pPlacer_->run(false);
     double wirelenght2 = getWeightedWL();
+    logger_->report("Current wWL = {}", wirelenght2);
     if (wirelenght < wirelenght2) {
+       logger_->report("Breaking the Cycle");
        break;
     }
   }
@@ -1878,6 +1887,7 @@ Tutorial::placeMacrosCornerMaxWl2()
   pPlacer_->run(false);
   double wirelenght = getWeightedWL();
   for (int i = 0; i < 3 ; i++){
+    logger_->report("Iteration {} starting", i);
     placeMacrosCornerMaxWl(); 
     resetIoplacer();
     pPlacer_->run(false);
