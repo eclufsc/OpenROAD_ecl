@@ -365,8 +365,6 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   if(!use_steiner_) {
     before_estimate = 0;
   }
-  int wl_before_moving = grt_->computeWirelength();
-  auto total_usages_antes = grt_->reportTotalUsages();
 
   for(auto pin : moving_cell->getITerms())
   {
@@ -1035,31 +1033,9 @@ CellMoveRouter::SelectCandidateCells() {
   cells_to_move_.clear();
   cells_weight_.clear();
 
-  // Inital Global Rout by OpenROAD
-  grt_->globalRoute();
-  long init_wl = grt_->computeWirelength();
-  std::cout<<"initial wl  "<<init_wl<<std::endl;
-  gui::Gui* gui = gui::Gui::get();
-  if (rectangleRender_ == nullptr)
-  {
-    rectangleRender_ = std::make_unique<RectangleRender>();
-    gui->registerRenderer(rectangleRender_.get());
-  }
-
-  //Initalize Rtrees
-  InitCellTree();
-  InitGCellTree();
-  abacus_.InitRowTree();
-
-  if(stt_ == nullptr) {
-    stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder(); // create object before using
-    block->setDrivingItermsforNets(); //set net drivers
-  }
-  
   std::map <std::string, int> netSteinerLookup; //mapa de nets e stwl
   int n_cells_to_move = block->getInsts().size() * 5/100;
   int n_cells_selected = 0;
-  logger_->report("Cells to move: {}", n_cells_to_move);
   std::unordered_map<odb::dbNet*, odb::dbInst*> net_selected_cell;
   for(odb::dbNet* net : block->getNets()) {
     if(net->getSigType().isSupply()) {
@@ -1135,12 +1111,13 @@ CellMoveRouter::SelectCandidateCells() {
             [](const RcmCell a, const RcmCell b) {
                 return a.weight > b.weight;
             });
-  for(int i = 0; i < n_cells_to_move; i++) {
+  for(int i = 0; i < cells_weight_.size(); i++) {
     if(cells_weight_[i].weight <= 0 ){
-      logger_->report("Estranho: ");
+      break;
     }
     cells_to_move_.push_back(cells_weight_[i]);
   }
+  logger_->report("Cells to move: {}", cells_to_move_.size());
 }
 
 void
@@ -1149,8 +1126,15 @@ CellMoveRouter::RunCMRO() {
   int total_regected = 0;
   int failed = 0;
   int worse = 0;
+  int movements = 0;
+  int rejected = 0;
   auto block = db_->getChip()->getBlock();
+  long after_wl;
   std::unordered_map<odb::dbInst*,int> cells_movement;
+  // Inital Global Rout by OpenROAD
+  grt_->globalRoute();
+  long init_wl = grt_->computeWirelength();
+  std::cout<<"initial wl  "<<init_wl<<std::endl;
   gui::Gui* gui = gui::Gui::get();
   if (rectangleRender_ == nullptr)
   {
@@ -1158,26 +1142,50 @@ CellMoveRouter::RunCMRO() {
     gui->registerRenderer(rectangleRender_.get());
   }
 
+  //Initalize Rtrees
+  InitCellTree();
+  InitGCellTree();
+  abacus_.InitRowTree();
+
+  if(stt_ == nullptr) {
+    stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder(); // create object before using
+    block->setDrivingItermsforNets(); //set net drivers
+  }
+
   // Init incremental global router
   icr_grt_ = new grt::IncrementalGRoute(grt_, block);
-  SelectCandidateCells();
-  gui->redraw();
-  while(!cells_to_move_.empty()) {
-    auto moving_cell = cells_to_move_[0];
-    //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
-    bool complete = MoveCell(moving_cell, worse);
-    if(complete) {
-      total_moved++;
-    } else {
-      total_regected++;
-      cells_to_move_.erase(cells_to_move_.begin());
+  for(int iteration = 1; iteration <=20; iteration++){
+    movements = 0;
+    rejected = 0;
+    SelectCandidateCells();
+    gui->redraw();
+    while(!cells_to_move_.empty()) {
+      auto moving_cell = cells_to_move_[0];
+      //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
+      bool complete = MoveCell(moving_cell, worse);
+      if(complete) {
+        cells_movement[moving_cell.inst] += 1;
+        movements++;
+      } else {
+        rejected++;
+        cells_to_move_.erase(cells_to_move_.begin());
+      }
     }
+    after_wl = grt_->computeWirelength();
+    std::cout<<"iteração: "<<iteration<<std::endl;
+    std::cout<<"wl (um): "<<after_wl<<std::endl;
+    std::cout<<"#vias: "<<grt_->getViaCount()<<std::endl;
+    std::cout<<"movimentos: "<<movements<<std::endl;
+    std::cout<<"movidas: "<< cells_movement.size()<<std::endl;
+    std::cout<<"rejeitadas: "<<rejected<<std::endl;
+    std::cout<<"worse: "<<worse<<std::endl;
+    total_moved += movements;
+    total_regected += rejected;
   }
-  std::cout<<"Celulas movidas: "<<total_moved<<std::endl;
-  std::cout<<"Celulas rejeitadas: "<<total_regected<<std::endl;
-  std::cout<<"Celulas movidas total: "<<total_moved<<std::endl;
+  std::cout<<"Celulas movidas "<<total_moved<<std::endl;
+  std::cout<<"Celulas rejeitadas "<<total_regected<<std::endl;
+  std::cout<<"Celulas movidas total "<<cells_movement.size()<<std::endl;
   std::cout<<"move worsed cells  "<<worse<<std::endl;
-  long after_wl = grt_->computeWirelength();
   std::cout<<"final wl  "<<after_wl<<std::endl;
 }
 
@@ -1188,7 +1196,7 @@ bool CellMoveRouter::MoveCell(RcmCell cell, int& worse_wl) {
   gui::Gui* gui = gui::Gui::get();
   //Initial info of the cell
   auto block = db_->getChip()->getBlock();
-  int wl_before_moving = grt_->computeWirelength();
+  //int wl_before_moving = grt_->computeWirelength();
   int moving_cell_width = cell.inst->getBBox()->getDX();
   int original_x, original_y;
   cell.inst->getLocation(original_x, original_y);
@@ -1326,10 +1334,10 @@ bool CellMoveRouter::MoveCell(RcmCell cell, int& worse_wl) {
     }
   }
 
-  int wl_after_moving = grt_->computeWirelength();
+  /*int wl_after_moving = grt_->computeWirelength();
   if(wl_after_moving > wl_before_moving) {
     worse_wl += 1;
-  }/*  cell.inst->setLocation(original_x, original_y);
+  }  cell.inst->setLocation(original_x, original_y);
     for (auto [inst, original_location] : changed_cells) {
       inst->setLocation(original_location.first, original_location.second);
     }
