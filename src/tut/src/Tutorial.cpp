@@ -1747,7 +1747,7 @@ PinParser Tutorial::parserArguments(string filepath)
   inputData.open(filepath);
   std::string line;
   std::string currentCategory;
-  
+  int unit = db_->getChip()->getBlock()->getTech()->getLefUnits();
   // Regex to match exclude patterns like left:500-800 or top:*
   std::regex excludePattern(R"((\w+):(?:([\d]+|\*)\-([\d]+|\*)|(\*)))");
   std::smatch match;
@@ -1777,9 +1777,9 @@ PinParser Tutorial::parserArguments(string filepath)
             if (std::regex_match(line, match, excludePattern)) {
               exclude_struct exclude_item;
               exclude_item.edge = pPlacer_->getEdge(match[1]);
-                if(match[2]!="*"&&match[5]!="*") {
+                if(match[2]!="*"&&match[4]!="*") {
                   // std::cout<<match[2]<<" "<<typeid(match[2].str().c_str()).name()<<std::endl;
-                  exclude_item.begin = atoi(match[2].str().c_str());
+                  exclude_item.begin = atoi(match[2].str().c_str()) * unit;
                 }
                 else {
                   if(match[1]=="top"||match[1]=="bottom")
@@ -1787,9 +1787,9 @@ PinParser Tutorial::parserArguments(string filepath)
                   else
                     exclude_item.begin = db_->getChip()->getBlock()->getDieArea().yMin();
                 }
-                if(match[3]!="*"&&match[5]!="*") {
+                if(match[3]!="*"&&match[4]!="*") {
                   // std::cout<<match[3]<<" "<<typeid(match[3].str().c_str()).name()<<std::endl;
-                  exclude_item.end = atoi(match[3].str().c_str());
+                  exclude_item.end = atoi(match[3].str().c_str()) * unit;
                 }
                 else {
                   if(match[1]=="top"||match[1]=="bottom")
@@ -1835,8 +1835,10 @@ Tutorial::resetIoplacer()
   }
   for (auto exclude : inputFlags.exclude_list)
   {
+    // logger_->report("edge {}, begin {}, end {}", exclude.edge, exclude.begin, exclude.end);
     pPlacer_->excludeInterval(exclude.edge, exclude.begin, exclude.end);
   }
+  //pPlacer_->setAnnealingConfig(1000.0, 1000, 10, 0.9);
 }
 
 void
@@ -1872,7 +1874,7 @@ Tutorial::placeMacrosCornerMinWL2()
     pPlacer_->run(false);
     double wirelenght2 = getWeightedWL();
     logger_->report("Current wWL = {}", wirelenght2);
-    if (wirelenght < wirelenght2) {
+    if (wirelenght <= wirelenght2) {
        logger_->report("Breaking the Cycle");
        break;
     }
@@ -1882,8 +1884,11 @@ Tutorial::placeMacrosCornerMinWL2()
 void
 Tutorial::placeMacrosCornerMaxWl2()
 {
+  logger_->report("Initial Macro Placement");
   placeMacrosCornerMaxWl();
+  first_time_ = false;
   resetIoplacer();
+  logger_->report("Running IOPlacer");
   pPlacer_->run(false);
   double wirelenght = getWeightedWL();
   for (int i = 0; i < 3 ; i++){
@@ -1893,6 +1898,7 @@ Tutorial::placeMacrosCornerMaxWl2()
     pPlacer_->run(false);
     double wirelenght2 = getWeightedWL();
     if (wirelenght < wirelenght2) {
+       logger_->report("Breaking the Cycle");
        break;
     }
   }

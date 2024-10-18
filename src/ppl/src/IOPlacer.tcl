@@ -431,6 +431,11 @@ sta::define_cmd_args "place_pins" {[-hor_layers h_layers]\
                                  }
 
 proc place_pins { args } {
+  set fileId [open "args_input.txt" "w"]
+  foreach arg $args {
+    puts $fileId $arg
+  }
+  close $fileId
   set regions [ppl::parse_excludes_arg $args]
   set pin_groups [ppl::parse_group_pins_arg $args]
   sta::parse_key_args "place_pins" args \
