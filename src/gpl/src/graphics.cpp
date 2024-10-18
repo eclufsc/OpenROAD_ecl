@@ -46,19 +46,20 @@
 
 namespace gpl {
 
+Graphics::Graphics(utl::Logger* logger)
+    : HeatMapDataSource(logger, "gpl", "gpl"), logger_(logger), mode_(Mbff)
+{
+  gui::Gui::get()->registerRenderer(this);
+}
+
 Graphics::Graphics(utl::Logger* logger,
                    std::shared_ptr<PlacerBaseCommon> pbc,
                    std::vector<std::shared_ptr<PlacerBase>>& pbVec)
     : HeatMapDataSource(logger, "gpl", "gpl"),
       pbc_(std::move(pbc)),
-
       pbVec_(pbVec),
-
-      np_(nullptr),
-      selected_(nullptr),
-      draw_bins_(false),
       logger_(logger),
-      heatmap_type_(Density)
+      mode_(Initial)
 {
   gui::Gui::get()->registerRenderer(this);
 }
@@ -77,10 +78,9 @@ Graphics::Graphics(utl::Logger* logger,
       pbVec_(pbVec),
       nbVec_(nbVec),
       np_(np),
-      selected_(nullptr),
       draw_bins_(draw_bins),
       logger_(logger),
-      heatmap_type_(Density)
+      mode_(Nesterov)
 {
   gui::Gui::get()->registerRenderer(this);
   initHeatmap();
@@ -155,55 +155,124 @@ void Graphics::drawInitial(gui::Painter& painter)
   }
 }
 
+void Graphics::drawForce(gui::Painter& painter)
+{
+  for (const auto& nb : nbVec_) {
+    const auto& bins = nb->bins();
+    if (bins.empty()) {
+      continue;
+    }
+    const auto& bin = *bins.begin();
+    const auto size = std::max(bin.dx(), bin.dy());
+    if (size * painter.getPixelsPerDBU() < 10) {  // too small
+      return;
+    }
+    float efMax = 0;
+    int max_len = std::numeric_limits<int>::max();
+    for (auto& bin : bins) {
+      efMax = std::max(efMax,
+                       std::hypot(bin.electroForceX(), bin.electroForceY()));
+      max_len = std::min({max_len, bin.dx(), bin.dy()});
+    }
+
+    for (auto& bin : bins) {
+      float fx = bin.electroForceX();
+      float fy = bin.electroForceY();
+      float f = std::hypot(fx, fy);
+      float ratio = f / efMax;
+      float dx = fx / f * max_len * ratio;
+      float dy = fy / f * max_len * ratio;
+
+      int cx = bin.cx();
+      int cy = bin.cy();
+
+      painter.setPen(gui::Painter::red, true);
+      painter.drawLine(cx, cy, cx + dx, cy + dy);
+    }
+  }
+}
+
+void Graphics::drawCells(const std::vector<GCellHandle>& cells,
+                         gui::Painter& painter)
+{
+  for (const auto& handle : cells) {
+    const GCell* gCell
+        = handle;  // Uses the conversion operator to get a GCell*
+    drawSingleGCell(gCell, painter);
+  }
+}
+
+void Graphics::drawCells(const std::vector<GCell*>& cells,
+                         gui::Painter& painter)
+{
+  for (const auto& gCell : cells) {
+    drawSingleGCell(gCell, painter);
+  }
+}
+
+void Graphics::drawSingleGCell(const GCell* gCell, gui::Painter& painter)
+{
+  const int gcx = gCell->dCx();
+  const int gcy = gCell->dCy();
+
+  int xl = gcx - gCell->dx() / 2;
+  int yl = gcy - gCell->dy() / 2;
+  int xh = gcx + gCell->dx() / 2;
+  int yh = gcy + gCell->dy() / 2;
+
+  gui::Painter::Color color;
+  if (gCell->isInstance()) {
+    color = gCell->instance()->isLocked() ? gui::Painter::dark_cyan
+                                          : gui::Painter::dark_green;
+  } else if (gCell->isFiller()) {
+    color = gui::Painter::dark_magenta;
+  }
+
+  if (gCell == selected_) {
+    color = gui::Painter::yellow;
+  }
+
+  color.a = 180;
+  painter.setBrush(color);
+  painter.drawRect({xl, yl, xh, yh});
+}
+
 void Graphics::drawNesterov(gui::Painter& painter)
 {
-  // TODO: Support graphics for multiple Nesterov instances
   drawBounds(painter);
   if (draw_bins_) {
     // Draw the bins
-    painter.setPen(gui::Painter::white, /* cosmetic */ true);
+    painter.setPen(gui::Painter::transparent);
 
-    for (auto& bin : nbVec_[0]->bins()) {
-      int color = bin.density() * 50 + 20;
+    for (const auto& nb : nbVec_) {
+      for (auto& bin : nb->bins()) {
+        int density = bin.density() * 50 + 20;
+        gui::Painter::Color color;
+        if (density > 255) {
+          color = {255, 165, 0, 180};  // orange = out of the range
+        } else {
+          density = 255 - std::max(density, 20);
+          color = {density, density, density, 180};
+        }
 
-      color = (color > 255) ? 255 : (color < 20) ? 20 : color;
-      color = 255 - color;
-
-      painter.setBrush({color, color, color, 180});
-      painter.drawRect({bin.lx(), bin.ly(), bin.ux(), bin.uy()});
+        painter.setBrush(color);
+        painter.drawRect({bin.lx(), bin.ly(), bin.ux(), bin.uy()});
+      }
     }
   }
 
   // Draw the placeable objects
   painter.setPen(gui::Painter::white);
-  for (auto* gCell : nbc_->gCells()) {
-    const int gcx = gCell->dCx();
-    const int gcy = gCell->dCy();
-
-    int xl = gcx - gCell->dx() / 2;
-    int yl = gcy - gCell->dy() / 2;
-    int xh = gcx + gCell->dx() / 2;
-    int yh = gcy + gCell->dy() / 2;
-
-    gui::Painter::Color color;
-    if (gCell->isInstance()) {
-      color = gCell->instance()->isLocked() ? gui::Painter::dark_cyan
-                                            : gui::Painter::dark_green;
-    } else if (gCell->isFiller()) {
-      color = gui::Painter::dark_magenta;
-    }
-    if (gCell == selected_) {
-      color = gui::Painter::yellow;
-    }
-
-    color.a = 180;
-    painter.setBrush(color);
-    painter.drawRect({xl, yl, xh, yh});
+  drawCells(nbc_->gCells(), painter);
+  for (const auto& nb : nbVec_) {
+    drawCells(nb->gCells(), painter);
   }
 
   painter.setBrush(gui::Painter::Color(gui::Painter::light_gray, 50));
-  for (auto& inst : pbVec_[0]->nonPlaceInsts()) {
-    painter.drawRect({inst->lx(), inst->ly(), inst->ux(), inst->uy()});
+  for (const auto& pb : pbVec_) {
+    for (auto& inst : pb->nonPlaceInsts()) {
+      painter.drawRect({inst->lx(), inst->ly(), inst->ux(), inst->uy()});
+    }
   }
 
   // Draw lines to neighbors
@@ -227,37 +296,30 @@ void Graphics::drawNesterov(gui::Painter& painter)
 
   // Draw force direction lines
   if (draw_bins_) {
-    float efMax = 0;
-    int max_len = std::numeric_limits<int>::max();
-    for (auto& bin : nbVec_[0]->bins()) {
-      efMax = std::max(efMax,
-                       std::hypot(bin.electroForceX(), bin.electroForceY()));
-      max_len = std::min({max_len, bin.dx(), bin.dy()});
-    }
+    drawForce(painter);
+  }
+}
 
-    for (auto& bin : nbVec_[0]->bins()) {
-      float fx = bin.electroForceX();
-      float fy = bin.electroForceY();
-      float f = hypot(fx, fy);
-      float ratio = f / efMax;
-      float dx = fx / f * max_len * ratio;
-      float dy = fy / f * max_len * ratio;
-
-      int cx = bin.cx();
-      int cy = bin.cy();
-
-      painter.setPen(gui::Painter::red, true);
-      painter.drawLine(cx, cy, cx + dx, cy + dy);
-    }
+void Graphics::drawMBFF(gui::Painter& painter)
+{
+  painter.setPen(gui::Painter::yellow, /* cosmetic */ true);
+  for (const auto& [start, end] : mbff_edges_) {
+    painter.drawLine(start, end);
   }
 }
 
 void Graphics::drawObjects(gui::Painter& painter)
 {
-  if (nbc_) {
-    drawNesterov(painter);
-  } else {
-    drawInitial(painter);
+  switch (mode_) {
+    case Mbff:
+      drawMBFF(painter);
+      break;
+    case Nesterov:
+      drawNesterov(painter);
+      break;
+    case Initial:
+      drawInitial(painter);
+      break;
   }
 }
 
@@ -308,6 +370,13 @@ void Graphics::cellPlot(bool pause)
     reportSelected();
     gui::Gui::get()->pause();
   }
+}
+
+void Graphics::mbff_mapping(const LineSegs& segs)
+{
+  mbff_edges_ = segs;
+  gui::Gui::get()->redraw();
+  gui::Gui::get()->pause();
 }
 
 gui::SelectionSet Graphics::select(odb::dbTechLayer* layer,

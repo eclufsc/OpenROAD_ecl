@@ -1,26 +1,116 @@
 {
-    "IFP::ord_version" : ""
-  , "IFP::instance_count" : "45634"
-  , "RSZ::repair_design_buffer_count" : "332"
-  , "RSZ::max_slew_slack" : "24.9099957463552"
-  , "RSZ::max_fanout_slack" : "100.0"
-  , "RSZ::max_capacitance_slack" : "78.64325756295086"
-  , "RSZ::worst_slack_min" : "0.0018975932473569198"
-  , "RSZ::worst_slack_max" : "-0.9094156796136068"
-  , "RSZ::tns_max" : "-96.7951222127989"
-  , "RSZ::hold_buffer_count" : "141"
-  , "DPL::utilization" : "7.1"
-  , "DPL::design_area" : "632876"
-  , "GRT::ANT::errors" : "0"
-  , "drt::wire length::total" : 2228768
-  , "drt::vias::total" : 315031
-  , "DRT::drv" : "0"
-  , "DRT::worst_slack_min" : "0.07309797418709191"
-  , "DRT::worst_slack_max" : "-1.1343903915079483"
-  , "DRT::tns_max" : "-125.10782097742039"
-  , "DRT::clock_skew" : "0.9025287439524763"
-  , "DRT::max_slew_slack" : "-7.817331949869792"
-  , "DRT::max_fanout_slack" : "100.0"
-  , "DRT::max_capacitance_slack" : "9.517641866627246"
-  , "DRT::clock_period" : "8.000000"
+	"IFP::ord_version": "",
+	"IFP::instance_count": "45634",
+	"floorplan__design__io": 47,
+	"design__io__hpwl": 12947255,
+	"design__instance__displacement__total": 126218,
+	"design__instance__displacement__mean": 1.718,
+	"design__instance__displacement__max": 14.617,
+	"route__wirelength__estimated": 1.46041e+06,
+	"RSZ::repair_design_buffer_count": "230",
+	"RSZ::max_slew_slack": "20.377322038014732",
+	"RSZ::max_fanout_slack": "100.0",
+	"RSZ::max_capacitance_slack": "22.00913149268759",
+	"design__instance__displacement__total": 3940.83,
+	"design__instance__displacement__mean": 0.053,
+	"design__instance__displacement__max": 11.04,
+	"route__wirelength__estimated": 1.51852e+06,
+	"design__instance__count__setup_buffer": 111,
+	"design__instance__count__hold_buffer": 94,
+	"RSZ::worst_slack_min": "0.012383650011507461",
+	"RSZ::worst_slack_max": "0.000604849520922098",
+	"RSZ::tns_max": "-6.21724911373669e-5",
+	"RSZ::hold_buffer_count": "94",
+	"design__instance__displacement__total": 1658.83,
+	"design__instance__displacement__mean": 0.022,
+	"design__instance__displacement__max": 13.821,
+	"route__wirelength__estimated": 1.55952e+06,
+	"DPL::utilization": "23.4",
+	"DPL::design_area": "512281",
+	"route__net": 57279,
+	"route__net__special": 2,
+	"grt__antenna_diodes_count": 969,
+	"grt__antenna__violating__nets": 3,
+	"grt__antenna__violating__pins": 3,
+	"GRT::ANT::errors": "3",
+	"route__net": 57279,
+	"route__net__special": 2,
+	"route__drc_errors__iter:1": 9292,
+	"route__wirelength__iter:1": 1750261,
+	"route__drc_errors__iter:2": 1285,
+	"route__wirelength__iter:2": 1741780,
+	"route__drc_errors__iter:3": 693,
+	"route__wirelength__iter:3": 1740889,
+	"route__drc_errors__iter:4": 13,
+	"route__wirelength__iter:4": 1740838,
+	"route__drc_errors__iter:5": 0,
+	"route__wirelength__iter:5": 1740842,
+	"route__drc_errors": 0,
+	"route__wirelength": 1740842,
+	"route__vias": 308471,
+	"route__vias__singlecut": 308471,
+	"route__vias__multicut": 0,
+	"DRT::drv": "0",
+	"drt__repair_antennas__pre_repair__antenna__violating__nets": 36,
+	"drt__repair_antennas__pre_repair__antenna__violating__pins": 40,
+	"drt__repair_antennas__iter_0__antenna_diodes_count": 1029,
+	"drt__repair_antennas__iter_0__route__drc_errors__iter:1": 603,
+	"drt__repair_antennas__iter_0__route__wirelength__iter:1": 1741498,
+	"drt__repair_antennas__iter_0__route__drc_errors__iter:2": 92,
+	"drt__repair_antennas__iter_0__route__wirelength__iter:2": 1741302,
+	"drt__repair_antennas__iter_0__route__drc_errors__iter:3": 52,
+	"drt__repair_antennas__iter_0__route__wirelength__iter:3": 1741303,
+	"drt__repair_antennas__iter_0__route__drc_errors__iter:4": 0,
+	"drt__repair_antennas__iter_0__route__wirelength__iter:4": 1741299,
+	"drt__repair_antennas__iter_0__route__drc_errors": 0,
+	"drt__repair_antennas__iter_0__route__wirelength": 1741299,
+	"drt__repair_antennas__iter_0__route__vias": 308647,
+	"drt__repair_antennas__iter_0__route__vias__singlecut": 308647,
+	"drt__repair_antennas__iter_0__route__vias__multicut": 0,
+	"drt__repair_antennas__iter_0__antenna__violating__nets": 5,
+	"drt__repair_antennas__iter_0__antenna__violating__pins": 6,
+	"drt__repair_antennas__iter_1__antenna_diodes_count": 1035,
+	"drt__repair_antennas__iter_1__route__drc_errors__iter:1": 123,
+	"drt__repair_antennas__iter_1__route__wirelength__iter:1": 1741337,
+	"drt__repair_antennas__iter_1__route__drc_errors__iter:2": 5,
+	"drt__repair_antennas__iter_1__route__wirelength__iter:2": 1741304,
+	"drt__repair_antennas__iter_1__route__drc_errors__iter:3": 1,
+	"drt__repair_antennas__iter_1__route__wirelength__iter:3": 1741299,
+	"drt__repair_antennas__iter_1__route__drc_errors__iter:4": 0,
+	"drt__repair_antennas__iter_1__route__wirelength__iter:4": 1741299,
+	"drt__repair_antennas__iter_1__route__drc_errors": 0,
+	"drt__repair_antennas__iter_1__route__wirelength": 1741299,
+	"drt__repair_antennas__iter_1__route__vias": 308630,
+	"drt__repair_antennas__iter_1__route__vias__singlecut": 308630,
+	"drt__repair_antennas__iter_1__route__vias__multicut": 0,
+	"drt__repair_antennas__iter_1__antenna__violating__nets": 1,
+	"drt__repair_antennas__iter_1__antenna__violating__pins": 1,
+	"drt__repair_antennas__iter_2__antenna_diodes_count": 1036,
+	"drt__repair_antennas__iter_2__route__drc_errors__iter:1": 8,
+	"drt__repair_antennas__iter_2__route__wirelength__iter:1": 1741304,
+	"drt__repair_antennas__iter_2__route__drc_errors__iter:2": 0,
+	"drt__repair_antennas__iter_2__route__wirelength__iter:2": 1741295,
+	"drt__repair_antennas__iter_2__route__drc_errors": 0,
+	"drt__repair_antennas__iter_2__route__wirelength": 1741295,
+	"drt__repair_antennas__iter_2__route__vias": 308645,
+	"drt__repair_antennas__iter_2__route__vias__singlecut": 308645,
+	"drt__repair_antennas__iter_2__route__vias__multicut": 0,
+	"drt__repair_antennas__iter_2__antenna__violating__nets": 0,
+	"drt__repair_antennas__iter_2__antenna__violating__pins": 0,
+	"drt__antenna__violating__nets": 0,
+	"drt__antenna__violating__pins": 0,
+	"DRT::ANT::errors": "0",
+	"design__violations": 0,
+	"timing__drv__floating__nets": 0,
+	"timing__drv__floating__pins": 0,
+	"DRT::worst_slack_min": "-0.2778988229304138",
+	"DRT::worst_slack_max": "-0.6207932121850533",
+	"DRT::tns_max": "-20.527848446559247",
+	"DRT::clock_skew": "0.6122766911222901",
+	"DRT::max_slew_slack": "-7.6505690813064575",
+	"DRT::max_fanout_slack": "100.0",
+	"DRT::max_capacitance_slack": "-7.005621233340539",
+	"DRT::clock_period": "8.000000",
+	"flow__warnings__count": 175,
+	"flow__errors__count": 0
 }

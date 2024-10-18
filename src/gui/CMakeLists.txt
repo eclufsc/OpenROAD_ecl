@@ -29,10 +29,6 @@ if (Qt5_FOUND AND BUILD_GUI)
 
     target_compile_definitions(gui PRIVATE ENABLE_CHARTS)
 
-    list(APPEND CHARTS_SRC
-      "src/chartsWidget.cpp"
-    )
-
     list(APPEND CHARTS_LIB
       "Qt5::Charts"
     )
@@ -60,6 +56,7 @@ if (Qt5_FOUND AND BUILD_GUI)
     src/gotoDialog.cpp
     src/inspector.cpp
     src/dbDescriptors.cpp
+    src/staDescriptors.cpp
     src/highlightGroupDialog.cpp
     src/selectHighlightWindow.cpp
     src/staGui.cpp
@@ -76,7 +73,7 @@ if (Qt5_FOUND AND BUILD_GUI)
     src/gui_utils.cpp
     src/colorGenerator.cpp
     src/bufferTreeDescriptor.cpp
-    ${CHARTS_SRC}
+    src/chartsWidget.cpp
     resources/resource.qrc
   )
 
@@ -105,6 +102,10 @@ else()
     PUBLIC
       odb
   )
+  target_include_directories(gui
+    PRIVATE
+      ${OPENROAD_HOME}/include
+  )
 endif()
 
 target_include_directories(gui
@@ -114,3 +115,5 @@ target_include_directories(gui
     ${OPENSTA_HOME}/include
     ${DBSTA_HOME}/include
 )
+
+add_subdirectory(test)

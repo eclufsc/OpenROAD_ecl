@@ -273,10 +273,10 @@ void fit()
   gui->fit();
 }
 
-void save_image(const char* filename, double xlo, double ylo, double xhi, double yhi, double dbu_per_pixel = 0, const std::map<std::string, bool>& display_settings = {})
+void save_image(const char* filename, double xlo, double ylo, double xhi, double yhi, int width_px = 0, double dbu_per_pixel = 0, const std::map<std::string, bool>& display_settings = {})
 {
   auto gui = gui::Gui::get();
-  gui->saveImage(filename, make_rect(xlo, ylo, xhi, yhi), dbu_per_pixel, display_settings);
+  gui->saveImage(filename, make_rect(xlo, ylo, xhi, yhi), width_px, dbu_per_pixel, display_settings);
 }
 
 void save_clocktree_image(const char* filename, const char* clock_name, const char* corner = "", int width_px = 0, int height_px = 0)
@@ -442,13 +442,18 @@ void gui_pause(int timeout = 0)
   return gui->pause(timeout);
 }
 
-void load_drc(const char* filename)
+void select_marker_category(odb::dbMarkerCategory* category)
 {
-  if (!check_gui("load_drc")) {
+  if (!check_gui("select_marker_category")) {
     return;
   }
   auto gui = gui::Gui::get();
-  gui->loadDRC(filename);
+  gui->selectMarkers(category);
+}
+
+void select_marker_category(const char* name)
+{
+  select_marker_category(get_block()->findMarkerCategory(name));
 }
 
 void show_widget(const char* name)
@@ -469,10 +474,10 @@ void hide_widget(const char* name)
   return gui->showWidget(name, false);
 }
 
-void show(const char* script = "", bool interactive = true)
+void show(const char* script = "", bool interactive = true, bool load_settings = true)
 {
   auto gui = gui::Gui::get();
-  gui->showGui(script, interactive);
+  gui->showGui(script, interactive, load_settings);
 }
 
 void hide()
@@ -580,6 +585,58 @@ void selection_animate(int repeat = 0)
   gui->animateSelection(repeat);
 }
 
+bool get_heatmap_bool(const std::string& name, const std::string& option)
+{
+  auto gui = gui::Gui::get();
+  auto value = gui->getHeatMapSetting(name, option);
+  if (std::holds_alternative<bool>(value)) {
+      return std::get<bool>(value);
+  } else {
+    auto logger = ord::OpenRoad::openRoad()->getLogger();
+    logger->error(GUI, 90, "Heatmap setting \"{}\" is not a boolean", option);
+  }
+  return false;
+}
+
+int get_heatmap_int(const std::string& name, const std::string& option)
+{
+  auto gui = gui::Gui::get();
+  auto value = gui->getHeatMapSetting(name, option);
+  if (std::holds_alternative<int>(value)) {
+      return std::get<int>(value);
+  } else {
+    auto logger = ord::OpenRoad::openRoad()->getLogger();
+    logger->error(GUI, 91, "Heatmap setting \"{}\" is not an integer", option);
+  }
+  return 0;
+}
+
+double get_heatmap_double(const std::string& name, const std::string& option)
+{
+  auto gui = gui::Gui::get();
+  auto value = gui->getHeatMapSetting(name, option);
+  if (std::holds_alternative<double>(value)) {
+      return std::get<double>(value);
+  } else {
+    auto logger = ord::OpenRoad::openRoad()->getLogger();
+    logger->error(GUI, 92, "Heatmap setting \"{}\" is not a double", option);
+  }
+  return 0.0;
+}
+
+std::string get_heatmap_string(const std::string& name, const std::string& option)
+{
+  auto gui = gui::Gui::get();
+  auto value = gui->getHeatMapSetting(name, option);
+  if (std::holds_alternative<std::string>(value)) {
+    return std::get<std::string>(value);
+  } else {
+    auto logger = ord::OpenRoad::openRoad()->getLogger();
+    logger->error(GUI, 93, "Heatmap setting \"{}\" is not a string", option);
+  }
+  return "";
+}
+
 void set_heatmap(const std::string& name, const std::string& option, double value = 0.0)
 {
   auto gui = gui::Gui::get();
@@ -652,5 +709,9 @@ void trigger_action(const std::string& name)
   gui->triggerAction(name);
 }
 
-%} // inline
+bool supported()
+{
+  return true;
+}
 
+%} // inline

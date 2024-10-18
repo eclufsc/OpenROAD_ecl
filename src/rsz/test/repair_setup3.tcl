@@ -13,4 +13,6 @@ estimate_parasitics -placement
 # force violation at r3/D to repair
 set_load 1.0 l2q
 
-repair_timing -setup
+write_verilog_for_eqy repair_setup3 before "None"
+repair_timing -setup -verbose
+run_equivalence_test repair_setup3 ./sky130hd/work_around_yosys/ "None"

@@ -150,6 +150,7 @@ class LayoutViewer : public QWidget
                Gui* gui,
                const std::function<bool(void)>& usingDBU,
                const std::function<bool(void)>& showRulerAsEuclidian,
+               const std::function<bool(void)>& showDBView,
                QWidget* parent = nullptr);
 
   odb::dbBlock* getBlock() const { return block_; }
@@ -168,6 +169,7 @@ class LayoutViewer : public QWidget
   // save image of the layout
   void saveImage(const QString& filepath,
                  const odb::Rect& region = odb::Rect(),
+                 int width_px = 0,
                  double dbu_per_pixel = 0);
 
   // From QWidget
@@ -181,6 +183,9 @@ class LayoutViewer : public QWidget
   {
     return screenToDBU(visibleRegion().boundingRect());
   }
+
+  bool isCursorInsideViewport();
+  void updateCursorCoordinates();
 
  signals:
   // indicates the current location of the mouse
@@ -269,19 +274,24 @@ class LayoutViewer : public QWidget
 
   void exit();
 
+  void resetCache();
+
   void commandAboutToExecute();
   void commandFinishedExecuting();
   void executionPaused();
 
+  static QColor background() { return Qt::black; }
+
  private slots:
   void setBlock(odb::dbBlock* block);
   void updatePixmap(const QImage& image, const QRect& bounds);
+  void handleLoadingIndication();
 
  private:
   struct Boxes
   {
-    std::vector<QRect> obs;
-    std::vector<QRect> mterms;
+    std::vector<QPolygon> obs;
+    std::map<odb::dbMTerm*, std::vector<QPolygon>> mterms;
   };
 
   using LayerBoxes = std::map<odb::dbTechLayer*, Boxes>;
@@ -313,7 +323,7 @@ class LayoutViewer : public QWidget
   int instanceSizeLimit() const;
   int shapeSizeLimit() const;
 
-  std::vector<std::pair<odb::dbObject*, odb::Rect>> getRowRects(
+  std::vector<std::tuple<odb::dbObject*, odb::Rect, int>> getRowRects(
       odb::dbBlock* block,
       const odb::Rect& bounds);
 
@@ -347,6 +357,10 @@ class LayoutViewer : public QWidget
   bool isNetVisible(odb::dbNet* net);
 
   void drawScaleBar(QPainter* painter, const QRect& rect);
+  void drawLoadingIndicator(QPainter* painter, const QRect& bounds);
+  QRect computeIndicatorBackground(QPainter* painter,
+                                   const QRect& bounds) const;
+  void setLoadingState();
 
   void populateModuleColors();
 
@@ -377,10 +391,12 @@ class LayoutViewer : public QWidget
   QPoint mouse_press_pos_;
   QPoint mouse_move_pos_;
   bool rubber_band_showing_;
+  bool is_view_dragging_;
   Gui* gui_;
 
   std::function<bool(void)> usingDBU_;
   std::function<bool(void)> showRulerAsEuclidian_;
+  std::function<bool(void)> showDBView_;
 
   const std::map<odb::dbModule*, ModuleSettings>& modules_;
 
@@ -433,14 +449,14 @@ class LayoutViewer : public QWidget
   RenderThread viewer_thread_;
   QPixmap draw_pixmap_;
   QRect draw_pixmap_bounds_;
+  QTimer* loading_timer_;
+  std::string loading_indicator_;
 
   static constexpr qreal zoom_scale_factor_ = 1.2;
 
   // parameters used to animate the selection of objects
   static constexpr int animation_repeats_ = 6;
   static constexpr int animation_interval_ = 300;
-
-  const QColor background_ = Qt::black;
 
   friend class RenderThread;
 };
@@ -451,8 +467,11 @@ class LayoutScroll : public QScrollArea
 {
   Q_OBJECT
  public:
-  LayoutScroll(LayoutViewer* viewer, QWidget* parent = 0);
-
+  LayoutScroll(LayoutViewer* viewer,
+               const std::function<bool(void)>& default_mouse_wheel_zoom,
+               const std::function<int(void)>& arrow_keys_scroll_step,
+               QWidget* parent = nullptr);
+  bool isScrollingWithCursor();
  signals:
   // indicates that the viewport (visible area of the layout) has changed
   void viewportChanged();
@@ -465,9 +484,15 @@ class LayoutScroll : public QScrollArea
   void resizeEvent(QResizeEvent* event) override;
   void scrollContentsBy(int dx, int dy) override;
   void wheelEvent(QWheelEvent* event) override;
+  bool eventFilter(QObject* object, QEvent* event) override;
+  void keyPressEvent(QKeyEvent* event) override;
 
  private:
+  std::function<bool(void)> default_mouse_wheel_zoom_;
+  std::function<int(void)> arrow_keys_scroll_step_;
   LayoutViewer* viewer_;
+
+  bool scrolling_with_cursor_;
 };
 
 }  // namespace gui

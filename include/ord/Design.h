@@ -35,10 +35,18 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 namespace odb {
 class dbBlock;
+class dbDatabase;
+class dbMaster;
+class dbMTerm;
+class dbNet;
+class dbInst;
+class dbITerm;
 }  // namespace odb
 
 namespace ifp {
@@ -85,7 +93,7 @@ namespace cts {
 class TritonCTS;
 }
 
-namespace triton_route {
+namespace drt {
 class TritonRoute;
 }
 
@@ -125,6 +133,11 @@ namespace pad {
 class ICeWall;
 }
 
+namespace sta {
+class dbSta;
+class LibertyCell;
+}  // namespace sta
+
 namespace ord {
 
 class Tech;
@@ -141,7 +154,9 @@ class Design
                bool child = false);
   void link(const std::string& design_name);
 
+  void readDb(std::istream& stream);
   void readDb(const std::string& file_name);
+  void writeDb(std::ostream& stream);
   void writeDb(const std::string& file_name);
   void writeDef(const std::string& file_name);
 
@@ -155,6 +170,15 @@ class Design
 
   Tech* getTech();
 
+  bool isSequential(odb::dbMaster* master);
+  bool isBuffer(odb::dbMaster* master);
+  bool isInverter(odb::dbMaster* master);
+  bool isInSupply(odb::dbITerm* pin);
+  std::string getITermName(odb::dbITerm* pin);
+  bool isInClock(odb::dbInst* inst);
+  bool isInClock(odb::dbITerm* iterm);
+  std::uint64_t getNetRoutedLength(odb::dbNet* net);
+
   // Services
   ifp::InitFloorplan* getFloorplan();
   ant::AntennaChecker* getAntennaChecker();
@@ -166,7 +190,7 @@ class Design
   ppl::IOPlacer* getIOPlacer();
   tap::Tapcell* getTapcell();
   cts::TritonCTS* getTritonCts();
-  triton_route::TritonRoute* getTritonRoute();
+  drt::TritonRoute* getTritonRoute();
   dpo::Optdp* getOptdp();
   fin::Finale* getFinale();
   par::PartitionMgr* getPartitionMgr();
@@ -177,7 +201,18 @@ class Design
   pdn::PdnGen* getPdnGen();
   pad::ICeWall* getICeWall();
 
+  // This returns a database that is not the one associated with
+  // the rest of the application.  It is usable as a standalone
+  // db but should not passed to any other Design or Tech APIs.
+  //
+  // This is useful if you need a second database for specialized
+  // use cases and is not ordinarily required.
+  static odb::dbDatabase* createDetachedDb();
+
  private:
+  sta::dbSta* getSta();
+  sta::LibertyCell* getLibertyCell(odb::dbMaster* master);
+
   Tech* tech_;
 };
 

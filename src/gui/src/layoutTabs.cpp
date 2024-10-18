@@ -47,7 +47,10 @@ LayoutTabs::LayoutTabs(Options* options,
                        const std::vector<std::unique_ptr<Ruler>>& rulers,
                        Gui* gui,
                        std::function<bool(void)> usingDBU,
+                       std::function<bool(void)> usingPolyDecompView,
                        std::function<bool(void)> showRulerAsEuclidian,
+                       std::function<bool(void)> default_mouse_wheel_zoom,
+                       std::function<int(void)> arrow_keys_scroll_step,
                        QWidget* parent)
     : QTabWidget(parent),
       options_(options),
@@ -57,7 +60,10 @@ LayoutTabs::LayoutTabs(Options* options,
       rulers_(rulers),
       gui_(gui),
       usingDBU_(std::move(usingDBU)),
+      usingPolyDecompView_(std::move(usingPolyDecompView)),
       showRulerAsEuclidian_(std::move(showRulerAsEuclidian)),
+      default_mouse_wheel_zoom_(std::move(default_mouse_wheel_zoom)),
+      arrow_keys_scroll_step_(std::move(arrow_keys_scroll_step)),
       logger_(nullptr)
 {
   setTabBarAutoHide(true);
@@ -66,6 +72,13 @@ LayoutTabs::LayoutTabs(Options* options,
 
 void LayoutTabs::blockLoaded(odb::dbBlock* block)
 {
+  // Check if we already have a tab for this block
+  for (LayoutViewer* viewer : viewers_) {
+    if (viewer->getBlock() == block) {
+      return;
+    }
+  }
+
   populateModuleColors(block);
   auto viewer = new LayoutViewer(options_,
                                  output_widget_,
@@ -79,15 +92,27 @@ void LayoutTabs::blockLoaded(odb::dbBlock* block)
                                  gui_,
                                  usingDBU_,
                                  showRulerAsEuclidian_,
+                                 usingPolyDecompView_,
                                  this);
   viewer->setLogger(logger_);
   viewers_.push_back(viewer);
-  auto scroll = new LayoutScroll(viewer, this);
+  if (command_executing_) {
+    viewer->commandAboutToExecute();
+  }
+  auto scroll = new LayoutScroll(
+      viewer, default_mouse_wheel_zoom_, arrow_keys_scroll_step_, this);
   viewer->blockLoaded(block);
 
   auto tech = block->getTech();
   const auto name = fmt::format("{} ({})", block->getName(), tech->getName());
   addTab(scroll, name.c_str());
+
+  // This has to be done after addTab.  For unexplained reasons it
+  // doesn't work for all users if done in LayoutViewer::LayoutViewer.
+  QPalette palette;
+  palette.setColor(QPalette::Window, LayoutViewer::background());
+  viewer->setPalette(palette);
+  viewer->setAutoFillBackground(true);
 
   // forward signals from the viewer upward
   connect(viewer, &LayoutViewer::location, this, &LayoutTabs::location);
@@ -112,6 +137,7 @@ void LayoutTabs::blockLoaded(odb::dbBlock* block)
 void LayoutTabs::tabChange(int index)
 {
   current_viewer_ = viewers_[index];
+
   emit setCurrentBlock(current_viewer_->getBlock());
 }
 
@@ -125,14 +151,28 @@ void LayoutTabs::setLogger(utl::Logger* logger)
 void LayoutTabs::zoomIn()
 {
   if (current_viewer_) {
-    current_viewer_->zoomIn();
+    if (current_viewer_->isCursorInsideViewport()) {
+      const odb::Point focus = current_viewer_->screenToDBU(
+          current_viewer_->mapFromGlobal(QCursor::pos()));
+
+      current_viewer_->zoomIn(focus, true);
+    } else {
+      current_viewer_->zoomIn();
+    }
   }
 }
 
 void LayoutTabs::zoomOut()
 {
   if (current_viewer_) {
-    current_viewer_->zoomOut();
+    if (current_viewer_->isCursorInsideViewport()) {
+      const odb::Point focus = current_viewer_->screenToDBU(
+          current_viewer_->mapFromGlobal(QCursor::pos()));
+
+      current_viewer_->zoomOut(focus, true);
+    } else {
+      current_viewer_->zoomOut();
+    }
   }
 }
 
@@ -299,16 +339,18 @@ void LayoutTabs::exit()
 
 void LayoutTabs::commandAboutToExecute()
 {
-  if (current_viewer_) {
-    current_viewer_->commandAboutToExecute();
+  for (LayoutViewer* viewer : viewers_) {
+    viewer->commandAboutToExecute();
   }
+  command_executing_ = true;
 }
 
 void LayoutTabs::commandFinishedExecuting()
 {
-  if (current_viewer_) {
-    current_viewer_->commandFinishedExecuting();
+  for (LayoutViewer* viewer : viewers_) {
+    viewer->commandFinishedExecuting();
   }
+  command_executing_ = false;
 }
 
 void LayoutTabs::restoreTclCommands(std::vector<std::string>& cmds)
@@ -322,6 +364,13 @@ void LayoutTabs::executionPaused()
 {
   if (current_viewer_) {
     current_viewer_->executionPaused();
+  }
+}
+
+void LayoutTabs::resetCache()
+{
+  for (LayoutViewer* viewer : viewers_) {
+    viewer->resetCache();
   }
 }
 

@@ -33,6 +33,7 @@
 #include <boost/io/ios_state.hpp>
 #include <boost/serialization/export.hpp>
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 
@@ -47,9 +48,9 @@
 #include "gc/FlexGC.h"
 #include "serialization.h"
 
-using namespace std;
-using namespace fr;
-BOOST_CLASS_EXPORT(PinAccessJobDescription)
+BOOST_CLASS_EXPORT(drt::PinAccessJobDescription)
+
+namespace drt {
 
 FlexPA::FlexPA(frDesign* in, Logger* logger, dst::Distributed* dist)
     : design_(in),
@@ -91,23 +92,24 @@ void FlexPA::init()
   initTrackCoords();
 
   unique_insts_.init();
+  initSkipInstTerm();
 }
 
 void FlexPA::applyPatternsFile(const char* file_path)
 {
-  uniqueInstPatterns_.clear();
+  unique_inst_patterns_.clear();
   std::ifstream file(file_path);
   frIArchive ar(file);
   ar.setDesign(design_);
   registerTypes(ar);
-  ar >> uniqueInstPatterns_;
+  ar >> unique_inst_patterns_;
   file.close();
 }
 
 void FlexPA::prep()
 {
   ProfileTask profile("PA:prep");
-  prepPoint();
+  initAllAccessPoints();
   revertAccessPoints();
   if (isDistributed()) {
     std::vector<paUpdate> updates;
@@ -116,6 +118,7 @@ void FlexPA::prep()
       for (const auto& term : master->getTerms()) {
         for (const auto& pin : term->getPins()) {
           std::vector<std::unique_ptr<frPinAccess>> pa;
+          pa.reserve(pin->getNumPinAccess());
           for (int i = 0; i < pin->getNumPinAccess(); i++) {
             pa.push_back(std::make_unique<frPinAccess>(*pin->getPinAccess(i)));
           }
@@ -126,6 +129,7 @@ void FlexPA::prep()
     for (const auto& term : design_->getTopBlock()->getTerms()) {
       for (const auto& pin : term->getPins()) {
         std::vector<std::unique_ptr<frPinAccess>> pa;
+        pa.reserve(pin->getNumPinAccess());
         for (int i = 0; i < pin->getNumPinAccess(); i++) {
           pa.push_back(std::make_unique<frPinAccess>(*pin->getPinAccess(i)));
         }
@@ -145,8 +149,9 @@ void FlexPA::prep()
     msg.setJobDescription(std::move(uDesc));
     const bool ok
         = dist_->sendJob(msg, remote_host_.c_str(), remote_port_, result);
-    if (!ok)
+    if (!ok) {
       logger_->error(utl::DRT, 331, "Error sending UPDATE_PA Job to cloud");
+    }
   }
   prepPattern();
 }
@@ -157,7 +162,7 @@ void FlexPA::setTargetInstances(const frCollection<odb::dbInst*>& insts)
 }
 
 void FlexPA::setDistributed(const std::string& rhost,
-                            const ushort rport,
+                            const uint16_t rport,
                             const std::string& shared_vol,
                             const int cloud_sz)
 {
@@ -179,34 +184,39 @@ int FlexPA::main()
   init();
   prep();
 
-  int stdCellPinCnt = 0;
+  int std_cell_pin_cnt = 0;
   for (auto& inst : getDesign()->getTopBlock()->getInsts()) {
     if (inst->getMaster()->getMasterType() != dbMasterType::CORE) {
       continue;
     }
-    for (auto& instTerm : inst->getInstTerms()) {
-      if (isSkipInstTerm(instTerm.get())) {
+    for (auto& inst_term : inst->getInstTerms()) {
+      if (isSkipInstTerm(inst_term.get())) {
         continue;
       }
-      if (instTerm->hasNet()) {
-        stdCellPinCnt++;
+      if (inst_term->hasNet()) {
+        std_cell_pin_cnt++;
       }
     }
   }
 
   if (VERBOSE > 0) {
     unique_insts_.report();
-    logger_->report("#stdCellGenAp          = {}", stdCellPinGenApCnt_);
-    logger_->report("#stdCellValidPlanarAp  = {}", stdCellPinValidPlanarApCnt_);
-    logger_->report("#stdCellValidViaAp     = {}", stdCellPinValidViaApCnt_);
-    logger_->report("#stdCellPinNoAp        = {}", stdCellPinNoApCnt_);
-    logger_->report("#stdCellPinCnt         = {}", stdCellPinCnt);
-    logger_->report("#instTermValidViaApCnt = {}", instTermValidViaApCnt_);
-    logger_->report("#macroGenAp            = {}", macroCellPinGenApCnt_);
+    //clang-format off
+    logger_->report("#stdCellGenAp          = {}", std_cell_pin_gen_ap_cnt_);
+    logger_->report("#stdCellValidPlanarAp  = {}",
+                    std_cell_pin_valid_planar_ap_cnt_);
+    logger_->report("#stdCellValidViaAp     = {}",
+                    std_cell_pin_valid_via_ap_cnt_);
+    logger_->report("#stdCellPinNoAp        = {}", std_cell_pin_no_ap_cnt_);
+    logger_->report("#stdCellPinCnt         = {}", std_cell_pin_cnt);
+    logger_->report("#instTermValidViaApCnt = {}", inst_term_valid_via_ap_cnt_);
+    logger_->report("#macroGenAp            = {}", macro_cell_pin_gen_ap_cnt_);
     logger_->report("#macroValidPlanarAp    = {}",
-                    macroCellPinValidPlanarApCnt_);
-    logger_->report("#macroValidViaAp       = {}", macroCellPinValidViaApCnt_);
-    logger_->report("#macroNoAp             = {}", macroCellPinNoApCnt_);
+                    macro_cell_pin_valid_planar_ap_cnt_);
+    logger_->report("#macroValidViaAp       = {}",
+                    macro_cell_pin_valid_via_ap_cnt_);
+    logger_->report("#macroNoAp             = {}", macro_cell_pin_no_ap_cnt_);
+    //clang-format on
   }
 
   if (VERBOSE > 0) {
@@ -251,3 +261,5 @@ template void FlexPinAccessPattern::serialize<frIArchive>(
 template void FlexPinAccessPattern::serialize<frOArchive>(
     frOArchive& ar,
     const unsigned int file_version);
+
+}  // namespace drt

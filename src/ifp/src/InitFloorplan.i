@@ -53,6 +53,10 @@ sta::dbSta *
 getSta();
 }
 
+static utl::Logger* getLogger() {
+  return ord::OpenRoad::openRoad()->getLogger();
+}
+ 
 static ifp::InitFloorplan get_floorplan()
 {
   auto app = ord::getOpenRoad();
@@ -74,9 +78,23 @@ static ifp::InitFloorplan get_floorplan()
 //
 ////////////////////////////////////////////////////////////////
 
+%import <std_string.i>
 %import <std_vector.i>
 %import "dbtypes.i"
 %include "../../Exception.i"
+
+%typemap(in) ifp::RowParity {
+  char *str = Tcl_GetStringFromObj($input, 0);
+  if (strcasecmp(str, "NONE") == 0) {
+    $1 = ifp::RowParity::NONE;
+  } else if (strcasecmp(str, "EVEN") == 0) {
+    $1 = ifp::RowParity::EVEN;
+  } else if (strcasecmp(str, "ODD") == 0) {
+    $1 = ifp::RowParity::ODD;
+  } else {
+    $1 = ifp::RowParity::NONE;
+  }
+}
 
 %inline %{
 
@@ -84,33 +102,44 @@ namespace ifp {
 
 void
 init_floorplan_core(int die_lx,
-		    int die_ly,
-		    int die_ux,
-		    int die_uy,
-		    int core_lx,
-		    int core_ly,
-		    int core_ux,
-		    int core_uy,
-		    const std::vector<odb::dbSite*>& sites)
+                    int die_ly,
+                    int die_ux,
+                    int die_uy,
+                    int core_lx,
+                    int core_ly,
+                    int core_ux,
+                    int core_uy,
+                    odb::dbSite* site,
+                    const std::vector<odb::dbSite*>& additional_sites,
+                    ifp::RowParity row_parity,
+                    const std::vector<odb::dbSite*>& flipped_sites)
 {
+  std::set<odb::dbSite*> flipped_sites_set(flipped_sites.begin(),
+                                           flipped_sites.end());
   get_floorplan().initFloorplan({die_lx, die_ly, die_ux, die_uy},
                                 {core_lx, core_ly, core_ux, core_uy},
-                                sites);
+                                site, additional_sites, row_parity, flipped_sites_set); 
 }
 
 void
 init_floorplan_util(double util,
                     double aspect_ratio,
                     int core_space_bottom,
-                     int core_space_top,
+                    int core_space_top,
                     int core_space_left,
                     int core_space_right,
-                    const std::vector<odb::dbSite*>& sites)
+                    odb::dbSite* site,
+                    const std::vector<odb::dbSite*>& additional_sites,
+                    ifp::RowParity row_parity,
+                    const std::vector<odb::dbSite*>& flipped_sites)
 {
+  std::set<odb::dbSite*> flipped_sites_set(flipped_sites.begin(),
+                                           flipped_sites.end());
   get_floorplan().initFloorplan(util, aspect_ratio,
                                 core_space_bottom, core_space_top,
                                 core_space_left, core_space_right,
-                                sites);
+                                site, additional_sites, row_parity,
+                                flipped_sites_set);
 }
 
 void
@@ -137,7 +166,11 @@ make_layer_tracks(odb::dbTechLayer* layer,
 
 odb::dbSite* find_site(const char* site_name)
 {
-  return get_floorplan().findSite(site_name);
+  auto site = get_floorplan().findSite(site_name);
+  if (!site) {
+    getLogger()->error(utl::IFP, 18, "Unable to find site: {}", site_name);
+  }
+  return site;
 }
 
 } // namespace

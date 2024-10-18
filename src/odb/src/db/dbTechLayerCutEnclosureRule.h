@@ -34,7 +34,7 @@
 #pragma once
 
 #include "dbCore.h"
-#include "odb.h"
+#include "odb/odb.h"
 
 namespace odb {
 class dbIStream;
@@ -51,7 +51,7 @@ struct dbTechLayerCutEnclosureRuleFlags
   bool below_ : 1;
   bool eol_min_length_valid_ : 1;
   bool eol_only_ : 1;
-  bool short_edge_only_ : 1;
+  bool short_edge_on_eol_ : 1;
   bool side_spacing_valid_ : 1;
   bool end_spacing_valid_ : 1;
   bool off_center_line_ : 1;
@@ -78,7 +78,8 @@ class _dbTechLayerCutEnclosureRule : public _dbObject
   _dbTechLayerCutEnclosureRule(_dbDatabase*,
                                const _dbTechLayerCutEnclosureRule& r);
   _dbTechLayerCutEnclosureRule(_dbDatabase*);
-  ~_dbTechLayerCutEnclosureRule();
+
+  ~_dbTechLayerCutEnclosureRule() = default;
 
   bool operator==(const _dbTechLayerCutEnclosureRule& rhs) const;
   bool operator!=(const _dbTechLayerCutEnclosureRule& rhs) const

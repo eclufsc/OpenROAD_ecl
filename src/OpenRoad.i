@@ -44,7 +44,6 @@
 #include "db_sta/dbSta.hh"
 #include "db_sta/dbNetwork.hh"
 #include "db_sta/dbReadVerilog.hh"
-#include "ord/Version.hh"
 #include "utl/Logger.h"
 #include "ord/OpenRoad.hh"
 
@@ -169,7 +168,7 @@ getOpenRCX()
   return openroad->getOpenRCX();
 }
 
-triton_route::TritonRoute *
+drt::TritonRoute *
 getTritonRoute()
 {
   OpenRoad *openroad = getOpenRoad();
@@ -309,13 +308,37 @@ using odb::dbTech;
 const char *
 openroad_version()
 {
-  return OPENROAD_VERSION;
+  return ord::OpenRoad::getVersion();
 }
 
 const char *
 openroad_git_describe()
 {
-  return OPENROAD_GIT_DESCRIBE;
+  return ord::OpenRoad::getGitDescribe();
+}
+
+const bool 
+openroad_gpu_compiled()
+{
+  return ord::OpenRoad::getGUICompileOption();
+}
+
+const bool
+openroad_python_compiled()
+{
+  return ord::OpenRoad::getPythonCompileOption();
+}
+
+const bool
+openroad_gui_compiled()
+{
+  return ord::OpenRoad::getGUICompileOption();
+}
+
+const bool
+openroad_charts_compiled()
+{
+  return ord::OpenRoad::getChartsCompileOption();
 }
 
 void
@@ -388,10 +411,10 @@ write_cdl_cmd(const char *outFilename,
 }
 
 void
-read_db_cmd(const char *filename)
+read_db_cmd(const char *filename, bool hierarchy)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->readDb(filename);
+  ord->readDb(filename,hierarchy);
 }
 
 void
@@ -416,10 +439,10 @@ read_verilog_cmd(const char *filename)
 }
 
 void
-link_design_db_cmd(const char *design_name)
+link_design_db_cmd(const char *design_name,bool hierarchy)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->linkDesign(design_name);
+  ord->linkDesign(design_name, hierarchy);
 }
 
 void
@@ -490,7 +513,7 @@ dbu_to_microns(int dbu)
     auto logger = getLogger();
     logger->error(utl::ORD, 49, "No tech is loaded");
   }
-  return static_cast<double>(dbu) / tech->getLefUnits();
+  return static_cast<double>(dbu) / tech->getDbUnitsPerMicron();
 }
 
 int
@@ -501,7 +524,7 @@ microns_to_dbu(double microns)
     auto logger = getLogger();
     logger->error(utl::ORD, 50, "No tech is loaded");
   }
-  return std::round(microns * tech->getLefUnits());
+  return std::round(microns * tech->getDbUnitsPerMicron());
 }
 
 // Common check for placement tools.

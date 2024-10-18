@@ -1,4 +1,6 @@
 record_tests {
+  hybrid_rows
+  hybrid_rows2
   init_floorplan1
   init_floorplan2
   init_floorplan3
@@ -15,11 +17,17 @@ record_tests {
   make_tracks5
   make_tracks6
   make_tracks7
+  multi_height1
+  multi_height2
   placement_blockage1
   placement_blockage2
   tiecells
   upf_test
-  multi_height1
-  multi_height2
+  upf_shifter_test
+  init_floorplan_even_rows
+  init_floorplan_odd_rows
+  init_floorplan_flip_sites
+  #ifp_man_tcl_check
+  #ifp_readme_msgs_check
 }
 

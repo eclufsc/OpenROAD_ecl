@@ -200,6 +200,7 @@ class Painter
   // height of the X.
   virtual void drawX(int x, int y, int size) = 0;
 
+  virtual void drawPolygon(const odb::Polygon& polygon) = 0;
   virtual void drawPolygon(const std::vector<odb::Point>& points) = 0;
 
   enum Anchor
@@ -264,7 +265,7 @@ class Descriptor
   virtual std::string getName(std::any object) const = 0;
   virtual std::string getShortName(std::any object) const
   {
-    return getName(object);
+    return getName(std::move(object));
   }
   virtual std::string getTypeName() const = 0;
   virtual std::string getTypeName(std::any /* object */) const
@@ -342,6 +343,10 @@ class Descriptor
   // and brush before calling.
   virtual void highlight(std::any object, Painter& painter) const = 0;
   virtual bool isSlowHighlight(std::any /* object */) const { return false; }
+
+  static std::string convertUnits(double value,
+                                  bool area = false,
+                                  int digits = 3);
 };
 
 // An object selected in the gui.  The object is stored as a
@@ -355,7 +360,7 @@ class Selected
   Selected() : object_({}), descriptor_(nullptr) {}
 
   Selected(std::any object, const Descriptor* descriptor)
-      : object_(object), descriptor_(descriptor)
+      : object_(std::move(object)), descriptor_(descriptor)
   {
   }
 
@@ -611,6 +616,7 @@ class Gui
   // Save layout to an image file
   void saveImage(const std::string& filename,
                  const odb::Rect& region = odb::Rect(),
+                 int width_px = 0,
                  double dbu_per_pixel = 0,
                  const std::map<std::string, bool>& display_settings = {});
 
@@ -676,8 +682,8 @@ class Gui
   void timingCone(odbTerm term, bool fanin, bool fanout);
   void timingPathsThrough(const std::set<odbTerm>& terms);
 
-  // open DRC
-  void loadDRC(const std::string& filename);
+  // open markers
+  void selectMarkers(odb::dbMarkerCategory* markers);
 
   // Force an immediate redraw.
   void redraw();
@@ -698,7 +704,9 @@ class Gui
   void hideGui();
 
   // Called to show the gui and return to tcl command line
-  void showGui(const std::string& cmds = "", bool interactive = true);
+  void showGui(const std::string& cmds = "",
+               bool interactive = true,
+               bool load_settings = true);
 
   // set the system logger
   void setLogger(utl::Logger* logger);
@@ -716,6 +724,8 @@ class Gui
   void setHeatMapSetting(const std::string& name,
                          const std::string& option,
                          const Renderer::Setting& value);
+  Renderer::Setting getHeatMapSetting(const std::string& name,
+                                      const std::string& option);
   void dumpHeatMap(const std::string& name, const std::string& file);
 
   // accessors for to add and remove commands needed to restore the state of the
@@ -802,6 +812,7 @@ int startGui(int& argc,
              char* argv[],
              Tcl_Interp* interp,
              const std::string& script = "",
-             bool interactive = true);
+             bool interactive = true,
+             bool load_settings = true);
 
 }  // namespace gui

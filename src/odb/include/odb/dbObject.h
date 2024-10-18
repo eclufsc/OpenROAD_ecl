@@ -41,10 +41,7 @@ namespace odb {
 ///
 /// When adding a new database object, you must add a dbObjectType enumerator
 /// and edit dbObject.cpp and assign an unique "character" code for its
-/// database-name. See the methods:
-///    void getDbName( char name[max_name_length] );
-///    static dbObject * resolveDbName( dbDatabase * db, const char * name );
-/// in dbObject.cpp
+/// database-name.
 ///
 class _dbDatabase;
 class dbOStream;
@@ -66,6 +63,7 @@ enum dbObjectType
 
   // Design Objects
   dbChipObj,
+  dbGdsLibObj,
   dbBlockObj,
   dbInstHdrObj,
   dbInstObj,
@@ -90,18 +88,39 @@ enum dbObjectType
   dbBPinObj,
   // Generator Code Begin DbObjectType
   dbAccessPointObj,
+  dbBusPortObj,
+  dbDftObj,
   dbGCellGridObj,
+  dbGDSBoundaryObj,
+  dbGDSBoxObj,
+  dbGDSNodeObj,
+  dbGDSPathObj,
+  dbGDSSRefObj,
+  dbGDSStructureObj,
+  dbGDSTextObj,
   dbGlobalConnectObj,
   dbGroupObj,
   dbGuideObj,
   dbIsolationObj,
+  dbLevelShifterObj,
   dbLogicPortObj,
+  dbMarkerObj,
+  dbMarkerCategoryObj,
   dbMetalWidthViaMapObj,
+  dbModBTermObj,
   dbModInstObj,
+  dbModITermObj,
+  dbModNetObj,
   dbModuleObj,
   dbNetTrackObj,
+  dbPolygonObj,
   dbPowerDomainObj,
   dbPowerSwitchObj,
+  dbScanChainObj,
+  dbScanInstObj,
+  dbScanListObj,
+  dbScanPartitionObj,
+  dbScanPinObj,
   dbTechLayerObj,
   dbTechLayerAreaRuleObj,
   dbTechLayerArraySpacingRuleObj,
@@ -113,16 +132,21 @@ enum dbObjectType
   dbTechLayerCutSpacingTableOrthRuleObj,
   dbTechLayerEolExtensionRuleObj,
   dbTechLayerEolKeepOutRuleObj,
+  dbTechLayerForbiddenSpacingRuleObj,
   dbTechLayerKeepOutZoneRuleObj,
+  dbTechLayerMaxSpacingRuleObj,
   dbTechLayerMinCutRuleObj,
   dbTechLayerMinStepRuleObj,
   dbTechLayerSpacingEolRuleObj,
   dbTechLayerSpacingTablePrlRuleObj,
+  dbTechLayerTwoWiresForbiddenSpcRuleObj,
   dbTechLayerWidthTableRuleObj,
+  dbTechLayerWrongDirSpacingRuleObj,
   // Generator Code End DbObjectType
 
   // Lib Objects
   dbLibObj,
+  dbGDSLibObj,
   dbSiteObj,
   dbMasterObj,
   dbMPinObj,
@@ -158,12 +182,10 @@ class dbObject
   dbObjectType getObjectType() const;
   dbDatabase* getDb() const;
   uint getId() const;
-  static const int max_name_length = 256;
-  void getDbName(char name[max_name_length]) const;
-  const char* getObjName() const;
+  const char* getTypeName() const;
 
-  static dbObject* resolveDbName(dbDatabase* db, const char* name);
-  static const char* getObjName(dbObjectType type);
+  static const char* getTypeName(dbObjectType type);
+  static dbObjectType getType(const char* name, utl::Logger* logger);
   // These are not intended for client use as the returned class is
   // not exported.  They are for internal db convenience.
   _dbObject* getImpl();

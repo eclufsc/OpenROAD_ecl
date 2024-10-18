@@ -115,7 +115,7 @@ namespace rcx {
 class Ext;
 }
 
-namespace triton_route {
+namespace drt {
 class TritonRoute;
 }
 
@@ -192,7 +192,7 @@ class OpenRoad
   mpl2::MacroPlacer2* getMacroPlacer2() { return macro_placer2_; }
   /* mpl3::MacroPlacer3* getMacroPlacer3() { return macro_placer3_; } */
   rcx::Ext* getOpenRCX() { return extractor_; }
-  triton_route::TritonRoute* getTritonRoute() { return detailed_router_; }
+  drt::TritonRoute* getTritonRoute() { return detailed_router_; }
   gpl::Replace* getReplace() { return replace_; }
   psm::PDNSim* getPDNSim() { return pdnsim_; }
   grt::GlobalRouter* getGlobalRouter() { return global_router_; }
@@ -239,13 +239,14 @@ class OpenRoad
                 bool includeFillers);
 
   void readVerilog(const char* filename);
-  void linkDesign(const char* design_name);
-
+  void linkDesign(const char* design_name, bool hierarchy);
   // Used if a design is created programmatically rather than loaded
   // to notify the tools (eg dbSta, gui).
   void designCreated();
 
-  void readDb(const char* filename);
+  void readDb(std::istream& stream);
+  void readDb(const char* filename, bool hierarchy = false);
+  void writeDb(std::ostream& stream);
   void writeDb(const char* filename);
 
   void diffDbs(const char* filename1, const char* filename2, const char* diffs);
@@ -256,6 +257,14 @@ class OpenRoad
 
   void addObserver(OpenRoadObserver* observer);
   void removeObserver(OpenRoadObserver* observer);
+
+  static const char* getVersion();
+  static const char* getGitDescribe();
+
+  static bool getGPUCompileOption();
+  static bool getPythonCompileOption();
+  static bool getGUICompileOption();
+  static bool getChartsCompileOption();
 
  protected:
   ~OpenRoad();
@@ -281,7 +290,7 @@ class OpenRoad
   cts::TritonCTS* tritonCts_ = nullptr;
   tap::Tapcell* tapcell_ = nullptr;
   rcx::Ext* extractor_ = nullptr;
-  triton_route::TritonRoute* detailed_router_ = nullptr;
+  drt::TritonRoute* detailed_router_ = nullptr;
   ant::AntennaChecker* antenna_checker_ = nullptr;
   gpl::Replace* replace_ = nullptr;
   psm::PDNSim* pdnsim_ = nullptr;

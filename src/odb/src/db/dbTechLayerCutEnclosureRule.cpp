@@ -33,127 +33,148 @@
 // Generator Code Begin Cpp
 #include "dbTechLayerCutEnclosureRule.h"
 
-#include "db.h"
+#include <cstdint>
+#include <cstring>
+
 #include "dbDatabase.h"
 #include "dbDiff.hpp"
 #include "dbTable.h"
 #include "dbTable.hpp"
 #include "dbTechLayer.h"
 #include "dbTechLayerCutClassRule.h"
+#include "odb/db.h"
 namespace odb {
 template class dbTable<_dbTechLayerCutEnclosureRule>;
 
 bool _dbTechLayerCutEnclosureRule::operator==(
     const _dbTechLayerCutEnclosureRule& rhs) const
 {
-  if (flags_.type_ != rhs.flags_.type_)
+  if (flags_.type_ != rhs.flags_.type_) {
     return false;
-
-  if (flags_.cut_class_valid_ != rhs.flags_.cut_class_valid_)
+  }
+  if (flags_.cut_class_valid_ != rhs.flags_.cut_class_valid_) {
     return false;
-
-  if (flags_.above_ != rhs.flags_.above_)
+  }
+  if (flags_.above_ != rhs.flags_.above_) {
     return false;
-
-  if (flags_.below_ != rhs.flags_.below_)
+  }
+  if (flags_.below_ != rhs.flags_.below_) {
     return false;
-
-  if (flags_.eol_min_length_valid_ != rhs.flags_.eol_min_length_valid_)
+  }
+  if (flags_.eol_min_length_valid_ != rhs.flags_.eol_min_length_valid_) {
     return false;
-
-  if (flags_.eol_only_ != rhs.flags_.eol_only_)
+  }
+  if (flags_.eol_only_ != rhs.flags_.eol_only_) {
     return false;
-
-  if (flags_.short_edge_only_ != rhs.flags_.short_edge_only_)
+  }
+  if (flags_.short_edge_on_eol_ != rhs.flags_.short_edge_on_eol_) {
     return false;
-
-  if (flags_.side_spacing_valid_ != rhs.flags_.side_spacing_valid_)
+  }
+  if (flags_.side_spacing_valid_ != rhs.flags_.side_spacing_valid_) {
     return false;
-
-  if (flags_.end_spacing_valid_ != rhs.flags_.end_spacing_valid_)
+  }
+  if (flags_.end_spacing_valid_ != rhs.flags_.end_spacing_valid_) {
     return false;
-
-  if (flags_.off_center_line_ != rhs.flags_.off_center_line_)
+  }
+  if (flags_.off_center_line_ != rhs.flags_.off_center_line_) {
     return false;
-
-  if (flags_.width_valid_ != rhs.flags_.width_valid_)
+  }
+  if (flags_.width_valid_ != rhs.flags_.width_valid_) {
     return false;
-
-  if (flags_.include_abutted_ != rhs.flags_.include_abutted_)
+  }
+  if (flags_.include_abutted_ != rhs.flags_.include_abutted_) {
     return false;
-
-  if (flags_.except_extra_cut_ != rhs.flags_.except_extra_cut_)
+  }
+  if (flags_.except_extra_cut_ != rhs.flags_.except_extra_cut_) {
     return false;
-
-  if (flags_.prl_ != rhs.flags_.prl_)
+  }
+  if (flags_.prl_ != rhs.flags_.prl_) {
     return false;
-
-  if (flags_.no_shared_edge_ != rhs.flags_.no_shared_edge_)
+  }
+  if (flags_.no_shared_edge_ != rhs.flags_.no_shared_edge_) {
     return false;
-
-  if (flags_.length_valid_ != rhs.flags_.length_valid_)
+  }
+  if (flags_.length_valid_ != rhs.flags_.length_valid_) {
     return false;
-
-  if (flags_.extra_cut_valid_ != rhs.flags_.extra_cut_valid_)
+  }
+  if (flags_.extra_cut_valid_ != rhs.flags_.extra_cut_valid_) {
     return false;
-
-  if (flags_.extra_only != rhs.flags_.extra_only)
+  }
+  if (flags_.extra_only != rhs.flags_.extra_only) {
     return false;
-
-  if (flags_.redundant_cut_valid_ != rhs.flags_.redundant_cut_valid_)
+  }
+  if (flags_.redundant_cut_valid_ != rhs.flags_.redundant_cut_valid_) {
     return false;
-
-  if (flags_.parallel_valid_ != rhs.flags_.parallel_valid_)
+  }
+  if (flags_.parallel_valid_ != rhs.flags_.parallel_valid_) {
     return false;
-
-  if (flags_.second_parallel_valid != rhs.flags_.second_parallel_valid)
+  }
+  if (flags_.second_parallel_valid != rhs.flags_.second_parallel_valid) {
     return false;
-
-  if (flags_.second_par_within_valid_ != rhs.flags_.second_par_within_valid_)
+  }
+  if (flags_.second_par_within_valid_ != rhs.flags_.second_par_within_valid_) {
     return false;
-
-  if (flags_.below_enclosure_valid_ != rhs.flags_.below_enclosure_valid_)
+  }
+  if (flags_.below_enclosure_valid_ != rhs.flags_.below_enclosure_valid_) {
     return false;
-
-  if (flags_.concave_corners_valid_ != rhs.flags_.concave_corners_valid_)
+  }
+  if (flags_.concave_corners_valid_ != rhs.flags_.concave_corners_valid_) {
     return false;
-
-  if (cut_class_ != rhs.cut_class_)
+  }
+  if (cut_class_ != rhs.cut_class_) {
     return false;
-  if (eol_width_ != rhs.eol_width_)
+  }
+  if (eol_width_ != rhs.eol_width_) {
     return false;
-  if (eol_min_length_ != rhs.eol_min_length_)
+  }
+  if (eol_min_length_ != rhs.eol_min_length_) {
     return false;
-  if (first_overhang_ != rhs.first_overhang_)
+  }
+  if (first_overhang_ != rhs.first_overhang_) {
     return false;
-  if (second_overhang_ != rhs.second_overhang_)
+  }
+  if (second_overhang_ != rhs.second_overhang_) {
     return false;
-  if (spacing_ != rhs.spacing_)
+  }
+  if (spacing_ != rhs.spacing_) {
     return false;
-  if (extension_ != rhs.extension_)
+  }
+  if (extension_ != rhs.extension_) {
     return false;
-  if (forward_extension_ != rhs.forward_extension_)
+  }
+  if (forward_extension_ != rhs.forward_extension_) {
     return false;
-  if (backward_extension_ != rhs.backward_extension_)
+  }
+  if (backward_extension_ != rhs.backward_extension_) {
     return false;
-  if (min_width_ != rhs.min_width_)
+  }
+  if (min_width_ != rhs.min_width_) {
     return false;
-  if (cut_within_ != rhs.cut_within_)
+  }
+  if (cut_within_ != rhs.cut_within_) {
     return false;
-  if (min_length_ != rhs.min_length_)
+  }
+  if (min_length_ != rhs.min_length_) {
     return false;
-  if (par_length_ != rhs.par_length_)
+  }
+  if (par_length_ != rhs.par_length_) {
     return false;
-  if (second_par_length_ != rhs.second_par_length_)
+  }
+  if (second_par_length_ != rhs.second_par_length_) {
     return false;
-  if (par_within_ != rhs.par_within_)
+  }
+  if (par_within_ != rhs.par_within_) {
     return false;
-  if (second_par_within_ != rhs.second_par_within_)
+  }
+  if (second_par_within_ != rhs.second_par_within_) {
     return false;
-  if (below_enclosure_ != rhs.below_enclosure_)
+  }
+  if (below_enclosure_ != rhs.below_enclosure_) {
     return false;
-  if (num_corners_ != rhs.num_corners_)
+  }
+  if (num_corners_ != rhs.num_corners_) {
     return false;
+  }
 
   return true;
 }
@@ -176,7 +197,7 @@ void _dbTechLayerCutEnclosureRule::differences(
   DIFF_FIELD(flags_.below_);
   DIFF_FIELD(flags_.eol_min_length_valid_);
   DIFF_FIELD(flags_.eol_only_);
-  DIFF_FIELD(flags_.short_edge_only_);
+  DIFF_FIELD(flags_.short_edge_on_eol_);
   DIFF_FIELD(flags_.side_spacing_valid_);
   DIFF_FIELD(flags_.end_spacing_valid_);
   DIFF_FIELD(flags_.off_center_line_);
@@ -226,7 +247,7 @@ void _dbTechLayerCutEnclosureRule::out(dbDiff& diff,
   DIFF_OUT_FIELD(flags_.below_);
   DIFF_OUT_FIELD(flags_.eol_min_length_valid_);
   DIFF_OUT_FIELD(flags_.eol_only_);
-  DIFF_OUT_FIELD(flags_.short_edge_only_);
+  DIFF_OUT_FIELD(flags_.short_edge_on_eol_);
   DIFF_OUT_FIELD(flags_.side_spacing_valid_);
   DIFF_OUT_FIELD(flags_.end_spacing_valid_);
   DIFF_OUT_FIELD(flags_.off_center_line_);
@@ -268,8 +289,7 @@ void _dbTechLayerCutEnclosureRule::out(dbDiff& diff,
 
 _dbTechLayerCutEnclosureRule::_dbTechLayerCutEnclosureRule(_dbDatabase* db)
 {
-  uint32_t* flags__bit_field = (uint32_t*) &flags_;
-  *flags__bit_field = 0;
+  flags_ = {};
   eol_width_ = 0;
   eol_min_length_ = 0;
   first_overhang_ = 0;
@@ -299,7 +319,7 @@ _dbTechLayerCutEnclosureRule::_dbTechLayerCutEnclosureRule(
   flags_.below_ = r.flags_.below_;
   flags_.eol_min_length_valid_ = r.flags_.eol_min_length_valid_;
   flags_.eol_only_ = r.flags_.eol_only_;
-  flags_.short_edge_only_ = r.flags_.short_edge_only_;
+  flags_.short_edge_on_eol_ = r.flags_.short_edge_on_eol_;
   flags_.side_spacing_valid_ = r.flags_.side_spacing_valid_;
   flags_.end_spacing_valid_ = r.flags_.end_spacing_valid_;
   flags_.off_center_line_ = r.flags_.off_center_line_;
@@ -340,8 +360,10 @@ _dbTechLayerCutEnclosureRule::_dbTechLayerCutEnclosureRule(
 
 dbIStream& operator>>(dbIStream& stream, _dbTechLayerCutEnclosureRule& obj)
 {
-  uint32_t* flags__bit_field = (uint32_t*) &obj.flags_;
-  stream >> *flags__bit_field;
+  uint32_t flags_bit_field;
+  stream >> flags_bit_field;
+  static_assert(sizeof(obj.flags_) == sizeof(flags_bit_field));
+  std::memcpy(&obj.flags_, &flags_bit_field, sizeof(flags_bit_field));
   stream >> obj.cut_class_;
   stream >> obj.eol_width_;
   stream >> obj.eol_min_length_;
@@ -366,8 +388,10 @@ dbIStream& operator>>(dbIStream& stream, _dbTechLayerCutEnclosureRule& obj)
 dbOStream& operator<<(dbOStream& stream,
                       const _dbTechLayerCutEnclosureRule& obj)
 {
-  uint32_t* flags__bit_field = (uint32_t*) &obj.flags_;
-  stream << *flags__bit_field;
+  uint32_t flags_bit_field;
+  static_assert(sizeof(obj.flags_) == sizeof(flags_bit_field));
+  std::memcpy(&flags_bit_field, &obj.flags_, sizeof(obj.flags_));
+  stream << flags_bit_field;
   stream << obj.cut_class_;
   stream << obj.eol_width_;
   stream << obj.eol_min_length_;
@@ -389,10 +413,6 @@ dbOStream& operator<<(dbOStream& stream,
   return stream;
 }
 
-_dbTechLayerCutEnclosureRule::~_dbTechLayerCutEnclosureRule()
-{
-}
-
 ////////////////////////////////////////////////////////////////////
 //
 // dbTechLayerCutEnclosureRule - Methods
@@ -410,8 +430,9 @@ void dbTechLayerCutEnclosureRule::setCutClass(
 dbTechLayerCutClassRule* dbTechLayerCutEnclosureRule::getCutClass() const
 {
   _dbTechLayerCutEnclosureRule* obj = (_dbTechLayerCutEnclosureRule*) this;
-  if (obj->cut_class_ == 0)
+  if (obj->cut_class_ == 0) {
     return nullptr;
+  }
   _dbTechLayer* par = (_dbTechLayer*) obj->getOwner();
   return (dbTechLayerCutClassRule*) par->cut_class_rules_tbl_->getPtr(
       obj->cut_class_);
@@ -709,18 +730,18 @@ bool dbTechLayerCutEnclosureRule::isEolOnly() const
   return obj->flags_.eol_only_;
 }
 
-void dbTechLayerCutEnclosureRule::setShortEdgeOnly(bool short_edge_only)
+void dbTechLayerCutEnclosureRule::setShortEdgeOnEol(bool short_edge_on_eol)
 {
   _dbTechLayerCutEnclosureRule* obj = (_dbTechLayerCutEnclosureRule*) this;
 
-  obj->flags_.short_edge_only_ = short_edge_only;
+  obj->flags_.short_edge_on_eol_ = short_edge_on_eol;
 }
 
-bool dbTechLayerCutEnclosureRule::isShortEdgeOnly() const
+bool dbTechLayerCutEnclosureRule::isShortEdgeOnEol() const
 {
   _dbTechLayerCutEnclosureRule* obj = (_dbTechLayerCutEnclosureRule*) this;
 
-  return obj->flags_.short_edge_only_;
+  return obj->flags_.short_edge_on_eol_;
 }
 
 void dbTechLayerCutEnclosureRule::setSideSpacingValid(bool side_spacing_valid)
@@ -1004,4 +1025,4 @@ void dbTechLayerCutEnclosureRule::destroy(dbTechLayerCutEnclosureRule* rule)
 }
 // User Code End dbTechLayerCutEnclosureRulePublicMethods
 }  // namespace odb
-   // Generator Code End Cpp
+// Generator Code End Cpp

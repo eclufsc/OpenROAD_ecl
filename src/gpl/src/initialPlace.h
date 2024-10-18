@@ -58,30 +58,27 @@ class InitialPlaceVars
   int maxFanout;
   float netWeightScale;
   bool debug;
-  bool forceCPU;
 
   InitialPlaceVars();
   void reset();
 };
 
-typedef Eigen::SparseMatrix<float, Eigen::RowMajor> SMatrix;
+using SMatrix = Eigen::SparseMatrix<float, Eigen::RowMajor>;
 
 class InitialPlace
 {
  public:
-  InitialPlace();
   InitialPlace(InitialPlaceVars ipVars,
                std::shared_ptr<PlacerBaseCommon> pbc,
                std::vector<std::shared_ptr<PlacerBase>>& pbVec,
                utl::Logger* logger);
-  ~InitialPlace();
   void doBicgstabPlace();
 
  private:
   InitialPlaceVars ipVars_;
   std::shared_ptr<PlacerBaseCommon> pbc_;
   std::vector<std::shared_ptr<PlacerBase>> pbVec_;
-  utl::Logger* log_;
+  utl::Logger* log_ = nullptr;
 
   // Solve two SparseMatrix equations here;
   //
@@ -118,7 +115,6 @@ class InitialPlace
   void updatePinInfo();
   void createSparseMatrix();
   void updateCoordi();
-  void reset();
 };
 
 }  // namespace gpl

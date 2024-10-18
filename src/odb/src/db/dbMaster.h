@@ -34,8 +34,8 @@
 
 #include "dbCore.h"
 #include "dbHashTable.h"
-#include "dbTypes.h"
-#include "odb.h"
+#include "odb/dbTypes.h"
+#include "odb/odb.h"
 
 namespace odb {
 
@@ -43,12 +43,15 @@ template <class T>
 class dbTable;
 class _dbMTerm;
 class _dbBox;
+class _dbPolygon;
+class _dbLib;
 class _dbMPin;
 class _dbTarget;
 class _dbSite;
 class _dbDatabase;
 class _dbTechAntennaPinModel;
 class dbBoxItr;
+class dbPolygonItr;
 class dbMPinItr;
 class dbTargetItr;
 class dbIStream;
@@ -84,18 +87,23 @@ class _dbMaster : public _dbObject
   dbId<_dbMaster> _leq;
   dbId<_dbMaster> _eeq;
   dbId<_dbBox> _obstructions;
+  dbId<_dbPolygon> _poly_obstructions;
+  dbId<_dbLib> _lib_for_site;
   dbId<_dbSite> _site;
   dbHashTable<_dbMTerm> _mterm_hash;
   dbTable<_dbMTerm>* _mterm_tbl;
   dbTable<_dbMPin>* _mpin_tbl;
   dbTable<_dbTarget>* _target_tbl;
   dbTable<_dbBox>* _box_tbl;
+  dbTable<_dbPolygon>* _poly_box_tbl;
   dbTable<_dbTechAntennaPinModel>* _antenna_pin_model_tbl;
 
   void* _sta_cell;  // not saved
 
   // NON-PERSISTANT-MEMBERS
   dbBoxItr* _box_itr;
+  dbPolygonItr* _pbox_itr;
+  dbBoxItr* _pbox_box_itr;
   dbMPinItr* _mpin_itr;
   dbTargetItr* _target_itr;
 

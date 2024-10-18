@@ -103,8 +103,8 @@ class IOPin
   odb::Point getPosition() const { return pos_; }
   void setX(const int x) { pos_.setX(x); }
   void setY(const int y) { pos_.setY(y); }
-  void setPos(const odb::Point& pos) { pos_ = pos; }
-  void setPos(const int x, const int y) { pos_ = odb::Point(x, y); }
+  void setPosition(const odb::Point& pos) { pos_ = pos; }
+  void setPosition(const int x, const int y) { pos_ = odb::Point(x, y); }
   void setLowerBound(const int x, const int y)
   {
     lower_bound_ = odb::Point(x, y);
@@ -114,7 +114,6 @@ class IOPin
     upper_bound_ = odb::Point(x, y);
   };
   std::string getName() const { return bterm_->getName(); }
-  odb::Point getPos() const { return pos_; }
   int getX() const { return pos_.getX(); }
   int getY() const { return pos_.getY(); }
   Direction getDirection() const { return direction_; }
@@ -204,7 +203,7 @@ class Netlist
   int computeDstIOtoPins(int idx, const odb::Point& slot_pos);
   void sortPinsFromGroup(int group_idx, Edge edge);
   odb::Rect getBB(int idx, const odb::Point& slot_pos);
-  void clear();
+  void reset();
 
  private:
   std::vector<InstancePin> inst_pins_;

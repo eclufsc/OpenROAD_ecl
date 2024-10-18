@@ -62,50 +62,6 @@ void FastRouteCore::ripupSegL(const Segment* seg)
   }
 }
 
-void FastRouteCore::ripupSegZ(const Segment* seg)
-{
-  const int edgeCost = nets_[seg->netID]->getEdgeCost();
-
-  const int ymin = std::min(seg->y1, seg->y2);
-  const int ymax = std::max(seg->y1, seg->y2);
-
-  if (seg->x1 == seg->x2) {
-    // remove V routing
-    for (int i = ymin; i < ymax; i++)
-      v_edges_[i][seg->x1].est_usage -= edgeCost;
-  } else if (seg->y1 == seg->y2) {
-    // remove H routing
-    for (int i = seg->x1; i < seg->x2; i++)
-      h_edges_[seg->y1][i].est_usage -= edgeCost;
-  } else {
-    // remove Z routing
-    if (seg->HVH) {
-      for (int i = seg->x1; i < seg->Zpoint; i++)
-        h_edges_[seg->y1][i].est_usage -= edgeCost;
-      for (int i = seg->Zpoint; i < seg->x2; i++)
-        h_edges_[seg->y2][i].est_usage -= edgeCost;
-      for (int i = ymin; i < ymax; i++)
-        v_edges_[i][seg->Zpoint].est_usage -= edgeCost;
-    } else {
-      if (seg->y1 < seg->y2) {
-        for (int i = seg->y1; i < seg->Zpoint; i++)
-          v_edges_[i][seg->x1].est_usage -= edgeCost;
-        for (int i = seg->Zpoint; i < seg->y2; i++)
-          v_edges_[i][seg->x2].est_usage -= edgeCost;
-        for (int i = seg->x1; i < seg->x2; i++)
-          h_edges_[seg->Zpoint][i].est_usage -= 1;
-      } else {
-        for (int i = seg->y2; i < seg->Zpoint; i++)
-          v_edges_[i][seg->x2].est_usage -= edgeCost;
-        for (int i = seg->Zpoint; i < seg->y1; i++)
-          v_edges_[i][seg->x1].est_usage -= edgeCost;
-        for (int i = seg->x1; i < seg->x2; i++)
-          h_edges_[seg->Zpoint][i].est_usage -= 1;
-      }
-    }
-  }
-}
-
 void FastRouteCore::newRipup(const TreeEdge* treeedge,
                              const int x1,
                              const int y1,
@@ -180,7 +136,7 @@ void FastRouteCore::newRipup(const TreeEdge* treeedge,
 }
 
 bool FastRouteCore::newRipupType2(const TreeEdge* treeedge,
-                                  TreeNode* treenodes,
+                                  std::vector<TreeNode>& treenodes,
                                   const int x1,
                                   const int y1,
                                   const int x2,
@@ -304,11 +260,14 @@ bool FastRouteCore::newRipupCheck(const TreeEdge* treeedge,
         }
       }
     }
-    if (!needRipup && update_slack_ && treeedge->route.last_routelen
+    if (!needRipup && critical_nets_percentage_ && treeedge->route.last_routelen
         && critical_slack) {
       const float delta = (float) treeedge->route.routelen
                           / (float) treeedge->route.last_routelen;
-      if (nets_[netID]->getSlack() <= critical_slack && (delta >= 2)) {
+      if (nets_[netID]->getSlack() <= critical_slack
+          && (nets_[netID]->getSlack()
+              > std::ceil(std::numeric_limits<float>::lowest()))
+          && (delta >= 2)) {
         nets_[netID]->setIsCritical(true);
         needRipup = true;
       }
@@ -353,8 +312,8 @@ bool FastRouteCore::newRipup3DType3(const int netID, const int edgeID)
   const int n1a = treeedge->n1a;
   const int n2a = treeedge->n2a;
 
-  int bl = (n1a < num_terminals) ? 0 : BIG_INT;
-  int hl = 0;
+  int bl = (n1a < num_terminals) ? nets_[netID]->getPinL()[n1a] : BIG_INT;
+  int hl = (n1a < num_terminals) ? nets_[netID]->getPinL()[n1a] : 0;
   int hid = BIG_INT;
   int bid = BIG_INT;
 
@@ -391,8 +350,8 @@ bool FastRouteCore::newRipup3DType3(const int netID, const int edgeID)
   treenodes[n1a].topL = hl;
   treenodes[n1a].hID = hid;
 
-  bl = (n2a < num_terminals) ? 0 : BIG_INT;
-  hl = 0;
+  bl = (n2a < num_terminals) ? nets_[netID]->getPinL()[n2a] : BIG_INT;
+  hl = (n2a < num_terminals) ? nets_[netID]->getPinL()[n2a] : 0;
   hid = bid = BIG_INT;
 
   for (int i = 0; i < treenodes[n2a].conCNT; i++) {
@@ -462,7 +421,7 @@ void FastRouteCore::releaseNetResources(const int netID)
   // Only release resources if they were created at first place.
   // Cases like "read_guides" can call this function multiple times,
   // without creating treeedges inside the core code.
-  if (treeedges != nullptr) {
+  if (!treeedges.empty()) {
     for (int edgeID = 0; edgeID < num_edges; edgeID++) {
       const TreeEdge* treeedge = &(treeedges[edgeID]);
       const std::vector<short>& gridsX = treeedge->route.gridsX;

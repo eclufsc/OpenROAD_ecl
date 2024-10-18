@@ -38,17 +38,17 @@
 #include <string>
 
 #include "clockWidget.h"
-#include "db.h"
-#include "dbShape.h"
-#include "defin.h"
 #include "displayControls.h"
 #include "drcWidget.h"
-#include "geom.h"
 #include "heatMapPlacementDensity.h"
 #include "inspector.h"
 #include "layoutViewer.h"
-#include "lefin.h"
 #include "mainWindow.h"
+#include "odb/db.h"
+#include "odb/dbShape.h"
+#include "odb/defin.h"
+#include "odb/geom.h"
+#include "odb/lefin.h"
 #include "ord/OpenRoad.hh"
 #include "ruler.h"
 #include "scriptWidget.h"
@@ -287,10 +287,11 @@ Selected Gui::makeSelected(const std::any& object)
   if (it != descriptors_.end()) {
     return it->second->makeSelected(object);
   }
-  logger_->warn(utl::GUI,
-                33,
-                "No descriptor is registered for {}.",
-                object.type().name());
+  char* type_name
+      = abi::__cxa_demangle(object.type().name(), nullptr, nullptr, nullptr);
+  logger_->warn(
+      utl::GUI, 33, "No descriptor is registered for type {}.", type_name);
+  free(type_name);
   return Selected();  // FIXME: null descriptor
 }
 
@@ -369,6 +370,7 @@ void Gui::addInstToHighlightSet(const char* name, int highlight_group)
 
   auto inst = block->findInst(name);
   if (!inst) {
+    logger_->error(utl::GUI, 100, "No instance named {} found.", name);
     return;
   }
   SelectionSet sel_inst_set;
@@ -385,6 +387,7 @@ void Gui::addNetToHighlightSet(const char* name, int highlight_group)
 
   auto net = block->findNet(name);
   if (!net) {
+    logger_->error(utl::GUI, 101, "No net named {} found.", name);
     return;
   }
   SelectionSet selection_set;
@@ -489,7 +492,7 @@ int Gui::select(const std::string& type,
           }
         }
 
-        main_window->addSelected(selected_set);
+        main_window->addSelected(selected_set, true);
         if (highlight_group != -1) {
           main_window->addHighlighted(selected_set, highlight_group);
         }
@@ -598,11 +601,9 @@ std::string Gui::requestUserInput(const std::string& title,
                                        QString::fromStdString(question));
 }
 
-void Gui::loadDRC(const std::string& filename)
+void Gui::selectMarkers(odb::dbMarkerCategory* markers)
 {
-  if (!filename.empty()) {
-    main_window->getDRCViewer()->loadReport(QString::fromStdString(filename));
-  }
+  main_window->getDRCViewer()->selectCategory(markers);
 }
 
 void Gui::setDisplayControlsVisible(const std::string& name, bool value)
@@ -674,6 +675,7 @@ void Gui::setResolution(double pixels_per_dbu)
 
 void Gui::saveImage(const std::string& filename,
                     const odb::Rect& region,
+                    int width_px,
                     double dbu_per_pixel,
                     const std::map<std::string, bool>& display_settings)
 {
@@ -731,6 +733,7 @@ void Gui::saveImage(const std::string& filename,
     save_cmds += std::to_string(save_region.yMin() / dbu_per_micron) + " ";
     save_cmds += std::to_string(save_region.xMax() / dbu_per_micron) + " ";
     save_cmds += std::to_string(save_region.yMax() / dbu_per_micron) + " ";
+    save_cmds += std::to_string(width_px) + " ";
     save_cmds += std::to_string(dbu_per_pixel) + " ";
     save_cmds += "$::gui::display_settings\n";
     // delete display settings map
@@ -747,7 +750,7 @@ void Gui::saveImage(const std::string& filename,
     }
 
     main_window->getLayoutViewer()->saveImage(
-        filename.c_str(), save_region, dbu_per_pixel);
+        filename.c_str(), save_region, width_px, dbu_per_pixel);
     // restore settings
     main_window->getControls()->restore();
   }
@@ -892,6 +895,7 @@ void Gui::setHeatMapSetting(const std::string& name,
   const std::string rebuild_map_option = "rebuild";
   if (option == rebuild_map_option) {
     source->destroyMap();
+    source->ensureMap();
   } else {
     auto settings = source->getSettings();
 
@@ -908,7 +912,7 @@ void Gui::setHeatMapSetting(const std::string& name,
                      options.join(", ").toStdString());
     }
 
-    auto current_value = settings[option];
+    auto& current_value = settings[option];
     if (std::holds_alternative<bool>(current_value)) {
       // is bool
       if (auto* s = std::get_if<bool>(&value)) {
@@ -952,6 +956,33 @@ void Gui::setHeatMapSetting(const std::string& name,
   }
 
   source->getRenderer()->redraw();
+}
+
+Renderer::Setting Gui::getHeatMapSetting(const std::string& name,
+                                         const std::string& option)
+{
+  HeatMapDataSource* source = getHeatMap(name);
+
+  const std::string map_has_option = "has_data";
+  if (option == map_has_option) {
+    return source->hasData();
+  }
+
+  auto settings = source->getSettings();
+
+  if (settings.count(option) == 0) {
+    QStringList options;
+    for (const auto& [key, kv] : settings) {
+      options.append(QString::fromStdString(key));
+    }
+    logger_->error(utl::GUI,
+                   95,
+                   "{} is not a valid option. Valid options are: {}",
+                   option,
+                   options.join(", ").toStdString());
+  }
+
+  return settings[option];
 }
 
 void Gui::dumpHeatMap(const std::string& name, const std::string& file)
@@ -1212,7 +1243,7 @@ void Gui::hideGui()
   main_window->exit();
 }
 
-void Gui::showGui(const std::string& cmds, bool interactive)
+void Gui::showGui(const std::string& cmds, bool interactive, bool load_settings)
 {
   if (enabled()) {
     logger_->warn(utl::GUI, 8, "GUI already active.");
@@ -1223,7 +1254,7 @@ void Gui::showGui(const std::string& cmds, bool interactive)
   // passing in cmd_argc and cmd_argv to meet Qt application requirement for
   // arguments nullptr for tcl interp to indicate nothing to setup and commands
   // and interactive setting
-  startGui(cmd_argc, cmd_argv, nullptr, cmds, interactive);
+  startGui(cmd_argc, cmd_argv, nullptr, cmds, interactive, load_settings);
 }
 
 void Gui::init(odb::dbDatabase* db, utl::Logger* logger)
@@ -1237,6 +1268,23 @@ void Gui::init(odb::dbDatabase* db, utl::Logger* logger)
   placement_density_heat_map_->registerHeatMap();
 }
 
+class SafeApplication : public QApplication
+{
+ public:
+  using QApplication::QApplication;
+
+  bool notify(QObject* receiver, QEvent* event) override
+  {
+    try {
+      return QApplication::notify(receiver, event);
+    } catch (std::exception& ex) {
+      // Ignored here as the message will be logged in the GUI
+    }
+
+    return false;
+  }
+};
+
 //////////////////////////////////////////////////
 
 // This is the main entry point to start the GUI.  It only
@@ -1245,13 +1293,14 @@ int startGui(int& argc,
              char* argv[],
              Tcl_Interp* interp,
              const std::string& script,
-             bool interactive)
+             bool interactive,
+             bool load_settings)
 {
   auto gui = gui::Gui::get();
   // ensure continue after close is false
   gui->clearContinueAfterClose();
 
-  QApplication app(argc, argv);
+  SafeApplication app(argc, argv);
   application = &app;
 
   // Default to 12 point for easier reading
@@ -1262,7 +1311,7 @@ int startGui(int& argc,
   auto* open_road = ord::OpenRoad::openRoad();
 
   // create new MainWindow
-  main_window = new gui::MainWindow;
+  main_window = new gui::MainWindow(load_settings);
 
   open_road->addObserver(main_window);
   if (!interactive) {
@@ -1324,7 +1373,7 @@ int startGui(int& argc,
     // disconnect tcl return lister
     QObject::disconnect(tcl_return_code_connect);
 
-    if (!tcl_ok) {
+    if (!exit_requested && !tcl_ok) {
       auto& cmds = gui->getRestoreStateCommands();
       if (cmds[cmds.size() - 1]
           == "exit") {  // exit, will be the last command if it is present
@@ -1383,7 +1432,19 @@ int startGui(int& argc,
   // rethow exception, if one happened after cleanup of main_window
   exception.rethrow();
 
-  if (interactive && (!gui->isContinueAfterClose() || exit_requested)) {
+  debugPrint(open_road->getLogger(),
+             utl::GUI,
+             "init",
+             1,
+             "Exit state: interactive ({}), isContinueAfterClose ({}), "
+             "exit_requested ({}), exit_code ({})",
+             interactive,
+             gui->isContinueAfterClose(),
+             exit_requested,
+             exit_code);
+
+  const bool do_exit = !gui->isContinueAfterClose() && exit_requested;
+  if (interactive && do_exit) {
     // if exiting, go ahead and exit with gui return code.
     exit(exit_code);
   }
@@ -1411,6 +1472,12 @@ Descriptor::Properties Selected::getProperties() const
   odb::Rect bbox;
   if (getBBox(bbox)) {
     props.push_back({"BBox", bbox});
+    // convenience; the user may want to know the dimensions
+    props.push_back(
+        {"BBox Width, Height",
+         std::string("(") + Descriptor::Property::convert_dbu(bbox.dx(), false)
+             + ", " + Descriptor::Property::convert_dbu(bbox.dy(), false)
+             + ")"});
   }
 
   return props;
@@ -1454,10 +1521,14 @@ std::string Descriptor::Property::toString(const std::any& value)
     return *v ? "True" : "False";
   } else if (auto v = std::any_cast<odb::Rect>(&value)) {
     std::string text = "(";
-    text += convert_dbu(v->xMin(), false) + ",";
+    text += convert_dbu(v->xMin(), false) + ", ";
     text += convert_dbu(v->yMin(), false) + "), (";
-    text += convert_dbu(v->xMax(), false) + ",";
+    text += convert_dbu(v->xMax(), false) + ", ";
     text += convert_dbu(v->yMax(), false) + ")";
+    return text;
+  } else if (auto v = std::any_cast<odb::Point>(&value)) {
+    std::string text = fmt::format(
+        "({},{})", convert_dbu(v->x(), false), convert_dbu(v->y(), false));
     return text;
   }
 

@@ -45,6 +45,7 @@
 
 #include <algorithm>  // min
 #include <mutex>
+#include <regex>
 
 #include "AbstractPathRenderer.h"
 #include "AbstractPowerDensityDataSource.h"
@@ -57,8 +58,10 @@
 #include "sta/Clock.hh"
 #include "sta/EquivCells.hh"
 #include "sta/Graph.hh"
+#include "sta/Liberty.hh"
 #include "sta/PathExpanded.hh"
 #include "sta/PathRef.hh"
+#include "sta/PatternMatch.hh"
 #include "sta/ReportTcl.hh"
 #include "sta/Sdc.hh"
 #include "sta/Search.hh"
@@ -66,6 +69,16 @@
 #include "utl/Logger.h"
 
 ////////////////////////////////////////////////////////////////
+
+namespace ord {
+
+using sta::dbSta;
+
+dbSta* makeDbSta()
+{
+  return new dbSta;
+}
+}  // namespace ord
 
 namespace sta {
 
@@ -111,7 +124,7 @@ class dbStaReport : public sta::ReportTcl
  protected:
   void printLine(const char* line, size_t length) override;
 
-  Logger* logger_;
+  Logger* logger_ = nullptr;
 
  private:
   // text buffer for tcl puts output when in GUI mode.
@@ -144,6 +157,24 @@ class dbStaCbk : public dbBlockCallBackObj
   Logger* logger_;
 };
 
+////////////////////////////////////////////////////////////////
+
+void dbStaState::init(dbSta* sta)
+{
+  sta_ = sta;
+  copyState(sta);
+  sta->registerStaState(this);
+}
+
+dbStaState::~dbStaState()
+{
+  if (sta_) {
+    sta_->unregisterStaState(this);
+  }
+}
+
+////////////////////////////////////////////////////////////////
+
 dbSta::~dbSta() = default;
 
 void dbSta::initVars(Tcl_Interp* tcl_interp,
@@ -153,10 +184,31 @@ void dbSta::initVars(Tcl_Interp* tcl_interp,
   db_ = db;
   logger_ = logger;
   makeComponents();
-  setTclInterp(tcl_interp);
+  if (tcl_interp) {
+    setTclInterp(tcl_interp);
+  }
   db_report_->setLogger(logger);
   db_network_->init(db, logger);
-  db_cbk_ = new dbStaCbk(this, logger);
+  db_cbk_ = std::make_unique<dbStaCbk>(this, logger);
+  buffer_use_analyser_ = std::make_unique<BufferUseAnalyser>();
+}
+
+void dbSta::updateComponentsState()
+{
+  Sta::updateComponentsState();
+  for (auto& state : sta_states_) {
+    state->copyState(this);
+  }
+}
+
+void dbSta::registerStaState(dbStaState* state)
+{
+  sta_states_.insert(state);
+}
+
+void dbSta::unregisterStaState(dbStaState* state)
+{
+  sta_states_.erase(state);
 }
 
 void dbSta::setPathRenderer(std::unique_ptr<AbstractPathRenderer> path_renderer)
@@ -176,6 +228,8 @@ std::unique_ptr<dbSta> dbSta::makeBlockSta(odb::dbBlock* block)
   clone->makeComponents();
   clone->initVars(tclInterp(), db_, logger_);
   clone->getDbNetwork()->setBlock(block);
+  clone->getDbNetwork()->setDefaultLibertyLibrary(
+      network_->defaultLibertyLibrary());
   clone->copyUnits(units());
   return clone;
 }
@@ -266,6 +320,244 @@ std::set<dbNet*> dbSta::findClkNets(const Clock* clk)
     }
   }
   return clk_nets;
+}
+
+std::string dbSta::getInstanceTypeText(InstType type)
+{
+  switch (type) {
+    case BLOCK:
+      return "Macro";
+    case PAD:
+      return "Pad";
+    case PAD_INPUT:
+      return "Input pad";
+    case PAD_OUTPUT:
+      return "Output pad";
+    case PAD_INOUT:
+      return "Input/output pad";
+    case PAD_POWER:
+      return "Power pad";
+    case PAD_SPACER:
+      return "Pad spacer";
+    case PAD_AREAIO:
+      return "Area IO";
+    case ENDCAP:
+      return "Endcap cell";
+    case FILL:
+      return "Fill cell";
+    case TAPCELL:
+      return "Tap cell";
+    case BUMP:
+      return "Bump";
+    case COVER:
+      return "Cover";
+    case ANTENNA:
+      return "Antenna cell";
+    case TIE:
+      return "Tie cell";
+    case LEF_OTHER:
+      return "Other";
+    case STD_CELL:
+      return "Standard cell";
+    case STD_BUF:
+      return "Buffer";
+    case STD_BUF_CLK_TREE:
+      return "Clock buffer";
+    case STD_BUF_TIMING_REPAIR:
+      return "Timing Repair Buffer";
+    case STD_INV:
+      return "Inverter";
+    case STD_INV_CLK_TREE:
+      return "Clock inverter";
+    case STD_INV_TIMING_REPAIR:
+      return "Timing Repair inverter";
+    case STD_CLOCK_GATE:
+      return "Clock gate cell";
+    case STD_LEVEL_SHIFT:
+      return "Level shifter cell";
+    case STD_SEQUENTIAL:
+      return "Sequential cell";
+    case STD_PHYSICAL:
+      return "Generic Physical";
+    case STD_COMBINATIONAL:
+      return "Multi-Input combinational cell";
+    case STD_OTHER:
+      return "Other";
+  }
+
+  return "Unknown";
+}
+
+dbSta::InstType dbSta::getInstanceType(odb::dbInst* inst)
+{
+  odb::dbMaster* master = inst->getMaster();
+  const auto master_type = master->getType();
+  const auto source_type = inst->getSourceType();
+  if (master->isBlock()) {
+    return BLOCK;
+  }
+  if (master->isPad()) {
+    if (master_type == odb::dbMasterType::PAD_INPUT) {
+      return PAD_INPUT;
+    }
+    if (master_type == odb::dbMasterType::PAD_OUTPUT) {
+      return PAD_OUTPUT;
+    }
+    if (master_type == odb::dbMasterType::PAD_INOUT) {
+      return PAD_INOUT;
+    }
+    if (master_type == odb::dbMasterType::PAD_POWER) {
+      return PAD_POWER;
+    }
+    if (master_type == odb::dbMasterType::PAD_SPACER) {
+      return PAD_SPACER;
+    }
+    if (master_type == odb::dbMasterType::PAD_AREAIO) {
+      return PAD_AREAIO;
+    }
+    return PAD;
+  }
+  if (master->isEndCap()) {
+    return ENDCAP;
+  }
+  if (master->isFiller()) {
+    return FILL;
+  }
+  if (master_type == odb::dbMasterType::CORE_WELLTAP) {
+    return TAPCELL;
+  }
+  if (master->isCover()) {
+    if (master_type == odb::dbMasterType::COVER_BUMP) {
+      return BUMP;
+    }
+    return COVER;
+  }
+  if (master_type == odb::dbMasterType::CORE_ANTENNACELL) {
+    return ANTENNA;
+  }
+  if (master_type == odb::dbMasterType::CORE_TIEHIGH
+      || master_type == odb::dbMasterType::CORE_TIELOW) {
+    return TIE;
+  }
+  if (source_type == odb::dbSourceType::DIST) {
+    return LEF_OTHER;
+  }
+
+  sta::dbNetwork* network = getDbNetwork();
+  sta::Cell* cell = network->dbToSta(master);
+  if (cell == nullptr) {
+    return LEF_OTHER;
+  }
+  sta::LibertyCell* lib_cell = network->libertyCell(cell);
+  if (lib_cell == nullptr) {
+    if (master->isCore()) {
+      return STD_CELL;
+    }
+    // default to use overall instance setting if there is no liberty cell and
+    // it's not a core cell.
+    return STD_OTHER;
+  }
+
+  const bool is_inverter = lib_cell->isInverter();
+  if (is_inverter || lib_cell->isBuffer()) {
+    if (source_type == odb::dbSourceType::TIMING) {
+      for (auto* iterm : inst->getITerms()) {
+        // look through iterms and check for clock nets
+        auto* net = iterm->getNet();
+        if (net == nullptr) {
+          continue;
+        }
+        if (net->getSigType() == odb::dbSigType::CLOCK) {
+          return is_inverter ? STD_INV_CLK_TREE : STD_BUF_CLK_TREE;
+        }
+      }
+      return is_inverter ? STD_INV_TIMING_REPAIR : STD_BUF_TIMING_REPAIR;
+    }
+    return is_inverter ? STD_INV : STD_BUF;
+  }
+  if (lib_cell->isClockGate()) {
+    return STD_CLOCK_GATE;
+  }
+  if (lib_cell->isLevelShifter()) {
+    return STD_LEVEL_SHIFT;
+  }
+  if (lib_cell->hasSequentials()) {
+    return STD_SEQUENTIAL;
+  }
+  if (lib_cell->portCount() == 0) {
+    return STD_PHYSICAL;  // generic physical
+  }
+  // not anything else, so combinational
+  return STD_COMBINATIONAL;
+}
+
+std::map<dbSta::InstType, dbSta::TypeStats> dbSta::countInstancesByType()
+{
+  auto insts = db_->getChip()->getBlock()->getInsts();
+  std::map<InstType, TypeStats> inst_type_stats;
+
+  for (auto inst : insts) {
+    InstType type = getInstanceType(inst);
+    auto& stats = inst_type_stats[type];
+    stats.count++;
+    auto master = inst->getMaster();
+    stats.area += master->getArea();
+  }
+  return inst_type_stats;
+}
+
+std::string toLowerCase(std::string str)
+{
+  std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+    return std::tolower(c);
+  });
+  return str;
+}
+
+void dbSta::report_cell_usage(const bool verbose)
+{
+  auto instances_types = countInstancesByType();
+  auto block = db_->getChip()->getBlock();
+  auto insts = block->getInsts();
+  const int total_usage = insts.size();
+  int64_t total_area = 0;
+  const double area_to_microns = std::pow(block->getDbUnitsPerMicron(), 2);
+
+  const char* header_format = "{:37} {:>7} {:>10}";
+  const char* format = "  {:35} {:>7} {:>10.2f}";
+  logger_->report(header_format, "Cell type report:", "Count", "Area");
+  for (auto [type, stats] : instances_types) {
+    std::string type_name = getInstanceTypeText(type);
+    logger_->report(
+        format, type_name, stats.count, stats.area / area_to_microns);
+    total_area += stats.area;
+
+    std::regex regexp(" |/|-");
+    logger_->metric("design__instance__count__class:"
+                        + toLowerCase(regex_replace(type_name, regexp, "_")),
+                    stats.count);
+  }
+  logger_->report(format, "Total", total_usage, total_area / area_to_microns);
+
+  if (verbose) {
+    logger_->report("\nCell instance report:");
+    std::map<dbMaster*, TypeStats> usage_count;
+    for (auto inst : insts) {
+      auto master = inst->getMaster();
+      auto& stats = usage_count[master];
+      stats.count++;
+      stats.area += master->getArea();
+    }
+    for (auto [master, stats] : usage_count) {
+      logger_->report(
+          format, master->getName(), stats.count, stats.area / area_to_microns);
+    }
+  }
+}
+
+BufferUse dbSta::getBufferUse(sta::LibertyCell* buffer)
+{
+  return buffer_use_analyser_->getBufferUse(buffer);
 }
 
 ////////////////////////////////////////////////////////////////
@@ -596,6 +888,28 @@ void dbStaCbk::inDbBTermSetIoType(dbBTerm* bterm, const dbIoType& io_type)
 void dbSta::highlight(PathRef* path)
 {
   path_renderer_->highlight(path);
+}
+
+////////////////////////////////////////////////////////////////
+
+BufferUseAnalyser::BufferUseAnalyser()
+{
+  clkbuf_pattern_
+      = std::make_unique<sta::PatternMatch>(".*CLKBUF.*",
+                                            /* is_regexp */ true,
+                                            /* nocase */ true,
+                                            /* Tcl_interp* */ nullptr);
+}
+
+BufferUse BufferUseAnalyser::getBufferUse(sta::LibertyCell* buffer)
+{
+  // is_clock_cell is a custom lib attribute that may not exist,
+  // so we also use the name pattern to help
+  if (buffer->isClockCell() || clkbuf_pattern_->match(buffer->name())) {
+    return CLOCK;
+  }
+
+  return DATA;
 }
 
 }  // namespace sta

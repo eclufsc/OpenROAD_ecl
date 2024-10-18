@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -7,6 +7,7 @@ cd "$(dirname $(readlink -f $0))/../"
 baseDir="$(pwd)"
 # docker hub organization/user from where to pull/push images
 org=openroad
+depsPrefixesFile="/etc/openroad_deps_prefixes.txt"
 
 _help() {
     cat <<EOF
@@ -18,28 +19,29 @@ usage: $0 [CMD] [OPTIONS]
   push                          Push the docker image to Docker Hub
 
   OPTIONS:
-  -compiler=COMPILER_NAME       Choose between gcc (default) and clang. Valid
-                                  only if the target is 'builder'.
-  -os=OS_NAME                   Choose beween centos7 (default), ubuntu20.04, ubuntu22.04, ubuntu22.10, rhel, opensuse, debian10 and debian11.
-  -target=TARGET                Choose target fo the Docker image:
+  -os=OS_NAME                   Choose between ubuntu22.04 (default), ubuntu20.04, rhel, opensuse and debian11.
+  -target=TARGET                Choose target for the Docker image:
                                   'dev': os + packages to compile app
                                   'builder': os + packages to compile app +
                                              copy source code and build app
                                   'binary': os + packages to run a compiled
                                             app + binary set as entrypoint
+  -compiler=COMPILER_NAME       Choose between gcc (default) and clang. Valid
+                                  only if the target is 'builder'.
   -threads                      Max number of threads to use if compiling.
                                   Default = \$(nproc)
-  -sha                          Use git commit sha as the tag image. Default is
-                                  'latest'.
+  -ci                           Install CI tools in image
   -h -help                      Show this message and exits
   -local                        Installs with prefix /home/openroad-deps
+  -username                     Docker Username
+  -password                     Docker Password
+  -deps-prefixes-path=PATH      Path where the file with dependency prefixes should be stored (in Docker image)
 
 EOF
     exit "${1:-1}"
 }
 
 _setup() {
-    commitSha="$(git rev-parse HEAD)"
     case "${compiler}" in
         "gcc" | "clang" )
             ;;
@@ -49,23 +51,14 @@ _setup() {
             ;;
     esac
     case "${os}" in
-        "centos7")
-            osBaseImage="centos:centos7"
-            ;;
         "ubuntu20.04")
             osBaseImage="ubuntu:20.04"
             ;;
         "ubuntu22.04")
             osBaseImage="ubuntu:22.04"
             ;;
-        "ubuntu22.10")
-            osBaseImage="ubuntu:22.10"
-            ;;
         "opensuse")
             osBaseImage="opensuse/leap"
-            ;;
-        "debian10")
-            osBaseImage="debian:buster"
             ;;
         "debian11")
             osBaseImage="debian:bullseye"
@@ -79,10 +72,10 @@ _setup() {
             ;;
     esac
     imageName="${IMAGE_NAME_OVERRIDE:-"${org}/${os}-${target}"}"
-    if [[ "${useCommitSha}" == "yes" ]]; then
-        imageTag="${commitSha}"
+    if [[ "${tag}" != "" ]]; then
+        imageTag="${tag}"
     else
-        imageTag="latest"
+        imageTag=$(./etc/DockerTag.sh -dev)
     fi
     case "${target}" in
         "builder" )
@@ -90,6 +83,7 @@ _setup() {
             context="."
             buildArgs="--build-arg compiler=${compiler}"
             buildArgs="${buildArgs} --build-arg numThreads=${numThreads}"
+            buildArgs="${buildArgs} --build-arg depsPrefixFile=${depsPrefixesFile}"
             if [[ "${isLocal}" == "yes" ]]; then
                 buildArgs="${buildArgs} --build-arg LOCAL_PATH=${LOCAL_PATH}/bin"
             fi
@@ -98,10 +92,18 @@ _setup() {
         "dev" )
             fromImage="${FROM_IMAGE_OVERRIDE:-$osBaseImage}"
             context="etc"
+            buildArgs="-save-deps-prefixes=${depsPrefixesFile}"
             if [[ "${isLocal}" == "yes" ]]; then
-                buildArgs="--build-arg INSTALLER_ARGS=-prefix=${LOCAL_PATH}"
-            else
-                buildArgs=""
+                buildArgs="${buildArgs} -prefix=${LOCAL_PATH}"
+            fi
+            if [[ "${equivalenceDeps}" == "yes" ]]; then
+                buildArgs="${buildArgs} -eqy"
+            fi
+            if [[ "$CI" == "yes" ]]; then
+                buildArgs="${buildArgs} -ci"
+            fi
+            if [[ "${buildArgs}" != "" ]]; then
+                buildArgs="--build-arg INSTALLER_ARGS='${buildArgs}'"
             fi
             ;;
         "binary" )
@@ -134,63 +136,43 @@ _test() {
         echo "Could not find ${imagePath}, will attempt to create it" >&2
         _create
     fi
-    docker run --rm "${imagePath}" "./docker/test_wrapper.sh" "${compiler}" "./test/regression"
+    docker run --rm "${imagePath}" "./docker/test_wrapper.sh" "${compiler}" "ctest --test-dir build -j ${numThreads}"
 }
 
 _create() {
     echo "Create docker image ${imagePath} using ${file}"
-    docker build --file "${file}" --tag "${imagePath}" ${buildArgs} "${context}"
+    eval docker buildx build \
+        --file "${file}" \
+        --tag "${imagePath}" \
+        ${buildArgs} \
+        "${context}"
 }
 
 _push() {
-    case "${target}" in
-        "dev" )
-            read -p "Will push docker image ${imagePath} to DockerHub [y/N]" -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$  ]]; then
-                mkdir -p build
+    if [[ -z ${username+x} ]]; then
+        echo "Missing required -username=<USER> argument"
+        _help
+    fi
+    if [[ -z ${password+x} ]]; then
+        echo "Missing required -password=<PASS> argument"
+        _help
+    fi
+    if [[ "${target}" != "dev" ]] && [[ "${target}" != "master" ]]; then
+        echo "Target ${target} is not valid candidate for push to Docker Hub." >&2
+        _help
+    fi
 
-                OS_LIST="centos7 ubuntu20.04 ubuntu22.04"
-                # create image with sha and latest tag for all os
-                for os in ${OS_LIST}; do
-                    ./etc/DockerHelper.sh create -target=dev \
-                        2>&1 | tee build/create-${os}-latest.log &
-                done
-                wait
+    docker login --username "${username}" --password "${password}"
 
-                for os in ${OS_LIST}; do
-                    ./etc/DockerHelper.sh create -target=dev -sha \
-                        2>&1 | tee build/create-${os}-${commitSha}.log &
-                done
-                wait
+    if [[ "${tag}" == "" ]]; then
+        tag=$(./etc/DockerTag.sh -dev)
+    fi
 
-                # test image with sha and latest tag for all os and compiler
-                for os in ${OS_LIST}; do
-                    ./etc/DockerHelper.sh test -target=builder -sha \
-                        2>&1 | tee build/test-${os}-gcc-latest.log &
-                done
-                wait
+    mkdir -p build
+    ./etc/DockerHelper.sh create -os=${os} -target=dev -tag=${tag} -ci \
+        2>&1 | tee build/create-${os}-dev-${tag}.log
 
-                for os in ${OS_LIST}; do
-                    ./etc/DockerHelper.sh test -target=builder -sha -compiler=clang \
-                        2>&1 | tee build/test-${os}-clang-latest.log &
-                done
-                wait
-
-                for os in ${OS_LIST}; do
-                    echo [DRY-RUN] docker push openroad/${os}-dev:latest
-                    echo [DRY-RUN] docker push openroad/${os}-dev:${commitSha}
-                done
-
-            else
-                echo "Will not push."
-            fi
-            ;;
-        *)
-            echo "Target ${target} is not valid candidate for push to DockerHub." >&2
-            _help
-            ;;
-    esac
+    docker push "${imageName}:${tag}"
 }
 
 #
@@ -203,6 +185,10 @@ if [[ $# -lt 1 ]]; then
     _help
 fi
 
+if [[ "$1" == "-h" || "$1" == "-help" ]]; then
+    _help 0
+fi
+
 _rule="_${1}"
 shift 1
 
@@ -213,22 +199,14 @@ if [[ -z $(command -v "${_rule}") ]]; then
 fi
 
 # default values, can be overwritten by cmdline args
-os="centos7"
+os="ubuntu22.04"
 target="dev"
 compiler="gcc"
-useCommitSha="no"
+numThreads="-1"
+tag=""
 isLocal="no"
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-  numThreads=$(nproc --all)
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-  numThreads=$(sysctl -n hw.ncpu)
-else
-  cat << EOF
-WARNING: Unsupported OSTYPE: cannot determine number of host CPUs"
-  Defaulting to 2 threads. Use --threads N to use N threads"
-EOF
-  numThreads=2
-fi
+equivalenceDeps="yes"
+CI="no"
 LOCAL_PATH="/home/openroad-deps"
 
 while [ "$#" -gt 0 ]; do
@@ -236,8 +214,14 @@ while [ "$#" -gt 0 ]; do
         -h|-help)
             _help 0
             ;;
-        -compiler=*)
-            compiler="${1#*=}"
+        -local )
+            isLocal=yes
+            ;;
+        -ci )
+            CI="yes"
+            ;;
+        -no_eqy )
+            equivalenceDeps=no
             ;;
         -os=* )
             os="${1#*=}"
@@ -248,13 +232,22 @@ while [ "$#" -gt 0 ]; do
         -threads=* )
             numThreads="${1#*=}"
             ;;
-        -sha )
-            useCommitSha=yes
+        -compiler=*)
+            compiler="${1#*=}"
             ;;
-        -local )
-            isLocal=yes
+        -username=* )
+            username="${1#*=}"
             ;;
-        -compiler | -os | -target )
+        -password=* )
+            password="${1#*=}"
+            ;;
+        -tag=* )
+            tag="${1#*=}"
+            ;;
+        -deps-prefixes-path=* )
+            depsPrefixesFile="${1#-deps-prefixes-path=}"
+            ;;
+        -os | -target | -compiler | -threads | -username | -password | -tag | -deps-prefixes-path )
             echo "${1} requires an argument" >&2
             _help
             ;;
@@ -265,6 +258,20 @@ while [ "$#" -gt 0 ]; do
     esac
     shift 1
 done
+
+if [[ "${numThreads}" == "-1" ]]; then
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        numThreads=$(nproc --all)
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        numThreads=$(sysctl -n hw.ncpu)
+    else
+        numThreads=2
+        cat << EOF
+[WARNING] Unsupported OSTYPE: cannot determine number of host CPUs"
+  Defaulting to 2 threads. Use --threads N to use N threads"
+EOF
+    fi
+fi
 
 _setup
 

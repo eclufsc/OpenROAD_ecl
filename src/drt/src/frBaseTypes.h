@@ -41,16 +41,14 @@
 #include <vector>
 
 #include "odb/dbTypes.h"
+#include "odb/geom.h"
 #include "utl/Logger.h"
 
-namespace odb {
-class Rect;
-}
 namespace boost::serialization {
 class access;
 }
 
-namespace fr {
+namespace drt {
 using Logger = utl::Logger;
 const utl::ToolId DRT = utl::DRT;
 using frLayerNum = int;
@@ -193,6 +191,7 @@ enum class frConstraintTypeEnum
   frcLef58SpacingEndOfLineWithinEncloseCutConstraint,
   frcLef58SpacingEndOfLineWithinParallelEdgeConstraint,
   frcLef58SpacingEndOfLineWithinMaxMinLengthConstraint,
+  frcLef58SpacingWrongDirConstraint,
   frcLef58CutClassConstraint,  // not supported
   frcNonSufficientMetalConstraint,
   frcSpacingSamenetConstraint,
@@ -205,7 +204,13 @@ enum class frConstraintTypeEnum
   frcLef58MinimumCutConstraint,
   frcMetalWidthViaConstraint,
   frcLef58AreaConstraint,
-  frcLef58KeepOutZoneConstraint
+  frcLef58KeepOutZoneConstraint,
+  frcLef58TwoWiresForbiddenSpcConstraint,
+  frcLef58ForbiddenSpcConstraint,
+  frcLef58EnclosureConstraint,
+  frcSpacingRangeConstraint,
+  frcLef58MaxSpacingConstraint,
+  frcSpacingTableOrth
 };
 
 std::ostream& operator<<(std::ostream& os, frConstraintTypeEnum type);
@@ -247,7 +252,7 @@ enum class frMinstepTypeEnum
 
 std::ostream& operator<<(std::ostream& os, frMinstepTypeEnum type);
 
-#define OPPOSITEDIR 7  // used in FlexGC_main.cpp
+constexpr int OPPOSITEDIR = 7;  // used in FlexGC_main.cpp
 enum class frDirEnum
 {
   UNKNOWN = 0,
@@ -269,6 +274,12 @@ static constexpr frDirEnum frDirEnumAll[] = {frDirEnum::D,
 static constexpr frDirEnum frDirEnumPlanar[]
     = {frDirEnum::S, frDirEnum::W, frDirEnum::E, frDirEnum::N};
 
+static constexpr frDirEnum frDirEnumVia[] = {frDirEnum::U, frDirEnum::D};
+
+static constexpr frDirEnum frDirEnumVert[] = {frDirEnum::N, frDirEnum::S};
+
+static constexpr frDirEnum frDirEnumHorz[] = {frDirEnum::W, frDirEnum::E};
+
 enum class AccessPointTypeEnum
 {
   Ideal,
@@ -287,70 +298,53 @@ enum class frAccessPointEnum
   NearbyGrid = 4  // nearby grid or 1/2 grid
 };
 
+enum class RipUpMode
+{
+  DRC = 0,
+  ALL = 1,
+  NEARDRC = 2,
+  INCR = 3,
+  VIASWAP = 4
+};
+
 namespace bg = boost::geometry;
 
-typedef bg::model::d2::point_xy<frCoord, bg::cs::cartesian> point_t;
-typedef bg::model::box<point_t> box_t;
-typedef bg::model::segment<point_t> segment_t;
+using point_t = bg::model::d2::point_xy<frCoord, bg::cs::cartesian>;
+using box_t = bg::model::box<point_t>;
+using segment_t = bg::model::segment<point_t>;
 
 template <typename T>
 using rq_box_value_t = std::pair<odb::Rect, T>;
 
 struct frDebugSettings
 {
-  frDebugSettings()
-      : debugDR(false),
-        debugDumpDR(false),
-        debugMaze(false),
-        debugPA(false),
-        debugTA(false),
-        draw(true),
-        allowPause(true),
-        x(-1),
-        y(-1),
-        iter(0),
-        paMarkers(false),
-        paEdge(false),
-        paCommit(false),
-        mazeEndIter(-1),
-        drcCost(-1),
-        markerCost(-1),
-        fixedShapeCost(-1),
-        markerDecay(-1),
-        ripupMode(-1),
-        followGuide(-1),
-        writeNetTracks(false)
-
-  {
-  }
-
   bool is_on() const { return debugDR || debugPA; }
 
-  bool debugDR;
-  bool debugDumpDR;
-  bool debugMaze;
-  bool debugPA;
-  bool debugTA;
-  bool draw;
-  bool allowPause;
+  bool debugDR{false};
+  bool debugDumpDR{false};
+  bool debugMaze{false};
+  bool debugPA{false};
+  bool debugTA{false};
+  bool draw{true};
+  bool allowPause{true};
   std::string netName;
   std::string pinName;
-  int x;
-  int y;
-  int iter;
-  bool paMarkers;
-  bool paEdge;
-  bool paCommit;
+  odb::Rect box{-1, -1, -1, -1};
+  int iter{0};
+  bool paMarkers{false};
+  bool paEdge{false};
+  bool paCommit{false};
   std::string dumpDir;
 
-  int mazeEndIter;
-  int drcCost;
-  int markerCost;
-  int fixedShapeCost;
-  float markerDecay;
-  int ripupMode;
-  int followGuide;
-  bool writeNetTracks;
+  int mazeEndIter{-1};
+  int drcCost{-1};
+  int markerCost{-1};
+  int fixedShapeCost{-1};
+  float markerDecay{-1};
+  int ripupMode{-1};
+  int followGuide{-1};
+  bool writeNetTracks{false};
+  bool dumpLastWorker{false};
 };
 
 // Avoids the need to split the whole serializer like
@@ -362,4 +356,6 @@ inline bool is_loading(const Archive& ar)
   return std::is_same<typename Archive::is_loading, boost::mpl::true_>::value;
 }
 
-}  // namespace fr
+using utl::format_as;
+
+}  // namespace drt

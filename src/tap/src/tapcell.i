@@ -83,8 +83,9 @@
   }
 
   void run(odb::dbMaster* endcap_master,
-           int halo_x,
-           int halo_y,
+           const int halo_x,
+           const int halo_y,
+           const int row_min_width,
            const char* cnrcap_nwin_master,
            const char* cnrcap_nwout_master,
            const char* tap_nwintie_master,
@@ -96,7 +97,8 @@
            const char* incnrcap_nwin_master,
            const char* incnrcap_nwout_master,
            odb::dbMaster* tapcell_master,
-           int dist)
+           const int dist,
+           const bool disallow_one_site_gaps)
   {
     Options options;
     options.endcap_master = endcap_master;
@@ -104,6 +106,7 @@
     options.dist = dist;
     options.halo_x = halo_x;
     options.halo_y = halo_y;
+    options.row_min_width = row_min_width;
     options.cnrcap_nwin_master = findMaster(cnrcap_nwin_master);
     options.cnrcap_nwout_master = findMaster(cnrcap_nwout_master);
     options.tap_nwintie_master = findMaster(tap_nwintie_master);
@@ -114,15 +117,17 @@
     options.tap_nwout3_master = findMaster(tap_nwout3_master);
     options.incnrcap_nwin_master = findMaster(incnrcap_nwin_master);
     options.incnrcap_nwout_master = findMaster(incnrcap_nwout_master);
+    options.disallow_one_site_gaps = disallow_one_site_gaps;
     getTapcell()->run(options);
   }
 
-  void cut_rows(odb::dbMaster* endcap_master, int halo_x, int halo_y)
+  void cut_rows(odb::dbMaster* endcap_master, int halo_x, int halo_y, int row_min_width)
   {
     Options options;
     options.endcap_master = endcap_master;
     options.halo_x = halo_x;
     options.halo_y = halo_y;
+    options.row_min_width = row_min_width;
     getTapcell()->cutRows(options);
   }
 

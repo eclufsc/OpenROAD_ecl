@@ -39,9 +39,8 @@
 #include "solver.h"
 
 namespace gpl {
-using namespace std;
 
-typedef Eigen::Triplet<float> T;
+using T = Eigen::Triplet<float>;
 
 InitialPlaceVars::InitialPlaceVars()
 {
@@ -56,11 +55,6 @@ void InitialPlaceVars::reset()
   maxFanout = 200;
   netWeightScale = 800.0;
   debug = false;
-  forceCPU = false;
-}
-
-InitialPlace::InitialPlace() : pbc_(nullptr), log_(nullptr)
-{
 }
 
 InitialPlace::InitialPlace(InitialPlaceVars ipVars,
@@ -71,25 +65,13 @@ InitialPlace::InitialPlace(InitialPlaceVars ipVars,
 {
 }
 
-InitialPlace::~InitialPlace()
-{
-  reset();
-}
-
-void InitialPlace::reset()
-{
-  pbc_ = nullptr;
-  ipVars_.reset();
-}
-
 void InitialPlace::doBicgstabPlace()
 {
   ResidualError error;
-  bool run_cpu = true;
 
   std::unique_ptr<Graphics> graphics;
   if (ipVars_.debug && Graphics::guiActive()) {
-    graphics = make_unique<Graphics>(log_, pbc_, pbVec_);
+    graphics = std::make_unique<Graphics>(log_, pbc_, pbVec_);
   }
 
   placeInstsCenter();
@@ -100,40 +82,16 @@ void InitialPlace::doBicgstabPlace()
   for (size_t iter = 1; iter <= ipVars_.maxIter; iter++) {
     updatePinInfo();
     createSparseMatrix();
-#ifdef ENABLE_GPU
-    if (!ipVars_.forceCPU) {
-      int gpu_count = 0;
-      cudaGetDeviceCount(&gpu_count);
-      if (gpu_count != 0) {
-        run_cpu = false;
-        // CUSOLVER based on sparse matrix and QR decomposition for initial
-        // place
-        error = cudaSparseSolve(iter,
-                                placeInstForceMatrixX_,
-                                fixedInstForceVecX_,
-                                instLocVecX_,
-                                placeInstForceMatrixY_,
-                                fixedInstForceVecY_,
-                                instLocVecY_,
-                                log_);
-      } else
-        log_->warn(GPL, 250, "GPU is not available. CPU solve is being used.");
-    }
-#endif
-    if (run_cpu) {
-      if (ipVars_.forceCPU)
-        log_->warn(GPL, 251, "CPU solver is forced to be used.");
-      error = cpuSparseSolve(ipVars_.maxSolverIter,
-                             iter,
-                             placeInstForceMatrixX_,
-                             fixedInstForceVecX_,
-                             instLocVecX_,
-                             placeInstForceMatrixY_,
-                             fixedInstForceVecY_,
-                             instLocVecY_,
-                             log_);
-    }
-    float error_max = max(error.x, error.y);
+    error = cpuSparseSolve(ipVars_.maxSolverIter,
+                           iter,
+                           placeInstForceMatrixX_,
+                           fixedInstForceVecX_,
+                           instLocVecX_,
+                           placeInstForceMatrixY_,
+                           fixedInstForceVecY_,
+                           instLocVecY_,
+                           log_);
+    float error_max = std::max(error.x, error.y);
     log_->report("[InitialPlace]  Iter: {} CG residual: {:0.8f} HPWL: {}",
                  iter,
                  error_max,
@@ -158,7 +116,8 @@ void InitialPlace::placeInstsCenter()
 
   for (auto& inst : pbc_->placeInsts()) {
     if (!inst->isLocked()) {
-      auto group = inst->dbInst()->getGroup();
+      const auto db_inst = inst->dbInst();
+      const auto group = db_inst->getGroup();
       if (group && group->getType() == odb::dbGroupType::POWER_DOMAIN) {
         auto domain_region = group->getRegion();
         int domain_xMin = std::numeric_limits<int>::max();
@@ -173,6 +132,12 @@ void InitialPlace::placeInstsCenter()
         }
         inst->setCenterLocation(domain_xMax - (domain_xMax - domain_xMin) / 2,
                                 domain_yMax - (domain_yMax - domain_yMin) / 2);
+      } else if (ipVars_.maxIter == 0 && db_inst->isPlaced()) {
+        // It is helpful to pick up the placement from mpl2 if available,
+        // particularly when you are going to skip initial placement
+        // (eg skip_io).
+        const auto bbox = db_inst->getBBox()->getBox();
+        inst->setCenterLocation(bbox.xCenter(), bbox.yCenter());
       } else {
         inst->setCenterLocation(centerX, centerY);
       }
@@ -272,7 +237,7 @@ void InitialPlace::createSparseMatrix()
   // to fill in SparseMatrix from Eigen docs.
   //
 
-  vector<T> listX, listY;
+  std::vector<T> listX, listY;
   listX.reserve(1000000);
   listY.reserve(1000000);
 
@@ -300,7 +265,6 @@ void InitialPlace::createSparseMatrix()
     }
 
     float netWeight = ipVars_.netWeightScale / (net->pins().size() - 1);
-    // cout << "net: " << net.net()->getConstName() << endl;
 
     // foreach two pins in single nets.
     auto& pins = net->pins();
@@ -329,16 +293,13 @@ void InitialPlace::createSparseMatrix()
           if (pin1->isPlaceInstConnected() && pin2->isPlaceInstConnected()) {
             const int inst1 = pin1->instance()->extId();
             const int inst2 = pin2->instance()->extId();
-            // cout << "inst: " << inst1 << " " << inst2 << endl;
 
-            listX.push_back(T(inst1, inst1, weightX));
-            listX.push_back(T(inst2, inst2, weightX));
+            listX.emplace_back(inst1, inst1, weightX);
+            listX.emplace_back(inst2, inst2, weightX);
 
-            listX.push_back(T(inst1, inst2, -weightX));
-            listX.push_back(T(inst2, inst1, -weightX));
+            listX.emplace_back(inst1, inst2, -weightX);
+            listX.emplace_back(inst2, inst1, -weightX);
 
-            // cout << pin1->cx() << " "
-            //  << pin1->instance()->cx() << endl;
             fixedInstForceVecX_(inst1)
                 += -weightX
                    * ((pin1->cx() - pin1->instance()->cx())
@@ -353,8 +314,7 @@ void InitialPlace::createSparseMatrix()
           else if (!pin1->isPlaceInstConnected()
                    && pin2->isPlaceInstConnected()) {
             const int inst2 = pin2->instance()->extId();
-            // cout << "inst2: " << inst2 << endl;
-            listX.push_back(T(inst2, inst2, weightX));
+            listX.emplace_back(inst2, inst2, weightX);
 
             fixedInstForceVecX_(inst2)
                 += weightX
@@ -364,8 +324,7 @@ void InitialPlace::createSparseMatrix()
           else if (pin1->isPlaceInstConnected()
                    && !pin2->isPlaceInstConnected()) {
             const int inst1 = pin1->instance()->extId();
-            // cout << "inst1: " << inst1 << endl;
-            listX.push_back(T(inst1, inst1, weightX));
+            listX.emplace_back(inst1, inst1, weightX);
 
             fixedInstForceVecX_(inst1)
                 += weightX
@@ -389,11 +348,11 @@ void InitialPlace::createSparseMatrix()
             const int inst1 = pin1->instance()->extId();
             const int inst2 = pin2->instance()->extId();
 
-            listY.push_back(T(inst1, inst1, weightY));
-            listY.push_back(T(inst2, inst2, weightY));
+            listY.emplace_back(inst1, inst1, weightY);
+            listY.emplace_back(inst2, inst2, weightY);
 
-            listY.push_back(T(inst1, inst2, -weightY));
-            listY.push_back(T(inst2, inst1, -weightY));
+            listY.emplace_back(inst1, inst2, -weightY);
+            listY.emplace_back(inst2, inst1, -weightY);
 
             fixedInstForceVecY_(inst1)
                 += -weightY
@@ -409,7 +368,7 @@ void InitialPlace::createSparseMatrix()
           else if (!pin1->isPlaceInstConnected()
                    && pin2->isPlaceInstConnected()) {
             const int inst2 = pin2->instance()->extId();
-            listY.push_back(T(inst2, inst2, weightY));
+            listY.emplace_back(inst2, inst2, weightY);
 
             fixedInstForceVecY_(inst2)
                 += weightY
@@ -419,7 +378,7 @@ void InitialPlace::createSparseMatrix()
           else if (pin1->isPlaceInstConnected()
                    && !pin2->isPlaceInstConnected()) {
             const int inst1 = pin1->instance()->extId();
-            listY.push_back(T(inst1, inst1, weightY));
+            listY.emplace_back(inst1, inst1, weightY);
 
             fixedInstForceVecY_(inst1)
                 += weightY

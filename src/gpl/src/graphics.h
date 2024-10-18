@@ -51,11 +51,18 @@ class NesterovPlace;
 class PlacerBaseCommon;
 class PlacerBase;
 class GCell;
+class GCellHandle;
 
 // This class draws debugging graphics on the layout
 class Graphics : public gui::Renderer, public gui::HeatMapDataSource
 {
  public:
+  using LineSeg = std::pair<odb::Point, odb::Point>;
+  using LineSegs = std::vector<LineSeg>;
+
+  // Debug mbff
+  Graphics(utl::Logger* logger);
+
   // Debug InitialPlace
   Graphics(utl::Logger* logger,
            std::shared_ptr<PlacerBaseCommon> pbc,
@@ -74,26 +81,29 @@ class Graphics : public gui::Renderer, public gui::HeatMapDataSource
   // Draw the graphics; optionally pausing afterwards
   void cellPlot(bool pause = false);
 
+  // Draw the MBFF mapping
+  void mbff_mapping(const LineSegs& segs);
+
   // Show a message in the status bar
   void status(const std::string& message);
 
   // From Renderer API
-  virtual void drawObjects(gui::Painter& painter) override;
-  virtual gui::SelectionSet select(odb::dbTechLayer* layer,
-                                   const odb::Rect& region) override;
+  void drawObjects(gui::Painter& painter) override;
+  gui::SelectionSet select(odb::dbTechLayer* layer,
+                           const odb::Rect& region) override;
 
   // From HeatMapDataSource
-  virtual bool canAdjustGrid() const override { return false; }
-  virtual double getGridXSize() const override;
-  virtual double getGridYSize() const override;
-  virtual odb::Rect getBounds() const override;
-  virtual bool populateMap() override;
-  virtual void combineMapData(bool base_has_value,
-                              double& base,
-                              const double new_data,
-                              const double data_area,
-                              const double intersection_area,
-                              const double rect_area) override;
+  bool canAdjustGrid() const override { return false; }
+  double getGridXSize() const override;
+  double getGridYSize() const override;
+  odb::Rect getBounds() const override;
+  bool populateMap() override;
+  void combineMapData(bool base_has_value,
+                      double& base,
+                      double new_data,
+                      double data_area,
+                      double intersection_area,
+                      double rect_area) override;
 
   // Is the GUI being displayed (true) or are we in batch mode (false)
   static bool guiActive();
@@ -105,19 +115,34 @@ class Graphics : public gui::Renderer, public gui::HeatMapDataSource
     Overflow
   };
 
+  enum Mode
+  {
+    Mbff,
+    Initial,
+    Nesterov
+  };
+
+  void drawForce(gui::Painter& painter);
+  void drawCells(const std::vector<GCell*>& cells, gui::Painter& painter);
+  void drawCells(const std::vector<GCellHandle>& cells, gui::Painter& painter);
+  void drawSingleGCell(const GCell* gCell, gui::Painter& painter);
+
   std::shared_ptr<PlacerBaseCommon> pbc_;
   std::shared_ptr<NesterovBaseCommon> nbc_;
   std::vector<std::shared_ptr<PlacerBase>> pbVec_;
   std::vector<std::shared_ptr<NesterovBase>> nbVec_;
-  NesterovPlace* np_;
-  GCell* selected_;
-  bool draw_bins_;
-  utl::Logger* logger_;
-  HeatMapType heatmap_type_;
+  NesterovPlace* np_ = nullptr;
+  GCell* selected_ = nullptr;
+  bool draw_bins_ = false;
+  utl::Logger* logger_ = nullptr;
+  HeatMapType heatmap_type_ = Density;
+  LineSegs mbff_edges_;
+  Mode mode_;
 
   void initHeatmap();
   void drawNesterov(gui::Painter& painter);
   void drawInitial(gui::Painter& painter);
+  void drawMBFF(gui::Painter& painter);
   void drawBounds(gui::Painter& painter);
   void reportSelected();
 };

@@ -44,6 +44,7 @@
 #include "dbTypes.h"
 #include "geom.h"
 #include "wOrder.h"
+#include "util.h"
 
 using namespace odb;
 %}
@@ -75,6 +76,8 @@ using namespace odb;
 %ignore odb::Point::set(Orientation2D orient, int value);
 %ignore odb::Rect::bloat(int margin, Orientation2D orient) const;
 
+%ignore odb::dbGDSStructure::operator[];
+
 %include "dbenums.i"
 %include "parserenums.i"
 %include "dbtypes.i"
@@ -97,3 +100,5 @@ using namespace odb;
 %include "odb/dbNetSet.h"
 %include "odb/dbCCSegSet.h"
 %include "odb/wOrder.h"
+
+std::string generateMacroPlacementString(odb::dbBlock* block);

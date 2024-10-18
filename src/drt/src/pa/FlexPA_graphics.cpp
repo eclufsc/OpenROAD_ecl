@@ -34,7 +34,7 @@
 
 #include "FlexPA.h"
 
-namespace fr {
+namespace drt {
 
 FlexPAGraphics::FlexPAGraphics(frDebugSettings* settings,
                                frDesign* design,
@@ -53,12 +53,13 @@ FlexPAGraphics::FlexPAGraphics(frDebugSettings* settings,
   // Build the layer map between opendb & tr
   auto odb_tech = db->getTech();
 
-  layer_map_.resize(odb_tech->getLayerCount(), -1);
+  layer_map_.resize(odb_tech->getLayerCount(), std::make_pair(-1, "none"));
 
   for (auto& tr_layer : design->getTech()->getLayers()) {
     auto odb_layer = tr_layer->getDbLayer();
     if (odb_layer) {
-      layer_map_[odb_layer->getNumber()] = tr_layer->getLayerNum();
+      layer_map_[odb_layer->getNumber()]
+          = std::make_pair(tr_layer->getLayerNum(), odb_layer->getName());
     }
   }
 
@@ -82,8 +83,9 @@ FlexPAGraphics::FlexPAGraphics(frDebugSettings* settings,
       inst_ = nullptr;
     } else {
       inst_ = design->getTopBlock()->getInst(inst_name);
-      if (!inst_)
+      if (!inst_) {
         logger_->warn(DRT, 5000, "INST NOT FOUND!");
+      }
     }
   }
 
@@ -92,11 +94,11 @@ FlexPAGraphics::FlexPAGraphics(frDebugSettings* settings,
 
 void FlexPAGraphics::drawLayer(odb::dbTechLayer* layer, gui::Painter& painter)
 {
-  frLayerNum layerNum;
+  frLayerNum layer_num;
   if (!shapes_.empty()) {
-    layerNum = layer_map_.at(layer->getNumber());
+    layer_num = layer_map_.at(layer->getNumber()).first;
     for (auto& b : shapes_) {
-      if (b.second != layerNum) {
+      if (b.second != layer_num) {
         continue;
       }
       painter.drawRect(
@@ -108,8 +110,8 @@ void FlexPAGraphics::drawLayer(odb::dbTechLayer* layer, gui::Painter& painter)
     return;
   }
 
-  layerNum = layer_map_.at(layer->getNumber());
-  if (layerNum < 0) {
+  layer_num = layer_map_.at(layer->getNumber()).first;
+  if (layer_num < 0) {
     return;
   }
 
@@ -117,9 +119,9 @@ void FlexPAGraphics::drawLayer(odb::dbTechLayer* layer, gui::Painter& painter)
     auto* via_def = via->getViaDef();
     Rect bbox;
     bool skip = false;
-    if (via_def->getLayer1Num() == layerNum) {
+    if (via_def->getLayer1Num() == layer_num) {
       bbox = via->getLayer1BBox();
-    } else if (via_def->getLayer2Num() == layerNum) {
+    } else if (via_def->getLayer2Num() == layer_num) {
       bbox = via->getLayer2BBox();
     } else {
       skip = true;
@@ -132,7 +134,7 @@ void FlexPAGraphics::drawLayer(odb::dbTechLayer* layer, gui::Painter& painter)
   }
 
   for (auto seg : pa_segs_) {
-    if (seg->getLayerNum() == layerNum) {
+    if (seg->getLayerNum() == layer_num) {
       Rect bbox = seg->getBBox();
       painter.setPen(layer, /* cosmetic */ true);
       painter.setBrush(layer);
@@ -144,27 +146,27 @@ void FlexPAGraphics::drawLayer(odb::dbTechLayer* layer, gui::Painter& painter)
     painter.setPen(gui::Painter::yellow, /* cosmetic */ true);
     painter.setBrush(gui::Painter::transparent);
     for (auto& marker : *pa_markers_) {
-      if (marker->getLayerNum() == layerNum) {
+      if (marker->getLayerNum() == layer_num) {
         painter.drawRect(marker->getBBox());
       }
     }
   }
 
   for (const auto& ap : aps_) {
-    if (ap.getLayerNum() != layerNum) {
+    if (ap.getLayerNum() != layer_num) {
       continue;
     }
     auto color = ap.hasAccess() ? gui::Painter::green : gui::Painter::red;
     painter.setPen(color, /* cosmetic */ true);
 
-    Point pt = ap.getPoint();
+    const Point& pt = ap.getPoint();
     painter.drawX(pt.x(), pt.y(), 50);
   }
 }
 
 void FlexPAGraphics::startPin(frMPin* pin,
                               frInstTerm* inst_term,
-                              set<frInst*, frBlockObjectComp>* instClass)
+                              std::set<frInst*, frBlockObjectComp>* inst_class)
 {
   pin_ = nullptr;
 
@@ -173,11 +175,14 @@ void FlexPAGraphics::startPin(frMPin* pin,
     if (term_name_ != "*" && term->getName() != term_name_) {
       return;
     }
-    if (instClass->find(inst_) == instClass->end()) {
+    if (inst_class->find(inst_) == inst_class->end()) {
       return;
     }
   }
 
+  if (inst_term == nullptr) {
+    logger_->error(DRT, 158, "Instance for MPin {} is null.", term->getName());
+  }
   const std::string name
       = inst_term->getInst()->getName() + ':' + term->getName();
   status("Start pin: " + name);
@@ -190,7 +195,7 @@ void FlexPAGraphics::startPin(frMPin* pin,
 
 void FlexPAGraphics::startPin(frBPin* pin,
                               frInstTerm* inst_term,
-                              set<frInst*, frBlockObjectComp>* instClass)
+                              std::set<frInst*, frBlockObjectComp>* inst_class)
 {
   pin_ = nullptr;
 
@@ -242,7 +247,7 @@ void FlexPAGraphics::setAPs(
 
   // We make a copy of the aps
   for (auto& ap : aps) {
-    aps_.emplace_back(*ap.get());
+    aps_.emplace_back(*ap);
   }
   status("add " + std::to_string(aps.size()) + " ( " + to_string(lower_type)
          + " / " + to_string(upper_type) + " ) "
@@ -267,6 +272,13 @@ void FlexPAGraphics::setViaAP(
   pa_markers_ = &markers;
   for (auto& marker : markers) {
     Rect bbox = marker->getBBox();
+    std::string layer_name;
+    for (auto& layer : layer_map_) {
+      if (layer.first == marker->getLayerNum()) {
+        layer_name = layer.second;
+        break;
+      }
+    }
     logger_->info(DRT,
                   119,
                   "Marker ({}, {}) ({}, {}) on {}:",
@@ -274,7 +286,7 @@ void FlexPAGraphics::setViaAP(
                   bbox.yMin(),
                   bbox.xMax(),
                   bbox.yMax(),
-                  marker->getLayerNum());
+                  layer_name);
     marker->getConstraint()->report(logger_);
   }
 
@@ -322,7 +334,7 @@ void FlexPAGraphics::setPlanarAP(
 }
 
 void FlexPAGraphics::setObjsAndMakers(
-    const vector<pair<frConnFig*, frBlockObject*>>& objs,
+    const std::vector<std::pair<frConnFig*, frBlockObject*>>& objs,
     const std::vector<std::unique_ptr<frMarker>>& markers,
     const FlexPA::PatternType type)
 {
@@ -376,4 +388,4 @@ bool FlexPAGraphics::guiActive()
   return gui::Gui::enabled();
 }
 
-}  // namespace fr
+}  // namespace drt

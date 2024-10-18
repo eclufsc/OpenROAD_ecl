@@ -29,7 +29,7 @@
 
 #include "frDesign.h"
 
-namespace fr {
+namespace drt {
 
 // Instances are grouped into equivalence classes based on master,
 // orientation, and track-offset.  From each equivalence class a
@@ -44,12 +44,16 @@ namespace fr {
 class UniqueInsts
 {
  public:
+  using InstSet = std::set<frInst*, frBlockObjectComp>;
   // if target_insts is non-empty then analysis is limited to
   // those instances.
   UniqueInsts(frDesign* design,
               const frCollection<odb::dbInst*>& target_insts,
               Logger* logger);
 
+  /**
+   * @brief Initializes Unique Instances and Pin Acess data.
+   */
   void init();
 
   // Get's the index corresponding to the inst's unique instance
@@ -58,33 +62,89 @@ class UniqueInsts
   int getPAIndex(frInst* inst) const;
 
   // Gets the instances in the equivalence set of the given inst
-  set<frInst*, frBlockObjectComp>* getClass(frInst* inst) const;
+  InstSet* getClass(frInst* inst) const;
 
   const std::vector<frInst*>& getUnique() const;
   frInst* getUnique(int idx) const;
   bool hasUnique(frInst* inst) const;
 
   void report() const;
+  void setDesign(frDesign* design) { design_ = design; }
 
  private:
-  using LayerRange = std::tuple<frLayerNum, frLayerNum>;
+  using LayerRange = std::pair<frLayerNum, frLayerNum>;
   using MasterLayerRange = std::map<frMaster*, LayerRange, frBlockObjectComp>;
 
   frDesign* getDesign() const { return design_; }
   frTechObject* getTech() const { return design_->getTech(); }
+
+  /**
+   * @brief Checks if any net related to the instance has a NonDefaultRule.
+   *
+   * @param inst A cell instance.
+   *
+   * @return If instance contains a NonDefaultRule net connected to any
+   * terminal.
+   */
   bool isNDRInst(frInst& inst);
   bool hasTrackPattern(frTrackPattern* tp, const Rect& box) const;
 
-  void getPrefTrackPatterns(std::vector<frTrackPattern*>& prefTrackPatterns);
+  /**
+   * @brief Creates a vector of preferred track patterns.
+   *
+   * Not every track pattern is a preferred one,
+   * this function acts as filter of design_->getTopBlock()->getTrackPatterns()
+   * to only take the preferred ones, which are the ones in the routing
+   * direction of the layer.
+   *
+   * @return A vector of track patterns objects.
+   */
+  std::vector<frTrackPattern*> getPrefTrackPatterns();
   void applyPatternsFile(const char* file_path);
 
+  /**
+   * @brief Computes all unique instances data structures
+   *
+   * Proxies computeUnique, only initializing the input data strcutures before.
+   *
+   * @todo This function can probably be eliminated
+   */
   void initUniqueInstance();
+
+  /**
+   * @brief Initializes pin access structures
+   * Fills unique_to_pa_idx_adds pin access unique points to pins
+   */
   void initPinAccess();
 
-  void initMaster2PinLayerRange(MasterLayerRange& master2PinLayerRange);
+  /**
+   * @brief Creates a map from Master instance to LayerRanges.
+   *
+   * LayerRange represents the lower and upper layer of a Master instance.
+   *
+   * @return A map from Master instance to LayerRange.
+   */
+  MasterLayerRange initMasterToPinLayerRange();
 
-  void computeUnique(const MasterLayerRange& master2PinLayerRange,
-                     const std::vector<frTrackPattern*>& prefTrackPatterns);
+  /**
+   * @brief Computes all unique instances data structures.
+   *
+   * @param master_to_pin_layer_range Map from a master instance to layerRange.
+   * @param pref_track_patterns Vector of preffered track patterns.
+   * Fills: master_OT_to_insts_, inst_to_unique_, inst_to_class_ and
+   * unique_to_idx_.
+   */
+  void computeUnique(const MasterLayerRange& master_to_pin_layer_range,
+                     const std::vector<frTrackPattern*>& pref_track_patterns);
+
+  /**
+   * @brief Raises an error if pin shape is illegal.
+   *
+   * @throws DRT 320/321 if the term has offgrid pin shape
+   * @throws DRT 322 if the pin figure is unsuported (not Rect of Polygon)
+   *
+   * @param pin Pin to be checked.
+   */
   void checkFigsOnGrid(const frMPin* pin);
 
   frDesign* design_;
@@ -94,18 +154,18 @@ class UniqueInsts
   // All the unique instances
   std::vector<frInst*> unique_;
   // Mapp all instances to their representative unique instance
-  std::map<frInst*, frInst*, frBlockObjectComp> inst2unique_;
+  std::map<frInst*, frInst*, frBlockObjectComp> inst_to_unique_;
   // Maps all instances to the set of instances with the same unique inst
-  std::map<frInst*, set<frInst*, frBlockObjectComp>*> inst2Class_;
+  std::unordered_map<frInst*, InstSet*> inst_to_class_;
   // Maps a unique instance to its pin access index
-  std::map<frInst*, int, frBlockObjectComp> unique2paidx_;
+  std::map<frInst*, int, frBlockObjectComp> unique_to_pa_idx_;
   // Maps a unique instance to its index in unique_
-  std::map<frInst*, int, frBlockObjectComp> unique2Idx_;
+  std::map<frInst*, int, frBlockObjectComp> unique_to_idx_;
   // master orient track-offset to instances
-  map<frMaster*,
-      map<dbOrientType, map<vector<frCoord>, set<frInst*, frBlockObjectComp>>>,
-      frBlockObjectComp>
-      masterOT2Insts_;
+  std::map<frMaster*,
+           std::map<dbOrientType, std::map<std::vector<frCoord>, InstSet>>,
+           frBlockObjectComp>
+      master_orient_trackoffset_to_insts_;
 };
 
-}  // namespace fr
+}  // namespace drt

@@ -38,20 +38,19 @@
 #include "db/obj/frMaster.h"
 #include "frDesign.h"
 
-using namespace std;
-using namespace fr;
+namespace drt {
 
-string OUT_MAZE_FILE;
-string DRC_RPT_FILE;
+std::string OUT_MAZE_FILE;
+std::string DRC_RPT_FILE;
 std::optional<int> DRC_RPT_ITER_STEP;
-string CMAP_FILE;
-string GUIDE_REPORT_FILE;
+std::string CMAP_FILE;
+std::string GUIDE_REPORT_FILE;
 
 // to be removed
 int OR_SEED = -1;
 double OR_K = 0;
 
-string DBPROCESSNODE = "";
+std::string DBPROCESSNODE;
 int MAX_THREADS = 1;
 int BATCHSIZE = 1024;
 int BATCHSIZETA = 8;
@@ -94,7 +93,6 @@ int CLOCK_NETS_LEAF_RIPUP_HARDINESS = 10;
 bool AUTO_TAPER_NDR_NETS = true;
 int TAPERBOX_RADIUS = 3;
 
-frUInt4 TAVIACOST = 1;
 frUInt4 TAPINCOST = 4;
 frUInt4 TAALIGNCOST = 4;
 frUInt4 TADRCCOST = 32;
@@ -109,20 +107,19 @@ frUInt4 MARKERBLOATWIDTH = 1;
 frUInt4 BLOCKCOST = 32;
 frUInt4 GUIDECOST = 1;  // disabled change getNextPathCost to enable
 float SHAPEBLOATWIDTH = 3;
-int MISALIGNMENTCOST = 8;
 
 int CONGCOST = 8;
 int HISTCOST = 32;
 std::string REPAIR_PDN_LAYER_NAME;
-frLayerNum GC_IGNORE_PDN_LAYER = -1;
-namespace fr {
+frLayerNum REPAIR_PDN_LAYER_NUM = -1;
+frLayerNum GC_IGNORE_PDN_LAYER_NUM = -1;
 
-ostream& operator<<(ostream& os, const frRect& pinFigIn)
+std::ostream& operator<<(std::ostream& os, const frRect& pinFigIn)
 {
   //  if (pinFigIn.getPin()) {
   //    os << "PINFIG (PINNAME/LAYER) " <<
   //    pinFigIn.getPin()->getTerm()->getName()
-  //       << " " << pinFigIn.getLayerNum() << endl;
+  //       << " " << pinFigIn.getLayerNum() << std::endl;
   //  }
   Rect tmpBox = pinFigIn.getBBox();
   os << "  RECT " << tmpBox.xMin() << " " << tmpBox.yMin() << " "
@@ -130,11 +127,11 @@ ostream& operator<<(ostream& os, const frRect& pinFigIn)
   return os;
 }
 
-ostream& operator<<(ostream& os, const frPolygon& pinFigIn)
+std::ostream& operator<<(std::ostream& os, const frPolygon& pinFigIn)
 {
   //  if (pinFigIn.getPin()) {
   //    os << "PINFIG (NAME/LAYER) " << pinFigIn.getPin()->getTerm()->getName()
-  //       << " " << pinFigIn.getLayerNum() << endl;
+  //       << " " << pinFigIn.getLayerNum() << std::endl;
   //  }
   os << "  POLYGON";
   for (auto& m : pinFigIn.getPoints()) {
@@ -143,22 +140,22 @@ ostream& operator<<(ostream& os, const frPolygon& pinFigIn)
   return os;
 }
 
-ostream& operator<<(ostream& os, const frMPin& pinIn)
+std::ostream& operator<<(std::ostream& os, const frMPin& pinIn)
 {
   os << "PIN (NAME) " << pinIn.getTerm()->getName();
   for (auto& m : pinIn.getFigs()) {
     if (m->typeId() == frcRect) {
-      os << endl << *(static_cast<frRect*>(m.get()));
+      os << std::endl << *(static_cast<frRect*>(m.get()));
     } else if (m->typeId() == frcPolygon) {
-      os << endl << *(static_cast<frPolygon*>(m.get()));
+      os << std::endl << *(static_cast<frPolygon*>(m.get()));
     } else {
-      os << endl << "Unsupported pinFig object!";
+      os << std::endl << "Unsupported pinFig object!";
     }
   }
   return os;
 }
 
-ostream& operator<<(ostream& os, const frBTerm& termIn)
+std::ostream& operator<<(std::ostream& os, const frBTerm& termIn)
 {
   frString name;
   frString netName;
@@ -168,12 +165,12 @@ ostream& operator<<(ostream& os, const frBTerm& termIn)
   }
   os << "TERM (NAME/NET) " << name << " " << netName;
   for (auto& m : termIn.getPins()) {
-    os << endl << *m;
+    os << std::endl << *m;
   }
   return os;
 }
 
-ostream& operator<<(ostream& os, const frInstTerm& instTermIn)
+std::ostream& operator<<(std::ostream& os, const frInstTerm& instTermIn)
 {
   frString name;
   frString cellName;
@@ -186,12 +183,12 @@ ostream& operator<<(ostream& os, const frInstTerm& instTermIn)
     netName = instTermIn.getNet()->getName();
   }
   os << "INSTTERM: (INST/CELL/TERM/NET) " << name << " " << cellName << " "
-     << termName << " " << netName << endl;
+     << termName << " " << netName << std::endl;
   os << *instTermIn.getTerm() << "END_INSTTERM";
   return os;
 }
 
-ostream& operator<<(ostream& os, const frViaDef& viaDefIn)
+std::ostream& operator<<(std::ostream& os, const frViaDef& viaDefIn)
 {
   frString name;
   name = viaDefIn.getName();
@@ -201,61 +198,61 @@ ostream& operator<<(ostream& os, const frViaDef& viaDefIn)
   }
   for (auto& m : viaDefIn.getLayer1Figs()) {
     if (m->typeId() == frcRect) {
-      os << endl << *(static_cast<frRect*>(m.get()));
+      os << std::endl << *(static_cast<frRect*>(m.get()));
     } else if (m->typeId() == frcPolygon) {
-      os << endl << *(static_cast<frPolygon*>(m.get()));
+      os << std::endl << *(static_cast<frPolygon*>(m.get()));
     } else {
-      os << endl << "Unsupported pinFig object!";
+      os << std::endl << "Unsupported pinFig object!";
     }
   }
   for (auto& m : viaDefIn.getCutFigs()) {
     if (m->typeId() == frcRect) {
-      os << endl << *(static_cast<frRect*>(m.get()));
+      os << std::endl << *(static_cast<frRect*>(m.get()));
     } else if (m->typeId() == frcPolygon) {
-      os << endl << *(static_cast<frPolygon*>(m.get()));
+      os << std::endl << *(static_cast<frPolygon*>(m.get()));
     } else {
-      os << endl << "Unsupported pinFig object!";
+      os << std::endl << "Unsupported pinFig object!";
     }
   }
   for (auto& m : viaDefIn.getLayer2Figs()) {
     if (m->typeId() == frcRect) {
-      os << endl << *(static_cast<frRect*>(m.get()));
+      os << std::endl << *(static_cast<frRect*>(m.get()));
     } else if (m->typeId() == frcPolygon) {
-      os << endl << *(static_cast<frPolygon*>(m.get()));
+      os << std::endl << *(static_cast<frPolygon*>(m.get()));
     } else {
-      os << endl << "Unsupported pinFig object!";
+      os << std::endl << "Unsupported pinFig object!";
     }
   }
   return os;
 }
 
-ostream& operator<<(ostream& os, const frBlock& blockIn)
+std::ostream& operator<<(std::ostream& os, const frBlock& blockIn)
 {
   Rect box = blockIn.getBBox();
-  os << "MACRO " << blockIn.getName() << endl
-     << "  ORIGIN " << box.xMin() << " " << box.yMin() << endl
+  os << "MACRO " << blockIn.getName() << std::endl
+     << "  ORIGIN " << box.xMin() << " " << box.yMin() << std::endl
      << "  SIZE " << box.xMax() << " " << box.yMax();
   for (auto& m : blockIn.getTerms()) {
-    os << endl << *m;
+    os << std::endl << *m;
   }
   return os;
 }
 
-ostream& operator<<(ostream& os, const frInst& instIn)
+std::ostream& operator<<(std::ostream& os, const frInst& instIn)
 {
   Point tmpPoint = instIn.getOrigin();
   auto tmpOrient = instIn.getOrient();
-  frString tmpName = instIn.getName();
+  const frString& tmpName = instIn.getName();
   frString tmpString = instIn.getMaster()->getName();
   os << "- " << tmpName << " " << tmpString << " + STATUS + ( " << tmpPoint.x()
-     << " " << tmpPoint.y() << " ) " << tmpOrient.getString() << endl;
+     << " " << tmpPoint.y() << " ) " << tmpOrient.getString() << std::endl;
   for (auto& m : instIn.getInstTerms()) {
-    os << endl << *m;
+    os << std::endl << *m;
   }
   return os;
 }
 
-ostream& operator<<(ostream& os, const drConnFig& fig)
+std::ostream& operator<<(std::ostream& os, const drConnFig& fig)
 {
   switch (fig.typeId()) {
     case drcPathSeg: {
@@ -285,7 +282,7 @@ ostream& operator<<(ostream& os, const drConnFig& fig)
   return os;
 }
 
-ostream& operator<<(ostream& os, const frPathSeg& p)
+std::ostream& operator<<(std::ostream& os, const frPathSeg& p)
 {
   os << "frPathSeg: begin (" << p.getBeginPoint().x() << " "
      << p.getBeginPoint().y() << " ) end ( " << p.getEndPoint().x() << " "
@@ -296,7 +293,7 @@ ostream& operator<<(ostream& os, const frPathSeg& p)
   return os;
 }
 
-ostream& operator<<(ostream& os, const frGuide& p)
+std::ostream& operator<<(std::ostream& os, const frGuide& p)
 {
   os << "frGuide: begin " << p.getBeginPoint() << " end " << p.getEndPoint()
      << " begin LayerNum " << p.getBeginLayerNum() << " end layerNum "
@@ -304,7 +301,7 @@ ostream& operator<<(ostream& os, const frGuide& p)
   return os;
 }
 
-ostream& operator<<(ostream& os, const frConnFig& fig)
+std::ostream& operator<<(std::ostream& os, const frConnFig& fig)
 {
   switch (fig.typeId()) {
     case frcPathSeg: {
@@ -342,7 +339,7 @@ ostream& operator<<(ostream& os, const frConnFig& fig)
   return os;
 }
 
-ostream& operator<<(ostream& os, const frBlockObject& fig)
+std::ostream& operator<<(std::ostream& os, const frBlockObject& fig)
 {
   switch (fig.typeId()) {
     case frcInstTerm: {
@@ -374,7 +371,7 @@ ostream& operator<<(ostream& os, const frBlockObject& fig)
   return os;
 }
 
-ostream& operator<<(ostream& os, const frNet& n)
+std::ostream& operator<<(std::ostream& os, const frNet& n)
 {
   os << "frNet " << n.getName() << (n.isClock() ? "CLOCK NET " : " ")
      << (n.hasNDR() ? "NDR " + n.getNondefaultRule()->getName() + " " : " ")
@@ -382,115 +379,17 @@ ostream& operator<<(ostream& os, const frNet& n)
   return os;
 }
 
-ostream& operator<<(ostream& os, const drNet& n)
+std::ostream& operator<<(std::ostream& os, const drNet& n)
 {
   os << "drNet " << *n.getFrNet() << "\nnRipupAvoids " << n.getNRipupAvoids()
      << " maxRipupAvoids " << n.getMaxRipupAvoids() << "\n";
   return os;
 }
 
-ostream& operator<<(ostream& os, const frMarker& m)
+std::ostream& operator<<(std::ostream& os, const frMarker& m)
 {
-  os << "MARKER: box " << m.getBBox() << " lNum " << m.getLayerNum()
-     << " constraint: ";
-  switch (m.getConstraint()->typeId()) {
-    case frConstraintTypeEnum::frcAreaConstraint:
-      return os << "frcAreaConstraint";
-    case frConstraintTypeEnum::frcCutSpacingConstraint:
-      return os << "frcCutSpacingConstraint";
-    case frConstraintTypeEnum::frcLef58CornerSpacingConcaveCornerConstraint:
-      return os << "frcLef58CornerSpacingConcaveCornerConstraint";
-    case frConstraintTypeEnum::frcLef58CornerSpacingConstraint:
-      return os << "frcLef58CornerSpacingConstraint";
-    case frConstraintTypeEnum::frcLef58CornerSpacingConvexCornerConstraint:
-      return os << "frcLef58CornerSpacingConvexCornerConstraint";
-    case frConstraintTypeEnum::frcLef58CornerSpacingSpacing1DConstraint:
-      return os << "frcLef58CornerSpacingSpacing1DConstraint";
-    case frConstraintTypeEnum::frcLef58CornerSpacingSpacing2DConstraint:
-      return os << "frcLef58CornerSpacingSpacing2DConstraint";
-    case frConstraintTypeEnum::frcLef58CornerSpacingSpacingConstraint:
-      return os << "frcLef58CornerSpacingSpacingConstraint";
-    case frConstraintTypeEnum::frcLef58CutClassConstraint:
-      return os << "frcLef58CutClassConstraint";
-    case frConstraintTypeEnum::frcLef58CutSpacingAdjacentCutsConstraint:
-      return os << "frcLef58CutSpacingAdjacentCutsConstraint";
-    case frConstraintTypeEnum::frcLef58CutSpacingConstraint:
-      return os << "frcLef58CutSpacingConstraint";
-    case frConstraintTypeEnum::frcLef58CutSpacingLayerConstraint:
-      return os << "frcLef58CutSpacingLayerConstraint";
-    case frConstraintTypeEnum::frcLef58CutSpacingParallelWithinConstraint:
-      return os << "frcLef58CutSpacingParallelWithinConstraint";
-    case frConstraintTypeEnum::frcLef58CutSpacingTableConstraint:
-      return os << "frcLef58CutSpacingTableConstraint";
-    case frConstraintTypeEnum::frcLef58CutSpacingTableLayerConstraint:
-      return os << "frcLef58CutSpacingTableLayerConstraint";
-    case frConstraintTypeEnum::frcLef58CutSpacingTablePrlConstraint:
-      return os << "frcLef58CutSpacingTablePrlConstraint";
-    case frConstraintTypeEnum::frcLef58EolExtensionConstraint:
-      return os << "frcLef58EolExtensionConstraint";
-    case frConstraintTypeEnum::frcLef58EolKeepOutConstraint:
-      return os << "frcLef58EolKeepOutConstraint";
-
-    case frConstraintTypeEnum::frcLef58MinStepConstraint:
-      return os << "frcLef58MinStepConstraint";
-    case frConstraintTypeEnum::frcLef58RectOnlyConstraint:
-      return os << "frcLef58RectOnlyConstraint";
-    case frConstraintTypeEnum::frcLef58RightWayOnGridOnlyConstraint:
-      return os << "frcLef58RightWayOnGridOnlyConstraint";
-    case frConstraintTypeEnum::frcLef58SpacingEndOfLineConstraint:
-      return os << "frcLef58SpacingEndOfLineConstraint";
-    case frConstraintTypeEnum::frcLef58SpacingEndOfLineWithinConstraint:
-      return os << "frcLef58SpacingEndOfLineWithinConstraint";
-    case frConstraintTypeEnum::
-        frcLef58SpacingEndOfLineWithinEncloseCutConstraint:
-      return os << "frcLef58SpacingEndOfLineWithinEncloseCutConstraint";
-    case frConstraintTypeEnum::frcLef58SpacingEndOfLineWithinEndToEndConstraint:
-      return os << "frcLef58SpacingEndOfLineWithinEndToEndConstraint";
-    case frConstraintTypeEnum::
-        frcLef58SpacingEndOfLineWithinMaxMinLengthConstraint:
-      return os << "frcLef58SpacingEndOfLineWithinMaxMinLengthConstraint";
-    case frConstraintTypeEnum::
-        frcLef58SpacingEndOfLineWithinParallelEdgeConstraint:
-      return os << "frcLef58SpacingEndOfLineWithinParallelEdgeConstraint";
-    case frConstraintTypeEnum::frcLef58SpacingTableConstraint:
-      return os << "frcLef58SpacingTableConstraint";
-    case frConstraintTypeEnum::frcMinEnclosedAreaConstraint:
-      return os << "frcMinEnclosedAreaConstraint";
-    case frConstraintTypeEnum::frcMinStepConstraint:
-      return os << "frcMinStepConstraint";
-    case frConstraintTypeEnum::frcMinWidthConstraint:
-      return os << "frcMinWidthConstraint";
-    case frConstraintTypeEnum::frcMinimumcutConstraint:
-      return os << "frcMinimumcutConstraint";
-    case frConstraintTypeEnum::frcNonSufficientMetalConstraint:
-      return os << "frcNonSufficientMetalConstraint";
-    case frConstraintTypeEnum::frcOffGridConstraint:
-      return os << "frcOffGridConstraint";
-    case frConstraintTypeEnum::frcRecheckConstraint:
-      return os << "frcRecheckConstraint";
-    case frConstraintTypeEnum::frcShortConstraint:
-      return os << "frcShortConstraint";
-    case frConstraintTypeEnum::frcSpacingConstraint:
-      return os << "frcSpacingConstraint";
-    case frConstraintTypeEnum::frcSpacingEndOfLineConstraint:
-      return os << "frcSpacingEndOfLineConstraint";
-    case frConstraintTypeEnum::frcSpacingEndOfLineParallelEdgeConstraint:
-      return os << "frcSpacingEndOfLineParallelEdgeConstraint";
-    case frConstraintTypeEnum::frcSpacingSamenetConstraint:
-      return os << "frcSpacingSamenetConstraint";
-    case frConstraintTypeEnum::frcSpacingTableConstraint:
-      return os << "frcSpacingTableConstraint";
-    case frConstraintTypeEnum::frcSpacingTableInfluenceConstraint:
-      return os << "frcSpacingTableInfluenceConstraint";
-    case frConstraintTypeEnum::frcSpacingTablePrlConstraint:
-      return os << "frcSpacingTablePrlConstraint";
-    case frConstraintTypeEnum::frcSpacingTableTwConstraint:
-      return os << "frcSpacingTableTwConstraint";
-    case frConstraintTypeEnum::frcLef58KeepOutZoneConstraint:
-      return os << "frcLef58KeepOutZoneConstraint";
-    default:
-      return os << "unknown viol";
-  }
+  return os << "MARKER: box " << m.getBBox() << " lNum " << m.getLayerNum()
+            << " constraint: " << m.getConstraint()->typeId();
 }
 
-}  // end namespace fr
+}  // end namespace drt

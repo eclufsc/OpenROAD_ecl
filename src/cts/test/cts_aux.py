@@ -34,34 +34,40 @@
 ###############################################################################
 from openroad import Design, Tech
 
-def clock_tree_synthesis(design, *,
-                         wire_unit=None,
-                         buf_list=None,
-                         root_buf=None,
-                         clk_nets=None,
-                         tree_buf=None,
-                         distance_between_buffers=None,
-                         branching_point_buffers_distance=None,
-                         clustering_exponent=None,
-                         clustering_unbalance_ratio=None,
-                         sink_clustering_size=None,
-                         sink_clustering_max_diameter=None,
-                         sink_clustering_enable=False,
-                         balance_levels=False,
-                         sink_clustering_levels=None,
-                         num_static_layers=None,
-                         sink_clustering_buffer=None
-                        ):
 
+def clock_tree_synthesis(
+    design,
+    *,
+    wire_unit=None,
+    buf_list=None,
+    root_buf=None,
+    clk_nets=None,
+    tree_buf=None,
+    distance_between_buffers=None,
+    branching_point_buffers_distance=None,
+    clustering_exponent=None,
+    clustering_unbalance_ratio=None,
+    sink_clustering_size=None,
+    sink_clustering_max_diameter=None,
+    sink_clustering_enable=False,
+    balance_levels=False,
+    sink_clustering_levels=None,
+    num_static_layers=None,
+    sink_clustering_buffer=None,
+    obstruction_aware=False,
+    apply_ndr=False,
+):
     cts = design.getTritonCts()
     parms = cts.getParms()
 
     # Boolean
     parms.setSinkClustering(sink_clustering_enable)
     parms.setBalanceLevels(balance_levels)
-    
+    parms.setObstructionAware(obstruction_aware)
+    parms.setApplyNDR(apply_ndr)
+
     if is_pos_int(sink_clustering_size):
-        parms.setSizeSinkClustering(sink_clustering_size)
+        parms.setSinkClusteringSize(sink_clustering_size)
 
     if is_pos_float(sink_clustering_max_diameter):
         parms.setMaxDiameter(sink_clustering_max_diameter)
@@ -78,7 +84,9 @@ def clock_tree_synthesis(design, *,
 
     if is_pos_float(branching_point_buffers_distance):
         parms.setVertexBuffersEnabled(True)
-        parms.setVertexBufferDistance(design.micronToDBU(branching_point_buffers_distance))
+        parms.setVertexBufferDistance(
+            design.micronToDBU(branching_point_buffers_distance)
+        )
 
     if is_pos_int(clustering_exponent):
         parms.setClusteringPower(clustering_exponent)
@@ -91,7 +99,7 @@ def clock_tree_synthesis(design, *,
     if buf_list != None:
         cts.setBufferList(buf_list)
     else:
-        utl.error(utl.CTS, 601, "Missing argument buf_list")
+        cts.setBufferList("")
 
     if is_pos_int(wire_unit):
         parms.setWireSegmentUnit(wire_unit)
@@ -105,22 +113,14 @@ def clock_tree_synthesis(design, *,
         parms.setTreeBuffer(tree_buf)
 
     if root_buf != None:
-        root_buf = root_buf.split(' ')[0]
-    elif buf_list != None:
-        root_buf = buf_list.split(' ')[0]
+        cts.setRootBuffer(root_buf)
     else:
-        utl.error(utl.CTS, 603, "Missing argument, must enter at least one of root_buf or buf_list.")
-
-    parms.setRootBuffer(root_buf)
+        cts.setRootBuffer("")
 
     if sink_clustering_buffer != None:
-        if type(sink_clustering_buffer) == list:
-            sink_buf = sink_clustering_buffer[0]
-        else:
-            sink_buf = sink_clustering_buffer
-        parms.setSinkBuffer(sink_buf)
+        cts.setSinkBuffer(sink_clustering_buf)
     else:
-        parms.setSinkBuffer(root_buf)
+        cts.setSinkBuffer("")
 
     if design.getBlock() == None:
         utl.error(utl.CTS, 604, "No design block found.")
@@ -136,7 +136,7 @@ def report_cts(design, out_file=None):
 def is_pos_int(x):
     if x == None:
         return False
-    elif isinstance(x, int) and x > 0 :
+    elif isinstance(x, int) and x > 0:
         return True
     else:
         utl.error(utl.CTS, 605, f"TypeError: {x} is not a postive integer")

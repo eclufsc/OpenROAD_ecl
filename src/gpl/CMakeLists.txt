@@ -41,6 +41,11 @@ include("openroad")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 find_package(Eigen3 REQUIRED)
+find_package(ortools REQUIRED)
+find_package(LEMON NAMES LEMON lemon REQUIRED)
+find_package(OpenMP REQUIRED)
+
+message(STATUS "Found OR-Tools: ${ortools_DIR} (version: ${ortools_VERSION})")
 
 swig_lib(NAME      gpl
          NAMESPACE gpl
@@ -59,11 +64,11 @@ target_sources(gpl
     src/fft.cpp
     src/fftsg.cpp
     src/fftsg2d.cpp
-    src/point.cpp
     src/routeBase.cpp
     src/timingBase.cpp
     src/graphics.cpp
     src/solver.cpp
+    src/mbff.cpp
 )
 
 messages(TARGET gpl)
@@ -71,6 +76,7 @@ messages(TARGET gpl)
 target_include_directories(gpl
   PUBLIC
     include
+    ${LEMON_INCLUDE_DIRS}
 )
 
 target_link_libraries(gpl
@@ -82,37 +88,10 @@ target_link_libraries(gpl
     OpenSTA
     rsz
     grt
+    ortools::ortools
+    Threads::Threads
+    OpenMP::OpenMP_CXX
 )
-
-# Allow users to use GPU or not
-option(GPU "Enable GPU" OFF)
-if (GPU)
-  message(STATUS "GPU is enabled")
-  # find_package(CUDA) should be replaced by "FindCUDAToolkit" for CMAKE verison >= 3.17. 
-  # See https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html. 
-  # find_package(CUDA) or FindCUDA is deprecated since vision 3.10.
-  find_package(CUDA QUIET COMPONENTS Core Widgets)
-  if (CUDA_FOUND)
-    message(STATUS "CUDA is found")
-    enable_language(CUDA)
-    target_sources(gpl PRIVATE src/gpuSolver.cu)
-    target_link_libraries(gpl
-      PRIVATE
-        ${CUDA_LIBRARIES}
-        ${CUDA_CUBLAS_LIBRARIES}
-        ${CUDA_cusparse_LIBRARY}
-        ${CUDA_cusolver_LIBRARY}
-    )
-    target_compile_definitions( gpl
-    PRIVATE
-      ENABLE_GPU
-    )
-  else()
-    message(STATUS "CUDA is not found")
-  endif()
-else()
-  message(STATUS "GPU is not enabled")
-endif()
 
 if (Python3_FOUND AND BUILD_PYTHON)
   swig_lib(NAME          gpl_py
@@ -126,6 +105,7 @@ if (Python3_FOUND AND BUILD_PYTHON)
   target_include_directories(gpl_py
     PUBLIC
       include
+      
   )
 
   target_link_libraries(gpl_py
@@ -139,4 +119,8 @@ if (Python3_FOUND AND BUILD_PYTHON)
       grt
   )
 
+endif()
+
+if(ENABLE_TESTS)
+  add_subdirectory(test)
 endif()

@@ -1,4 +1,6 @@
 record_tests {
+  resize1_hier
+  repair_hold1_hier  
   buffer_ports1
   buffer_ports3
   buffer_ports4
@@ -6,13 +8,18 @@ record_tests {
   buffer_ports6
   buffer_ports7
   buffer_ports8
+  buffer_varying_lengths
+  eqy_repair_setup2
+  eqy_repair_setup5
   fanin_fanout1
+  gain_buffering1
   make_parasitics1
   make_parasitics2
   make_parasitics3
   make_parasitics4
   make_parasitics5
   make_parasitics6
+  pin_swap1
   resize1
   resize4
   resize5
@@ -22,6 +29,7 @@ record_tests {
   resize_slack3
   remove_buffers1
   remove_buffers2
+  remove_buffers3
   repair_clk_nets1
   repair_clk_inverters1
   repair_cap1
@@ -60,6 +68,7 @@ record_tests {
   repair_setup4
   repair_setup5
   repair_setup6
+  repair_setup7
   repair_slew1
   repair_slew2
   repair_slew3
@@ -78,6 +87,8 @@ record_tests {
   repair_slew16
   repair_slew17
   report_floating_nets1
+  report_floating_nets2
+  report_floating_nets3
   repair_tie1
   repair_tie2
   repair_tie3
@@ -103,4 +114,11 @@ record_tests {
   repair_hold9_verbose
   set_dont_touch1
   set_dont_use1
+  repair_setup_undo
+  #rsz_man_tcl_check
+  #rsz_readme_msgs_check
+}
+
+record_pass_fail_tests {
+  cpp_tests
 }
