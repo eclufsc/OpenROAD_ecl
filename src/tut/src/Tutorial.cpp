@@ -1863,7 +1863,7 @@ Tutorial::placeMacrosCornerMinWL2()
   first_time_ = false;
   resetIoplacer();
   logger_->report("Running IOPlacer");
-  pPlacer_->run(false);
+  pPlacer_->runHungarianMatching(false);
   double wirelenght = getWeightedWL();
   logger_->report("Current wWL = {}", wirelenght);
   for (int i = 0; i < 3 ; i++){
@@ -1871,7 +1871,7 @@ Tutorial::placeMacrosCornerMinWL2()
     unlockMacros();
     placeMacrosCornerMinWL();
     resetIoplacer();
-    pPlacer_->run(false);
+    pPlacer_->runHungarianMatching(false);
     double wirelenght2 = getWeightedWL();
     logger_->report("Current wWL = {}", wirelenght2);
     if (wirelenght <= wirelenght2) {
@@ -1889,13 +1889,13 @@ Tutorial::placeMacrosCornerMaxWl2()
   first_time_ = false;
   resetIoplacer();
   logger_->report("Running IOPlacer");
-  pPlacer_->run(false);
+  pPlacer_->runHungarianMatching(false);
   double wirelenght = getWeightedWL();
   for (int i = 0; i < 3 ; i++){
     logger_->report("Iteration {} starting", i);
     placeMacrosCornerMaxWl(); 
     resetIoplacer();
-    pPlacer_->run(false);
+    pPlacer_->runHungarianMatching(false);
     double wirelenght2 = getWeightedWL();
     if (wirelenght < wirelenght2) {
        logger_->report("Breaking the Cycle");
