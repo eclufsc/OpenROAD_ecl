@@ -2,6 +2,7 @@ include("openroad")
 
 project(tut)
 
+
 swig_lib(NAME      tut
          NAMESPACE tut
          I_FILE    src/Tutorial.i
@@ -23,8 +24,10 @@ target_link_libraries(tut
     utl
     odb
     OpenSTA
+    ${GUROBI_LIBRARIES}  # Add Gurobi library
 )
 
 messages(
   TARGET tut
 )
+
