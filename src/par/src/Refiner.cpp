@@ -1,38 +1,13 @@
-///////////////////////////////////////////////////////////////////////////
-//
-// BSD 3-Clause License
-//
-// Copyright (c) 2022, The Regents of the University of California
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
-//
-///////////////////////////////////////////////////////////////////////////////
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2022-2025, The OpenROAD Authors
+
 #include "Refiner.h"
+
+#include <map>
+#include <memory>
+#include <set>
+#include <utility>
+#include <vector>
 
 #include "Evaluator.h"
 #include "Hypergraph.h"
@@ -90,13 +65,18 @@ Refiner::Refiner(
 
 void Refiner::SetMaxMove(const int max_move)
 {
-  logger_->info(PAR, 163, "Set the max_move to {}", max_move);
+  debugPrint(logger_, PAR, "refinement", 1, "Set the max_move to {}", max_move);
   max_move_ = max_move;
 }
 
 void Refiner::SetRefineIters(const int refiner_iters)
 {
-  logger_->info(PAR, 164, "Set the refiner_iter to {}", refiner_iters);
+  debugPrint(logger_,
+             PAR,
+             "refinement",
+             1,
+             "Set the refiner_iter to {}",
+             refiner_iters);
   refiner_iters_ = refiner_iters;
 }
 
@@ -104,8 +84,14 @@ void Refiner::RestoreDefaultParameters()
 {
   max_move_ = max_move_default_;
   refiner_iters_ = refiner_iters_default_;
-  logger_->info(PAR, 165, "Reset the max_move to {}", max_move_);
-  logger_->info(PAR, 166, "Reset the refiner_iters to {}", refiner_iters_);
+  debugPrint(
+      logger_, PAR, "refinement", 1, "Reset the max_move to {}", max_move_);
+  debugPrint(logger_,
+             PAR,
+             "refinement",
+             1,
+             "Reset the refiner_iters to {}",
+             refiner_iters_);
 }
 
 // The main function of refinement class
@@ -115,8 +101,12 @@ void Refiner::Refine(const HGraphPtr& hgraph,
                      Partitions& solution)
 {
   if (max_move_ <= 0) {
-    logger_->report("[PARAMS] max_move = {}", max_move_);
-    logger_->info(PAR, 118, "Exit Refinement.");
+    debugPrint(logger_,
+               PAR,
+               "refinement",
+               1,
+               "max_move = {}. Exiting Refinement.",
+               max_move_);
     return;
   }
   // calculate the basic statistics of current solution
@@ -350,7 +340,7 @@ GainCell Refiner::CalculateVertexGain(int v,
   // define lambda function
   // for checking connectivity (number of blocks connected by a hyperedge)
   // function : check the connectivity for the hyperedge
-  auto GetConnectivity = [&](int e) {
+  auto get_connectivity = [&](int e) {
     int connectivity = 0;
     for (auto& num_v : net_degs[e]) {
       if (num_v > 0) {
@@ -361,7 +351,7 @@ GainCell Refiner::CalculateVertexGain(int v,
   };
   // traverse all the hyperedges connected to v
   for (const int e : hgraph->Edges(v)) {
-    const int connectivity = GetConnectivity(e);
+    const int connectivity = get_connectivity(e);
     const float e_score = evaluator_->CalculateHyperedgeCost(e, hgraph);
     if (connectivity == 0) {
       // ignore the hyperedge consisting of multiple vertices
@@ -521,7 +511,7 @@ HyperedgeGainPtr Refiner::CalculateHyperedgeGain(
   // define lambda function
   // for checking connectivity (number of blocks connected by a hyperedge)
   // function : check the connectivity for the hyperedge
-  auto GetConnectivity = [&](int e) {
+  auto get_connectivity = [&](int e) {
     int connectivity = 0;
     for (auto& num_v : net_deg_map[e]) {
       if (num_v > 0) {
@@ -537,7 +527,7 @@ HyperedgeGainPtr Refiner::CalculateHyperedgeGain(
     const int from_pid = vertex_pair.second;
     // traverse all the hyperedges connected to v
     for (const int e : hgraph->Edges(v)) {
-      const int connectivity = GetConnectivity(e);
+      const int connectivity = get_connectivity(e);
       const float e_score = evaluator_->CalculateHyperedgeCost(e, hgraph);
       if (connectivity == 0) {
         // ignore the hyperedge consisting of multiple vertices

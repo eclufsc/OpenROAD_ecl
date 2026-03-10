@@ -1,39 +1,11 @@
-///////////////////////////////////////////////////////////////////////////////
-// BSD 3-Clause License
-//
-// Copyright (c) 2019, Nefelus Inc
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2019-2025, The OpenROAD Authors
 
 #pragma once
 
-#include "db.h"
-#include "odb.h"
+#include "odb/ZException.h"
+#include "odb/db.h"
+#include "odb/odb.h"
 
 namespace odb {
 
@@ -72,6 +44,7 @@ namespace odb {
 #define WOP_RECT 14      //  X X X 0 1 1 1 0 :  operand = first offset
 #define WOP_NOP 15       //  X X X 0 1 1 1 1 :  operand = 0
 #define WOP_COLOR 16     //  X X X 1 0 0 0 0 :  operand = integer operand
+#define WOP_VIACOLOR 17  //  X X X 1 0 0 0 1 :  operand = via color
 
 // opcode-flags
 #define WOP_VIA_EXIT_TOP \
@@ -104,9 +77,9 @@ namespace odb {
 
 struct WirePoint
 {
-  int _x;
-  int _y;
-  dbTechLayer* _layer;
+  int _x = 0;
+  int _y = 0;
+  dbTechLayer* _layer = nullptr;
 };
 
 template <class O, class D>
@@ -136,8 +109,9 @@ prevOpCode:
       if (get_layer) {
         pnt._layer = dbTechLayer::getTechLayer(tech, data[idx]);
 
-        if ((look_for_x == false) && (look_for_y == false))
+        if ((look_for_x == false) && (look_for_y == false)) {
           return;
+        }
 
         get_layer = false;
       }
@@ -156,8 +130,9 @@ prevOpCode:
         look_for_x = false;
         pnt._x = data[idx];
 
-        if ((look_for_y == false) && (get_layer == false))
+        if ((look_for_y == false) && (get_layer == false)) {
           return;
+        }
       }
 
       --idx;
@@ -169,8 +144,9 @@ prevOpCode:
         look_for_y = false;
         pnt._y = data[idx];
 
-        if ((look_for_x == false) && (get_layer == false))
+        if ((look_for_x == false) && (get_layer == false)) {
           return;
+        }
       }
 
       --idx;
@@ -181,13 +157,15 @@ prevOpCode:
       if (get_layer) {
         dbVia* via = dbVia::getVia(block, data[idx]);
 
-        if (opcode & WOP_VIA_EXIT_TOP)
+        if (opcode & WOP_VIA_EXIT_TOP) {
           pnt._layer = via->getTopLayer();
-        else
+        } else {
           pnt._layer = via->getBottomLayer();
+        }
 
-        if ((look_for_x == false) && (look_for_y == false))
+        if ((look_for_x == false) && (look_for_y == false)) {
           return;
+        }
 
         get_layer = false;
       }
@@ -200,13 +178,15 @@ prevOpCode:
       if (get_layer) {
         dbTechVia* via = dbTechVia::getTechVia(tech, data[idx]);
 
-        if (opcode & WOP_VIA_EXIT_TOP)
+        if (opcode & WOP_VIA_EXIT_TOP) {
           pnt._layer = via->getTopLayer();
-        else
+        } else {
           pnt._layer = via->getBottomLayer();
+        }
 
-        if ((look_for_x == false) && (look_for_y == false))
+        if ((look_for_x == false) && (look_for_y == false)) {
           return;
+        }
 
         get_layer = false;
       }

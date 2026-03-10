@@ -1,42 +1,11 @@
-///////////////////////////////////////////////////////////////////////////////
-// BSD 3-Clause License
-//
-// Copyright (c) 2022, The Regents of the University of California
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2022-2025, The OpenROAD Authors
 
 // Generator Code Begin Cpp
 #include "dbPowerDomain.h"
 
-#include "db.h"
 #include "dbBlock.h"
 #include "dbDatabase.h"
-#include "dbDiff.hpp"
 #include "dbHashTable.hpp"
 #include "dbIsolation.h"
 #include "dbModInst.h"
@@ -44,34 +13,42 @@
 #include "dbTable.h"
 #include "dbTable.hpp"
 #include "dbVector.h"
+#include "odb/db.h"
 // User Code Begin Includes
 #include <cmath>
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 #include "dbGroup.h"
+#include "dbLevelShifter.h"
 // User Code End Includes
 namespace odb {
 template class dbTable<_dbPowerDomain>;
 
 bool _dbPowerDomain::operator==(const _dbPowerDomain& rhs) const
 {
-  if (_name != rhs._name)
+  if (_name != rhs._name) {
     return false;
-  if (_next_entry != rhs._next_entry)
+  }
+  if (_next_entry != rhs._next_entry) {
     return false;
-  if (_group != rhs._group)
+  }
+  if (_group != rhs._group) {
     return false;
-  if (_top != rhs._top)
+  }
+  if (_top != rhs._top) {
     return false;
-  if (_parent != rhs._parent)
+  }
+  if (_parent != rhs._parent) {
     return false;
-  if (_x1 != rhs._x1)
+  }
+  if (_area != rhs._area) {
     return false;
-  if (_x2 != rhs._x2)
+  }
+  if (_voltage != rhs._voltage) {
     return false;
-  if (_y1 != rhs._y1)
-    return false;
-  if (_y2 != rhs._y2)
-    return false;
+  }
 
   return true;
 }
@@ -81,54 +58,14 @@ bool _dbPowerDomain::operator<(const _dbPowerDomain& rhs) const
   return true;
 }
 
-void _dbPowerDomain::differences(dbDiff& diff,
-                                 const char* field,
-                                 const _dbPowerDomain& rhs) const
-{
-  DIFF_BEGIN
-  DIFF_FIELD(_name);
-  DIFF_FIELD(_next_entry);
-  DIFF_FIELD(_group);
-  DIFF_FIELD(_top);
-  DIFF_FIELD(_parent);
-  DIFF_FIELD(_x1);
-  DIFF_FIELD(_x2);
-  DIFF_FIELD(_y1);
-  DIFF_FIELD(_y2);
-  DIFF_END
-}
-
-void _dbPowerDomain::out(dbDiff& diff, char side, const char* field) const
-{
-  DIFF_OUT_BEGIN
-  DIFF_OUT_FIELD(_name);
-  DIFF_OUT_FIELD(_next_entry);
-  DIFF_OUT_FIELD(_group);
-  DIFF_OUT_FIELD(_top);
-  DIFF_OUT_FIELD(_parent);
-  DIFF_OUT_FIELD(_x1);
-  DIFF_OUT_FIELD(_x2);
-  DIFF_OUT_FIELD(_y1);
-  DIFF_OUT_FIELD(_y2);
-
-  DIFF_END
-}
-
 _dbPowerDomain::_dbPowerDomain(_dbDatabase* db)
 {
-}
-
-_dbPowerDomain::_dbPowerDomain(_dbDatabase* db, const _dbPowerDomain& r)
-{
-  _name = r._name;
-  _next_entry = r._next_entry;
-  _group = r._group;
-  _top = r._top;
-  _parent = r._parent;
-  _x1 = r._x1;
-  _x2 = r._x2;
-  _y1 = r._y1;
-  _y2 = r._y2;
+  _name = nullptr;
+  _top = false;
+  _voltage = 0;
+  // User Code Begin Constructor
+  _area.mergeInit();
+  // User Code End Constructor
 }
 
 dbIStream& operator>>(dbIStream& stream, _dbPowerDomain& obj)
@@ -141,10 +78,16 @@ dbIStream& operator>>(dbIStream& stream, _dbPowerDomain& obj)
   stream >> obj._group;
   stream >> obj._top;
   stream >> obj._parent;
-  stream >> obj._x1;
-  stream >> obj._x2;
-  stream >> obj._y1;
-  stream >> obj._y2;
+  stream >> obj._area;
+  // User Code Begin >>
+  if (stream.getDatabase()->isSchema(db_schema_level_shifter)) {
+    stream >> obj._levelshifters;
+  }
+
+  if (stream.getDatabase()->isSchema(db_schema_power_domain_voltage)) {
+    stream >> obj._voltage;
+  }
+  // User Code End >>
   return stream;
 }
 
@@ -158,17 +101,33 @@ dbOStream& operator<<(dbOStream& stream, const _dbPowerDomain& obj)
   stream << obj._group;
   stream << obj._top;
   stream << obj._parent;
-  stream << obj._x1;
-  stream << obj._x2;
-  stream << obj._y1;
-  stream << obj._y2;
+  stream << obj._area;
+  // User Code Begin <<
+  stream << obj._levelshifters;
+  stream << obj._voltage;
+  // User Code End <<
   return stream;
+}
+
+void _dbPowerDomain::collectMemInfo(MemInfo& info)
+{
+  info.cnt++;
+  info.size += sizeof(*this);
+
+  // User Code Begin collectMemInfo
+  info.children_["name"].add(_name);
+  info.children_["elements"].add(_elements);
+  info.children_["power_switch"].add(_power_switch);
+  info.children_["isolation"].add(_isolation);
+  info.children_["levelshifters"].add(_levelshifters);
+  // User Code End collectMemInfo
 }
 
 _dbPowerDomain::~_dbPowerDomain()
 {
-  if (_name)
+  if (_name) {
     free((void*) _name);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -186,8 +145,9 @@ const char* dbPowerDomain::getName() const
 dbGroup* dbPowerDomain::getGroup() const
 {
   _dbPowerDomain* obj = (_dbPowerDomain*) this;
-  if (obj->_group == 0)
+  if (obj->_group == 0) {
     return nullptr;
+  }
   _dbBlock* par = (_dbBlock*) obj->getOwner();
   return (dbGroup*) par->_group_tbl->getPtr(obj->_group);
 }
@@ -215,22 +175,35 @@ void dbPowerDomain::setParent(dbPowerDomain* parent)
 dbPowerDomain* dbPowerDomain::getParent() const
 {
   _dbPowerDomain* obj = (_dbPowerDomain*) this;
-  if (obj->_parent == 0)
+  if (obj->_parent == 0) {
     return nullptr;
+  }
   _dbBlock* par = (_dbBlock*) obj->getOwner();
   return (dbPowerDomain*) par->_powerdomain_tbl->getPtr(obj->_parent);
+}
+
+void dbPowerDomain::setVoltage(float voltage)
+{
+  _dbPowerDomain* obj = (_dbPowerDomain*) this;
+
+  obj->_voltage = voltage;
+}
+
+float dbPowerDomain::getVoltage() const
+{
+  _dbPowerDomain* obj = (_dbPowerDomain*) this;
+  return obj->_voltage;
 }
 
 // User Code Begin dbPowerDomainPublicMethods
 dbPowerDomain* dbPowerDomain::create(dbBlock* block, const char* name)
 {
   _dbBlock* _block = (_dbBlock*) block;
-  if (_block->_powerdomain_hash.hasMember(name))
+  if (_block->_powerdomain_hash.hasMember(name)) {
     return nullptr;
+  }
   _dbPowerDomain* pd = _block->_powerdomain_tbl->create();
-  pd->_name = strdup(name);
-  pd->_x1 = -1;  // used as flag to determine whether area has been set before
-  ZALLOCATED(pd->_name);
+  pd->_name = safe_strdup(name);
 
   _block->_powerdomain_hash.insert(pd);
   return (dbPowerDomain*) pd;
@@ -271,6 +244,12 @@ void dbPowerDomain::addIsolation(dbIsolation* iso)
   obj->_isolation.push_back(iso->getImpl()->getOID());
 }
 
+void dbPowerDomain::addLevelShifter(dbLevelShifter* shifter)
+{
+  _dbPowerDomain* obj = (_dbPowerDomain*) this;
+  obj->_levelshifters.push_back(shifter->getImpl()->getOID());
+}
+
 std::vector<dbPowerSwitch*> dbPowerDomain::getPowerSwitches()
 {
   _dbPowerDomain* obj = (_dbPowerDomain*) this;
@@ -299,37 +278,38 @@ std::vector<dbIsolation*> dbPowerDomain::getIsolations()
   return isolations;
 }
 
-bool dbPowerDomain::setArea(float _x1, float _y1, float _x2, float _y2)
+std::vector<dbLevelShifter*> dbPowerDomain::getLevelShifters()
 {
   _dbPowerDomain* obj = (_dbPowerDomain*) this;
-  const int dbu = obj->getDb()->getTech()->getLefUnits();
+  _dbBlock* par = (_dbBlock*) obj->getOwner();
 
-  if (_x1 >= 0 && _y1 >= 0 && _x2 >= 0 && _y2 >= 0) {
-    obj->_x1 = std::round(_x1 * dbu);
-    obj->_y1 = std::round(_y1 * dbu);
-    obj->_x2 = std::round(_x2 * dbu);
-    obj->_y2 = std::round(_y2 * dbu);
-    return true;
+  std::vector<dbLevelShifter*> levelshifters;
+
+  for (const auto& shifter : obj->_levelshifters) {
+    levelshifters.push_back(
+        (dbLevelShifter*) par->_levelshifter_tbl->getPtr(shifter));
   }
 
-  return false;
+  return levelshifters;
 }
 
-bool dbPowerDomain::getArea(int& _x1, int& _y1, int& _x2, int& _y2)
+void dbPowerDomain::setArea(const Rect& area)
 {
   _dbPowerDomain* obj = (_dbPowerDomain*) this;
-  if (obj->_x1 == -1) {  // area unset
+  obj->_area = area;
+}
+
+bool dbPowerDomain::getArea(Rect& area)
+{
+  _dbPowerDomain* obj = (_dbPowerDomain*) this;
+  if (obj->_area.isInverted()) {  // area unset
     return false;
   }
 
-  _x1 = obj->_x1;
-  _y1 = obj->_y1;
-  _x2 = obj->_x2;
-  _y2 = obj->_y2;
-
+  area = obj->_area;
   return true;
 }
 
 // User Code End dbPowerDomainPublicMethods
 }  // namespace odb
-   // Generator Code End Cpp
+// Generator Code End Cpp

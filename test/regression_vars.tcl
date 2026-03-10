@@ -1,16 +1,16 @@
 # Copied from OpenSTA/test/regression_vars.tcl
 # Copyright (c) 2021, Parallax Software, Inc.
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
@@ -18,24 +18,33 @@
 
 # Application program to run tests on.
 set app "openroad"
-set app_path [file join $openroad_dir "build" "src" $app]
+if { [info exist ::env(OPENROAD_EXE)] } {
+  set app_path "$::env(OPENROAD_EXE)"
+} else {
+  set app_path [file join $openroad_dir "build" "bin" $app]
+}
 # Application options.
 set app_options "-no_init -no_splash -exit"
 # Log files for each test are placed in result_dir.
 set result_dir [file join $test_dir "results"]
 # Collective diffs.
 set diff_file [file join $result_dir "diffs"]
+if { [info exist ::env(DIFF_LOCATION)] } {
+  set diff_file "$::env(DIFF_LOCATION)"
+}
 # File containing list of failed tests.
 set failure_file [file join $result_dir "failures"]
 # Use the DIFF_OPTIONS envar to change the diff options
 # (Solaris diff doesn't support this envar)
 set diff_options "-c"
-if [info exists env(DIFF_OPTIONS)] {
+if { [info exists env(DIFF_OPTIONS)] } {
   set diff_options $env(DIFF_OPTIONS)
 }
 
 set valgrind_suppress [file join $openroad_dir "test" valgrind.suppress]
-set valgrind_options "--num-callers=20 --leak-check=full --freelist-vol=100000000 --leak-resolution=high --suppressions=$valgrind_suppress"
+set valgrind_options "--num-callers=20 --leak-check=full \
+                      --freelist-vol=100000000 --leak-resolution=high \
+                      --suppressions=$valgrind_suppress"
 if { [exec "uname"] == "Darwin" } {
   append valgrind_options " --dsymutil=yes"
 }
@@ -65,6 +74,10 @@ proc record_flow_tests { tests } {
 
 proc record_tests1 { tests cmp_logfile } {
   global test_dir
+  if { [info exist ::env(CTEST_TESTNAME)] } {
+    set tests "$::env(CTEST_TESTNAME)"
+    set cmp_logfile "$::env(TEST_TYPE)"
+  }
   foreach test $tests {
     # Prune commented tests from the list.
     if { [string index $test 0] != "#" } {
@@ -74,17 +87,20 @@ proc record_tests1 { tests cmp_logfile } {
 }
 
 # Record a test in the regression suite.
-proc record_test { test cmd_dir pass_criteria } {
-  global cmd_dirs test_groups test_pass_criteria test_langs
+proc record_test { test cmd_dir pass_criteria { test_options "" } } {
+  global cmd_dirs test_groups test_pass_criteria test_langs test_specific_options
   set cmd_dirs($test) $cmd_dir
   lappend test_groups(all) $test
   set test_pass_criteria($test) $pass_criteria
   set test_langs($test) [list]
-  if {[file exists [file join $cmd_dir "$test.tcl"]]} {
+  if { $test_options != "" } {
+    set test_specific_options($test) $test_options
+  }
+  if { [file exists [file join $cmd_dir "$test.tcl"]] } {
     lappend test_langs($test) tcl
   }
 
-  if {[file exists [file join $cmd_dir "$test.py"]]} {
+  if { [file exists [file join $cmd_dir "$test.py"]] } {
     lappend test_langs($test) py
   }
   return $test
@@ -107,7 +123,7 @@ proc group_tests { group } {
 }
 
 # Clear the test lists.
-proc clear_tests {} {
+proc clear_tests { } {
   global test_groups
   unset test_groups
 }

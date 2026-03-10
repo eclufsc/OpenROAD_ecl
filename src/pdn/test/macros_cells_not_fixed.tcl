@@ -6,7 +6,8 @@ read_lef nangate_macros/fakeram45_64x32.lef
 
 read_def nangate_macros/floorplan.def
 
-[[ord::get_db_block] findInst dcache.data.data_arrays_0.data_arrays_0_ext.mem] setPlacementStatus PLACED
+set mem_inst [[ord::get_db_block] findInst dcache.data.data_arrays_0.data_arrays_0_ext.mem]
+$mem_inst setPlacementStatus PLACED
 
 add_global_connection -net VDD -pin_pattern {^VDD$} -power
 add_global_connection -net VDD -pin_pattern {^VDDPE$}
@@ -33,5 +34,5 @@ add_pdn_connect -grid "sram" -layers {metal4 metal5}
 add_pdn_connect -grid "sram" -layers {metal5 metal6}
 add_pdn_connect -grid "sram" -layers {metal6 metal7}
 
-catch {pdngen} err
+catch { pdngen } err
 puts $err

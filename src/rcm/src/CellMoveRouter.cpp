@@ -166,6 +166,66 @@ CellMoveRouter::buildSteinerTree(odb::dbNet * net)
   return tree;
 }
 
+stt::Tree
+CellMoveRouter::buildSteinerTree(odb::dbNet * net, odb::dbITerm* movedTerm, int termX, int termY)
+{
+
+  if ((net->getSigType() == odb::dbSigType::GROUND)
+      || (net->getSigType() == odb::dbSigType::POWER)
+      || (net->getITermCount() + net->getBTermCount() < 2))
+    return stt::Tree{};
+
+  const int driverID = net->getDrivingITerm();
+
+  // Get pin coords and driver
+  std::vector<int> xcoords, ycoords;
+  int rootIndex = 0;
+  for(auto dbITerm : net->getITerms())
+  {
+    int x, y;
+    const bool pinExist = dbITerm->getAvgXY(&x, &y);
+    if(pinExist && dbITerm != movedTerm)
+    {
+      if(driverID == dbITerm->getId())
+      {
+        rootIndex = xcoords.size();
+      }
+      xcoords.push_back(x);
+      ycoords.push_back(y);
+    } else if(dbITerm == movedTerm) {
+      if(driverID == dbITerm->getId())
+      {
+        rootIndex = xcoords.size();
+      }
+      xcoords.push_back(termX);
+      ycoords.push_back(termY);
+    }
+  }
+
+  for(auto dbBTerm : net->getBTerms()) {
+    int x, y;
+    const bool pinExist = dbBTerm->getFirstPinLocation(x, y);
+    if(pinExist)
+    {
+      if(dbBTerm->getIoType() == odb::dbIoType::INPUT)
+      {
+        rootIndex = xcoords.size();
+      }
+      xcoords.push_back(x);
+      ycoords.push_back(y);
+    }
+  }
+  //std::cout<<"root index: "<<rootIndex<< std::endl; //apagar
+  if(rootIndex == -1){
+    std::cout<<"NO ROOT INDEX ERROR"<< std::endl; //apagar
+    return stt::Tree{};
+
+  }
+  // Build Steiner Tree
+  const stt::Tree tree = stt_->makeSteinerTree(xcoords, ycoords, rootIndex);
+  return tree;
+}
+
 int
 CellMoveRouter::getTreeWl(const stt::Tree &tree) //get steiner wirelength from steiner tree object
 {
@@ -262,11 +322,12 @@ CellMoveRouter::Cell_Move_Rerout(){
 
 
   // Inital Global Rout by OpenROAD
-  grt_->globalRoute();
+  // grt_->globalRoute();
 
   long init_wl = grt_->computeWirelength();
   std::cout<<"initial wl  "<<init_wl<<std::endl;
   std::cout<<"initial #vias  "<<grt_->getViaCount()<<std::endl;
+  std::cout<<"Design has "<<db_->getChip()->getBlock()->getNets().size()<<" nets"<<std::endl;
   gui::Gui* gui = gui::Gui::get();
   if (rectangleRender_ == nullptr)
   {
@@ -274,14 +335,13 @@ CellMoveRouter::Cell_Move_Rerout(){
     gui->registerRenderer(rectangleRender_.get());
   }
 
-  InitCellsWeight();
   //Initalize Rtrees
   InitCellTree();
   InitGCellTree();
   abacus_.InitRowTree();
 
   int total_moved = 0;
-  int total_regected = 0;
+  int total_rejected = 0;
   int total_worse = 0;
   int iterations = 0;
   int n_move_cells = 0;
@@ -299,8 +359,8 @@ CellMoveRouter::Cell_Move_Rerout(){
       cells_to_move_.push_back(cells_weight_[i]);
     }
     std::cout<<"Celulas a serem movidas  "<<cells_to_move_.size()<<std::endl;
-    int cont = 0;
-    int cont2 = 0;
+    int success = 0;
+    int rejected = 0;
     int failed = 0;
     int worse = 0;
     while(!cells_to_move_.empty()) {
@@ -308,29 +368,34 @@ CellMoveRouter::Cell_Move_Rerout(){
       bool complete = Swap_and_Rerout(moving_cell, failed, worse, cells_to_move_[0].init_stwl);
       if(complete) {
         cells_movement[moving_cell] += 1;
-        cont++;
+        success++;
       } else {
-        cont2++;
+        rejected++;
         cells_to_move_.erase(cells_to_move_.begin());
       }
     }
-    total_moved += cont;
-    total_regected += cont2;
+
+    if(success == 0) {
+      break;
+    }
+
+    total_moved += success;
+    total_rejected += rejected;
     total_worse += worse;
     iterations ++;
     long after_wl = grt_->computeWirelength();
     std::cout<<"iteração: "<<iterations<<std::endl;
     std::cout<<"wl (um): "<<after_wl<<std::endl;
     std::cout<<"#vias: "<<grt_->getViaCount()<<std::endl;
-    std::cout<<"movimentos: "<<cont<<std::endl;
+    std::cout<<"movimentos: "<<success<<std::endl;
     std::cout<<"movidas: "<< cells_movement.size()<<std::endl;
-    std::cout<<"rejeitadas: "<<cont2<<std::endl;
+    std::cout<<"rejeitadas: "<<rejected<<std::endl;
     std::cout<<"worse: "<<worse<<std::endl;
 
   }
 
   std::cout<<"\ntotal moved cells  "<<total_moved<<std::endl;
-  std::cout<<"total rejected cells  "<<total_regected<<std::endl;
+  std::cout<<"total rejected cells  "<<total_rejected<<std::endl;
   std::cout<<"total move worsed cells  "<<total_worse<<std::endl;
   long after_wl = grt_->computeWirelength();
   std::cout<<"final wl  "<<after_wl<<std::endl;
@@ -341,7 +406,14 @@ CellMoveRouter::Cell_Move_Rerout(){
     std::cout<<"Inst "<<inst->getName()<<" moved: "<<count<<" times"<< std::endl;
   }*/
   std::cout<<"Effectvly moved: "<< cells_movement.size()<<std::endl;
-
+  auto last = cells_movement.begin();
+  std::cout<<"check inst : "<< last->first->getName()<<std::endl;
+  std::vector<odb::dbNet*> nets;
+  nets.reserve(db_->getChip()->getBlock()->getNets().size());
+  for (odb::dbNet* db_net : db_->getChip()->getBlock()->getNets()) {
+    nets.push_back(db_net);
+  }
+  grt_->saveGuides(nets);
   delete icr_grt_;
   icr_grt_ = nullptr;
 
@@ -525,7 +597,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
     {
       auto affected_net = pin->getNet();
       if(affected_net != NULL){
-        if (affected_net->getSigType().isSupply()) {
+        if (affected_net->getSigType().isSupply() || affected_net->isSpecial()) {
           continue;
         }
         //wl_before_moving += grt_->computeNetWirelength(affected_net);
@@ -828,6 +900,10 @@ CellMoveRouter::InitCellsWeight()
   std::map <std::string, int> netWlLookup; //mapa de nets e WL
 
   for (auto net: block->getNets()){ //cálculo do delta hpwl-wl de uma net
+    if (net->getSigType().isSupply()) {
+      net->setSpecial();
+      continue;
+    }
     
     auto netName = net->getName(); //pega o nome desta net
 
@@ -863,13 +939,13 @@ CellMoveRouter::InitCellsWeight()
       continue;
     }
     int original_x, original_y;
+    median cellMedian;
     if(compare_stiener_) {
       
       cell->getLocation(original_x, original_y);
       
-      median cell_nets_median = compute_cells_nets_median(cell);
-      cell->setLocation(cell_nets_median.first, cell_nets_median.second);
-      if(cell_nets_median.first == 0 && cell_nets_median.second == 0) {
+      cellMedian = compute_cells_nets_median(cell);
+      if(cellMedian.first == 0 && cellMedian.second == 0) {
         cells_weight_.push_back({cell, 0, 0, 0,{0,0}});
         continue;
       }
@@ -882,7 +958,7 @@ CellMoveRouter::InitCellsWeight()
           continue;
         }
         if(compare_stiener_) {
-          auto tree = buildSteinerTree(net); //make net steiner tree
+          auto tree = buildSteinerTree(net, pin, cellMedian.first, cellMedian.second);
           steiner_moved_sum += getTreeWl(tree); //get net STWL from tree
           steiner_sum += netSteinerLookup[net->getName()];
           delta_sum += netSteinerLookup[net->getName()] - getTreeWl(tree);
@@ -896,15 +972,10 @@ CellMoveRouter::InitCellsWeight()
     }
     RcmCell cell_weight = {cell, delta_sum, 0, steiner_sum, {0,0}};
     cells_weight_.push_back(cell_weight);
-    cells_weight_steiner.push_back({steiner_sum - steiner_moved_sum, cell});
   }
   std::sort(cells_weight_.begin(),cells_weight_.end(),
             [](const RcmCell a, const RcmCell b) {
                 return a.weight < b.weight;
-            });
-  std::sort(cells_weight_steiner.begin(),cells_weight_steiner.end(),
-            [](const std::pair<int, odb::dbInst*> a, const std::pair<int, odb::dbInst*> b) {
-                return a.first > b.first;
             });
 }
 
@@ -1123,7 +1194,7 @@ CellMoveRouter::SelectCandidateCells() {
 void
 CellMoveRouter::RunCMRO() {
   int total_moved = 0;
-  int total_regected = 0;
+  int total_rejected = 0;
   int failed = 0;
   int worse = 0;
   int movements = 0;
@@ -1180,10 +1251,10 @@ CellMoveRouter::RunCMRO() {
     std::cout<<"rejeitadas: "<<rejected<<std::endl;
     std::cout<<"worse: "<<worse<<std::endl;
     total_moved += movements;
-    total_regected += rejected;
+    total_rejected += rejected;
   }
   std::cout<<"Celulas movidas "<<total_moved<<std::endl;
-  std::cout<<"Celulas rejeitadas "<<total_regected<<std::endl;
+  std::cout<<"Celulas rejeitadas "<<total_rejected<<std::endl;
   std::cout<<"Celulas movidas total "<<cells_movement.size()<<std::endl;
   std::cout<<"move worsed cells  "<<worse<<std::endl;
   std::cout<<"final wl  "<<after_wl<<std::endl;

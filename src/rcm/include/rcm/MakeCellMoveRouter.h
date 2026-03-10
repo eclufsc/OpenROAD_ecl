@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tcl.h"
+
 namespace rcm{
 class CellMoveRouter;
 }
@@ -8,13 +10,10 @@ namespace odb{
 class dbDatabase;
 }
 
-namespace ord {
+namespace rcm {
 
-class OpenRoad;
 
-rcm::CellMoveRouter* makeCellMoveRouter();
-
-void initCellMoveRouter(OpenRoad *openroad);
+void initCellMoveRouter(Tcl_Interp* tcl_interp);
 
 //void deleteCellMoveRouter(rcm::CellMoveRouter *cellMoveRouter);
 }  // namespace ord

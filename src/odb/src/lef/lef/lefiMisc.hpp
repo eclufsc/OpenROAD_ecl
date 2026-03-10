@@ -30,11 +30,14 @@
 #ifndef lefiMisc_h
 #define lefiMisc_h
 
-#include <stdio.h>
+#include <cstdio>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "lefiKRDefs.hpp"
 
-BEGIN_LEFDEF_PARSER_NAMESPACE
+BEGIN_LEF_PARSER_NAMESPACE
 
 // The different types of items in a geometry list.
 
@@ -314,6 +317,7 @@ class lefiSite
   void setYSymmetry();
   void set90Symmetry();
   void addRowPattern(const char* name, int orient);
+  std::vector<std::pair<std::string, std::string>> getRowPatterns() const;
 
   const char* name() const;
   int hasClass() const;
@@ -507,8 +511,6 @@ class lefiMaxStackVia
   char* topLayer_;
 };
 
-END_LEFDEF_PARSER_NAMESPACE
-
-USE_LEFDEF_PARSER_NAMESPACE
+END_LEF_PARSER_NAMESPACE
 
 #endif

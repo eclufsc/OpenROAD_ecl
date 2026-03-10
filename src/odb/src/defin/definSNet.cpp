@@ -1,144 +1,37 @@
-///////////////////////////////////////////////////////////////////////////////
-// BSD 3-Clause License
-//
-// Copyright (c) 2019, Nefelus Inc
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2019-2025, The OpenROAD Authors
 
 #include "definSNet.h"
 
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cassert>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <vector>
 
 #include "create_box.h"
-#include "db.h"
-#include "dbShape.h"
 #include "definPolygon.h"
+#include "odb/db.h"
+#include "odb/dbSet.h"
+#include "odb/dbShape.h"
+#include "odb/dbTypes.h"
+#include "odb/geom.h"
 #include "utl/Logger.h"
+
 namespace odb {
-
-inline uint get_net_dbid(const char* name)
-{
-  if (*name != 'N')
-    return 0;
-
-  ++name;
-
-  if (*name == '\0')
-    return 0;
-
-  char* end;
-  uint dbid = strtoul(name, &end, 10);
-
-  if (*end != '\0')
-    return 0;
-
-  return dbid;
-}
-
-definSNet::definSNet()
-{
-  init();
-  _skip_special_wires = false;
-  _skip_shields = false;
-  _skip_block_wires = false;
-  _skip_fill_wires = false;
-  _replace_wires = false;
-  _names_are_ids = false;
-}
-
-definSNet::~definSNet()
-{
-}
-
-void definSNet::init()
-{
-  definBase::init();
-  _snet_cnt = 0;
-  _snet_iterm_cnt = 0;
-  _cur_net = nullptr;
-  _cur_layer = nullptr;
-  _swire = nullptr;
-  _wire_type = dbWireType::NONE;
-  _wire_shape_type = dbWireShapeType::NONE;
-  _shield_net = nullptr;
-  _prev_x = 0;
-  _prev_y = 0;
-  _prev_ext = 0;
-  _has_prev_ext = false;
-  _width = 0;
-  _point_cnt = 0;
-}
 
 void definSNet::begin(const char* name)
 {
   assert(_cur_net == nullptr);
 
-  if (!_replace_wires) {
-    _cur_net = _block->findNet(name);
+  _cur_net = _block->findNet(name);
 
-    if (_cur_net == nullptr)
-      _cur_net = dbNet::create(_block, name);
-
-    _cur_net->setSpecial();
-  } else {
-    if (_names_are_ids == false)
-      _cur_net = _block->findNet(name);
-    else {
-      uint netid = get_net_dbid(name);
-
-      if (netid)
-        _cur_net = dbNet::getNet(_block, netid);
-      else
-        _cur_net = nullptr;
-    }
-
-    if (_cur_net == nullptr) {
-      _logger->warn(utl::ODB, 156, "special net {} does not exist", name);
-      ++_errors;
-    } else {
-      dbWire* wire = _cur_net->getWire();
-
-      if (wire)
-        dbWire::destroy(wire);
-
-      dbSet<dbSWire> swires = _cur_net->getSWires();
-      dbSet<dbSWire>::iterator itr;
-
-      for (itr = swires.begin(); itr != swires.end(); itr = swires.begin()) {
-        dbSWire* swire = *itr;
-        dbSWire::destroy(swire);
-      }
-    }
-
-    _cur_net->setSpecial();
+  if (_cur_net == nullptr) {
+    _cur_net = dbNet::create(_block, name);
   }
+
+  _cur_net->setSpecial();
 
   _snet_cnt++;
   _swire = nullptr;
@@ -148,8 +41,9 @@ void definSNet::connection(const char* iname,
                            const char* tname,
                            bool /* unused: synth */)
 {
-  if ((_cur_net == nullptr) || (_replace_wires == true))
+  if (_cur_net == nullptr) {
     return;
+  }
 
   if (*iname == '*') {
     connect_all(_cur_net, tname);
@@ -202,40 +96,51 @@ void definSNet::connection(const char* iname,
 
 void definSNet::use(dbSigType type)
 {
-  if ((_cur_net == nullptr) || (_replace_wires == true))
+  if (_cur_net == nullptr) {
     return;
+  }
 
   _cur_net->setSigType(type);
 }
 
 void definSNet::source(dbSourceType source)
 {
-  if ((_cur_net == nullptr) || (_replace_wires == true))
+  if (_cur_net == nullptr) {
     return;
+  }
 
   _cur_net->setSourceType(source);
 }
 
 void definSNet::weight(int weight)
 {
-  if ((_cur_net == nullptr) || (_replace_wires == true))
+  if (_cur_net == nullptr) {
     return;
+  }
 
   _cur_net->setWeight(weight);
 }
 
 void definSNet::fixedbump()
 {
-  if ((_cur_net == nullptr) || (_replace_wires == true))
+  if (_cur_net == nullptr) {
     return;
+  }
 
   _cur_net->setFixedBump(true);
 }
 
-void definSNet::rect(const char* layer_name, int x1, int y1, int x2, int y2)
+void definSNet::rect(const char* layer_name,
+                     int x1,
+                     int y1,
+                     int x2,
+                     int y2,
+                     const char* type,
+                     uint mask)
 {
-  if (_swire == nullptr)
+  if (_swire == nullptr) {
     return;
+  }
 
   dbTechLayer* layer = _tech->findLayer(layer_name);
 
@@ -245,13 +150,14 @@ void definSNet::rect(const char* layer_name, int x1, int y1, int x2, int y2)
     return;
   }
 
-  dbSBox::create(_swire,
-                 layer,
-                 dbdist(x1),
-                 dbdist(y1),
-                 dbdist(x2),
-                 dbdist(y2),
-                 dbWireShapeType::NONE);
+  dbSBox* box = dbSBox::create(_swire,
+                               layer,
+                               dbdist(x1),
+                               dbdist(y1),
+                               dbdist(x2),
+                               dbdist(y2),
+                               dbWireShapeType(type));
+  box->setLayerMask(mask);
 }
 
 void definSNet::polygon(const char* layer_name, std::vector<defPoint>& points)
@@ -286,8 +192,9 @@ void definSNet::polygon(const char* layer_name, std::vector<defPoint>& points)
 
 void definSNet::wire(dbWireType type, const char* shield)
 {
-  if (_skip_special_wires)
+  if (_skip_special_wires) {
     return;
+  }
 
   _wire_type = type;
   if (type == dbWireType::SHIELD) {
@@ -306,8 +213,9 @@ void definSNet::wire(dbWireType type, const char* shield)
 
 void definSNet::path(const char* layer_name, int width)
 {
-  if (_skip_shields && (_wire_type == dbWireType::SHIELD))
+  if (_skip_shields && (_wire_type == dbWireType::SHIELD)) {
     return;
+  }
 
   _cur_layer = _tech->findLayer(layer_name);
 
@@ -333,18 +241,21 @@ void definSNet::path(const char* layer_name, int width)
 
 void definSNet::pathShape(const char* shape)
 {
-  if (_skip_shields && (_wire_type == dbWireType::SHIELD))
+  if (_skip_shields && (_wire_type == dbWireType::SHIELD)) {
     return;
+  }
 
   _wire_shape_type = dbWireShapeType(shape);
 }
 
-void definSNet::pathPoint(int x, int y, int ext)
+void definSNet::pathPoint(int x, int y, int ext, uint mask)
 {
   if ((_skip_shields && (_wire_type == dbWireType::SHIELD))
       || (_skip_block_wires && (_wire_shape_type == dbWireShapeType::BLOCKWIRE))
-      || (_skip_fill_wires && (_wire_shape_type == dbWireShapeType::FILLWIRE)))
+      || (_skip_fill_wires
+          && (_wire_shape_type == dbWireShapeType::FILLWIRE))) {
     return;
+  }
 
   int cur_x = dbdist(x);
   int cur_y = dbdist(y);
@@ -353,7 +264,7 @@ void definSNet::pathPoint(int x, int y, int ext)
   if (_swire) {
     _point_cnt++;
 
-    if (_point_cnt > 1)
+    if (_point_cnt > 1) {
       create_box(_swire,
                  _wire_shape_type,
                  _cur_layer,
@@ -366,7 +277,9 @@ void definSNet::pathPoint(int x, int y, int ext)
                  ext,
                  true,
                  _width,
+                 mask,
                  _logger);
+    }
 
     _prev_x = cur_x;
     _prev_y = cur_y;
@@ -375,12 +288,14 @@ void definSNet::pathPoint(int x, int y, int ext)
   }
 }
 
-void definSNet::pathPoint(int x, int y)
+void definSNet::pathPoint(int x, int y, uint mask)
 {
   if ((_skip_shields && (_wire_type == dbWireType::SHIELD))
       || (_skip_block_wires && (_wire_shape_type == dbWireShapeType::BLOCKWIRE))
-      || (_skip_fill_wires && (_wire_shape_type == dbWireShapeType::FILLWIRE)))
+      || (_skip_fill_wires
+          && (_wire_shape_type == dbWireShapeType::FILLWIRE))) {
     return;
+  }
 
   int cur_x = dbdist(x);
   int cur_y = dbdist(y);
@@ -388,7 +303,7 @@ void definSNet::pathPoint(int x, int y)
   if (_swire) {
     _point_cnt++;
 
-    if (_point_cnt > 1)
+    if (_point_cnt > 1) {
       create_box(_swire,
                  _wire_shape_type,
                  _cur_layer,
@@ -401,7 +316,9 @@ void definSNet::pathPoint(int x, int y)
                  0,
                  false,
                  _width,
+                 mask,
                  _logger);
+    }
 
     _prev_x = cur_x;
     _prev_y = cur_y;
@@ -410,12 +327,17 @@ void definSNet::pathPoint(int x, int y)
   }
 }
 
-void definSNet::pathVia(const char* via_name)
+void definSNet::pathVia(const char* via_name,
+                        uint bottom_mask,
+                        uint cut_mask,
+                        uint top_mask)
 {
   if ((_skip_shields && (_wire_type == dbWireType::SHIELD))
       || (_skip_block_wires && (_wire_shape_type == dbWireShapeType::BLOCKWIRE))
-      || (_skip_fill_wires && (_wire_shape_type == dbWireShapeType::FILLWIRE)))
+      || (_skip_fill_wires
+          && (_wire_shape_type == dbWireShapeType::FILLWIRE))) {
     return;
+  }
 
   dbTechVia* tech_via = _tech->findVia(via_name);
 
@@ -431,16 +353,20 @@ void definSNet::pathVia(const char* via_name)
                                     1,
                                     0,
                                     0,
+                                    bottom_mask,
+                                    cut_mask,
+                                    top_mask,
                                     _logger);
-      if (_cur_layer == nullptr)
+      if (_cur_layer == nullptr) {
         _errors++;
+      }
     }
   } else {
     dbVia* via = _block->findVia(via_name);
 
     if (via == nullptr) {
       _logger->warn(
-          utl::ODB, 163, "error: undefined ia ({}) referenced", via_name);
+          utl::ODB, 163, "error: undefined via ({}) referenced", via_name);
       ++_errors;
       return;
     }
@@ -456,9 +382,13 @@ void definSNet::pathVia(const char* via_name)
                                     1,
                                     0,
                                     0,
+                                    bottom_mask,
+                                    cut_mask,
+                                    top_mask,
                                     _logger);
-      if (_cur_layer == nullptr)
+      if (_cur_layer == nullptr) {
         _errors++;
+      }
     }
   }
 }
@@ -471,8 +401,10 @@ void definSNet::pathViaArray(const char* via_name,
 {
   if ((_skip_shields && (_wire_type == dbWireType::SHIELD))
       || (_skip_block_wires && (_wire_shape_type == dbWireShapeType::BLOCKWIRE))
-      || (_skip_fill_wires && (_wire_shape_type == dbWireShapeType::FILLWIRE)))
+      || (_skip_fill_wires
+          && (_wire_shape_type == dbWireShapeType::FILLWIRE))) {
     return;
+  }
 
   dbTechVia* tech_via = _tech->findVia(via_name);
 
@@ -480,7 +412,7 @@ void definSNet::pathViaArray(const char* via_name,
     stepX = dbdist(stepX);
     stepY = dbdist(stepY);
 
-    if (_swire)
+    if (_swire) {
       _cur_layer = create_via_array(_swire,
                                     _wire_shape_type,
                                     _cur_layer,
@@ -491,13 +423,17 @@ void definSNet::pathViaArray(const char* via_name,
                                     numY,
                                     stepX,
                                     stepY,
+                                    /* bottom_mask */ 0,
+                                    /* cut_mask */ 0,
+                                    /* top_mask */ 0,
                                     _logger);
+    }
   } else {
     dbVia* via = _block->findVia(via_name);
 
     if (via == nullptr) {
       _logger->warn(
-          utl::ODB, 164, "error: undefined ia ({}) referenced", via_name);
+          utl::ODB, 164, "error: undefined via ({}) referenced", via_name);
       ++_errors;
       return;
     }
@@ -505,7 +441,7 @@ void definSNet::pathViaArray(const char* via_name,
     stepX = dbdist(stepX);
     stepY = dbdist(stepY);
 
-    if (_swire)
+    if (_swire) {
       _cur_layer = create_via_array(_swire,
                                     _wire_shape_type,
                                     _cur_layer,
@@ -516,7 +452,11 @@ void definSNet::pathViaArray(const char* via_name,
                                     numY,
                                     stepX,
                                     stepY,
+                                    /* bottom_mask */ 0,
+                                    /* cut_mask */ 0,
+                                    /* top_mask */ 0,
                                     _logger);
+    }
   }
 }
 
@@ -530,8 +470,9 @@ void definSNet::wireEnd()
   if (_swire) {
     dbSet<dbSBox> wires = _swire->getWires();
 
-    if (wires.reversible() && wires.orderReversed())
+    if (wires.reversible() && wires.orderReversed()) {
       wires.reverse();
+    }
   }
 
   _swire = nullptr;
@@ -539,62 +480,70 @@ void definSNet::wireEnd()
 
 void definSNet::property(const char* name, const char* value)
 {
-  if ((_cur_net == nullptr) || _replace_wires)
+  if (_cur_net == nullptr) {
     return;
+  }
 
   dbProperty* p = dbProperty::find(_cur_net, name);
-  if (p)
+  if (p) {
     dbProperty::destroy(p);
+  }
 
   dbStringProperty::create(_cur_net, name, value);
 }
 
 void definSNet::property(const char* name, int value)
 {
-  if ((_cur_net == nullptr) || _replace_wires)
+  if (_cur_net == nullptr) {
     return;
+  }
 
   dbProperty* p = dbProperty::find(_cur_net, name);
-  if (p)
+  if (p) {
     dbProperty::destroy(p);
+  }
 
   dbIntProperty::create(_cur_net, name, value);
 }
 
 void definSNet::property(const char* name, double value)
 {
-  if ((_cur_net == nullptr) || _replace_wires)
+  if (_cur_net == nullptr) {
     return;
+  }
 
   dbProperty* p = dbProperty::find(_cur_net, name);
 
-  if (p)
+  if (p) {
     dbProperty::destroy(p);
+  }
 
   dbDoubleProperty::create(_cur_net, name, value);
 }
 
 void definSNet::end()
 {
-  if (_cur_net == nullptr)
+  if (_cur_net == nullptr) {
     return;
+  }
 
-  if (_replace_wires == false) {
-    dbSet<dbITerm> iterms = _cur_net->getITerms();
+  dbSet<dbITerm> iterms = _cur_net->getITerms();
 
-    if (iterms.reversible() && iterms.orderReversed())
-      iterms.reverse();
+  if (iterms.reversible() && iterms.orderReversed()) {
+    iterms.reverse();
+  }
 
-    dbSet<dbProperty> props = dbProperty::getProperties(_cur_net);
+  dbSet<dbProperty> props = dbProperty::getProperties(_cur_net);
 
-    if (!props.empty() && props.orderReversed())
-      props.reverse();
+  if (!props.empty() && props.orderReversed()) {
+    props.reverse();
   }
 
   dbSet<dbSWire> swires = _cur_net->getSWires();
 
-  if (swires.reversible() && swires.orderReversed())
+  if (swires.reversible() && swires.orderReversed()) {
     swires.reverse();
+  }
 
   _cur_net = nullptr;
 }
@@ -613,8 +562,9 @@ void definSNet::connect_all(dbNet* net, const char* term)
     dbMaster* master = *mitr;
     dbMTerm* mterm = master->findMTerm(_block, term);
 
-    if (mterm != nullptr)
+    if (mterm != nullptr) {
       matched_mterms[mterm] = 1;
+    }
   }
 
   dbSet<dbITerm>::iterator itr;

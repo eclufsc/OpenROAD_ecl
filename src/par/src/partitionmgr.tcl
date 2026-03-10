@@ -1,37 +1,5 @@
-###############################################################################
-##
-## BSD 3-Clause License
-##
-## Copyright (c) 2019, The Regents of the University of California
-## All rights reserved.
-##
-## Redistribution and use in source and binary forms, with or without
-## modification, are permitted provided that the following conditions are met:
-##
-## * Redistributions of source code must retain the above copyright notice, this
-##   list of conditions and the following disclaimer.
-##
-## * Redistributions in binary form must reproduce the above copyright notice,
-##   this list of conditions and the following disclaimer in the documentation
-##   and#or other materials provided with the distribution.
-##
-## * Neither the name of the copyright holder nor the names of its
-##   contributors may be used to endorse or promote products derived from
-##   this software without specific prior written permission.
-##
-## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-## ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-## LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-## CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-## SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-## INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-## POSSIBILITY OF SUCH DAMAGE.
-##
-################################################################################
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2019-2025, The OpenROAD Authors
 
 #--------------------------------------------------------------------
 # Partition netlist command
@@ -41,6 +9,7 @@ sta::define_cmd_args "triton_part_hypergraph" {
   -num_parts num_parts \
   -balance_constraint balance_constraint \
   [-base_balance base_balance] \
+  [-scale_factor scale_factor] \
   [-seed seed] \
   [-vertex_dimension vertex_dimension] \
   [-hyperedge_dimension hyperedge_dimension] \
@@ -73,41 +42,42 @@ sta::define_cmd_args "triton_part_hypergraph" {
   }
 proc triton_part_hypergraph { args } {
   sta::parse_key_args "triton_part_hypergraph" args \
-      keys {-num_parts \
-            -balance_constraint \
-            -base_balance \
-            -seed \
-            -vertex_dimension \
-            -hyperedge_dimension \
-            -placement_dimension \
-            -hypergraph_file \
-            -fixed_file \
-            -community_file \
-            -group_file \
-            -placement_file \
-            -e_wt_factors \
-            -v_wt_factors \
-            -placement_wt_factors \
-            -thr_coarsen_hyperedge_size_skip \
-            -thr_coarsen_vertices \
-            -thr_coarsen_hyperedges \
-            -coarsening_ratio \
-            -max_coarsen_iters \
-            -adj_diff_ratio \
-            -min_num_vertices_each_part \
-            -num_initial_solutions \
-            -num_best_initial_solutions \
-            -refiner_iters \
-            -max_moves \
-            -early_stop_ratio \
-            -total_corking_passes \
-            -v_cycle_flag \
-            -max_num_vcycle \
-            -num_coarsen_solutions \
-            -num_vertices_threshold_ilp \
-            -global_net_threshold } \
-      flags {}
- 
+    keys {-num_parts \
+          -balance_constraint \
+          -base_balance \
+          -scale_factor \
+          -seed \
+          -vertex_dimension \
+          -hyperedge_dimension \
+          -placement_dimension \
+          -hypergraph_file \
+          -fixed_file \
+          -community_file \
+          -group_file \
+          -placement_file \
+          -e_wt_factors \
+          -v_wt_factors \
+          -placement_wt_factors \
+          -thr_coarsen_hyperedge_size_skip \
+          -thr_coarsen_vertices \
+          -thr_coarsen_hyperedges \
+          -coarsening_ratio \
+          -max_coarsen_iters \
+          -adj_diff_ratio \
+          -min_num_vertices_each_part \
+          -num_initial_solutions \
+          -num_best_initial_solutions \
+          -refiner_iters \
+          -max_moves \
+          -early_stop_ratio \
+          -total_corking_passes \
+          -v_cycle_flag \
+          -max_num_vcycle \
+          -num_coarsen_solutions \
+          -num_vertices_threshold_ilp \
+          -global_net_threshold } \
+    flags {}
+
   if { ![info exists keys(-hypergraph_file)] } {
     utl::error PAR 0924 "Missing mandatory argument -hypergraph_file."
   }
@@ -115,7 +85,8 @@ proc triton_part_hypergraph { args } {
   set num_parts 2
   set balance_constraint 1.0
   set base_balance { 1.0 }
-  set seed 0 
+  set scale_factor { 1.0 }
+  set seed 0
   set vertex_dimension 1
   set hyperedge_dimension 1
   set placement_dimension 0
@@ -144,7 +115,7 @@ proc triton_part_hypergraph { args } {
   set num_coarsen_solutions 3
   set num_vertices_threshold_ilp 50
   set global_net_threshold 1000
-  
+
   if { [info exists keys(-num_parts)] } {
     set num_parts $keys(-num_parts)
   }
@@ -189,6 +160,10 @@ proc triton_part_hypergraph { args } {
     set base_balance $keys(-base_balance)
   }
 
+  if { [info exists keys(-scale_factor)] } {
+    set scale_factor $keys(-scale_factor)
+  }
+
   if { [info exists keys(-e_wt_factors)] } {
     set e_wt_factors $keys(-e_wt_factors)
   }
@@ -216,7 +191,7 @@ proc triton_part_hypergraph { args } {
   if { [info exists keys(-coarsening_ratio)] } {
     set coarsening_ratio $keys(-coarsening_ratio)
   }
-  
+
   if { [info exists keys(-max_coarsen_iters)] } {
     set max_coarsen_iters $keys(-max_coarsen_iters)
   }
@@ -274,41 +249,40 @@ proc triton_part_hypergraph { args } {
   }
 
   par::triton_part_hypergraph $num_parts \
-            $balance_constraint \
-            $base_balance \
-            $seed \
-            $vertex_dimension \
-            $hyperedge_dimension \
-            $placement_dimension \
-            $hypergraph_file \
-            $fixed_file \
-            $community_file \
-            $group_file \
-            $placement_file \
-            $e_wt_factors \
-            $v_wt_factors \
-            $placement_wt_factors \
-            $thr_coarsen_hyperedge_size_skip \
-            $thr_coarsen_vertices \
-            $thr_coarsen_hyperedges \
-            $coarsening_ratio \
-            $max_coarsen_iters \
-            $adj_diff_ratio \
-            $min_num_vertices_each_part \
-            $num_initial_solutions \
-            $num_best_initial_solutions \
-            $refiner_iters \
-            $max_moves \
-            $early_stop_ratio \
-            $total_corking_passes \
-            $v_cycle_flag \
-            $max_num_vcycle \
-            $num_coarsen_solutions \
-            $num_vertices_threshold_ilp \
-            $global_net_threshold
+    $balance_constraint \
+    $base_balance \
+    $scale_factor \
+    $seed \
+    $vertex_dimension \
+    $hyperedge_dimension \
+    $placement_dimension \
+    $hypergraph_file \
+    $fixed_file \
+    $community_file \
+    $group_file \
+    $placement_file \
+    $e_wt_factors \
+    $v_wt_factors \
+    $placement_wt_factors \
+    $thr_coarsen_hyperedge_size_skip \
+    $thr_coarsen_vertices \
+    $thr_coarsen_hyperedges \
+    $coarsening_ratio \
+    $max_coarsen_iters \
+    $adj_diff_ratio \
+    $min_num_vertices_each_part \
+    $num_initial_solutions \
+    $num_best_initial_solutions \
+    $refiner_iters \
+    $max_moves \
+    $early_stop_ratio \
+    $total_corking_passes \
+    $v_cycle_flag \
+    $max_num_vcycle \
+    $num_coarsen_solutions \
+    $num_vertices_threshold_ilp \
+    $global_net_threshold
 }
-
-
 
 sta::define_cmd_args "evaluate_hypergraph_solution" {
   -num_parts num_parts \
@@ -316,28 +290,30 @@ sta::define_cmd_args "evaluate_hypergraph_solution" {
   -hypergraph_file hypergraph_file \
   -solution_file solution_file \
   [-base_balance base_balance] \
+  [-scale_factor scale_factor] \
   [-vertex_dimension vertex_dimension] \
   [-hyperedge_dimension hyperedge_dimension] \
   [-fixed_file fixed_file] \
   [-group_file group_file] \
   [-e_wt_factors e_wt_factors] \
-  [-v_wt_factors v_wt_factors] \ 
+  [-v_wt_factors v_wt_factors] \
   }
 proc evaluate_hypergraph_solution { args } {
   sta::parse_key_args "evaluate_hypergraph_solution" args \
-      keys {-num_parts \
-            -balance_constraint \
-            -base_balance \
-            -vertex_dimension \
-            -hyperedge_dimension \
-            -hypergraph_file \
-            -solution_file \
-            -fixed_file \
-            -group_file \
-            -e_wt_factors \
-            -v_wt_factors \
-             } \
-      flags {}
+    keys {-num_parts \
+          -balance_constraint \
+          -base_balance \
+          -scale_factor \
+          -vertex_dimension \
+          -hyperedge_dimension \
+          -hypergraph_file \
+          -solution_file \
+          -fixed_file \
+          -group_file \
+          -e_wt_factors \
+          -v_wt_factors \
+           } \
+    flags {}
   if { ![info exists keys(-hypergraph_file)] } {
     utl::error PAR 0925 "Missing mandatory argument -hypergraph_file."
   }
@@ -345,6 +321,7 @@ proc evaluate_hypergraph_solution { args } {
   set solution_file $keys(-solution_file)
   set num_parts 2
   set base_balance { 1.0 }
+  set scale_factor { 1.0 }
   set balance_constraint 1.0
   set vertex_dimension 1
   set hyperedge_dimension 1
@@ -352,7 +329,7 @@ proc evaluate_hypergraph_solution { args } {
   set group_file ""
   set e_wt_factors { 1.0 }
   set v_wt_factors { 1.0 }
-  
+
   if { [info exists keys(-num_parts)] } {
     set num_parts $keys(-num_parts)
   }
@@ -385,6 +362,10 @@ proc evaluate_hypergraph_solution { args } {
     set base_balance $keys(-base_balance)
   }
 
+  if { [info exists keys(-scale_factor)] } {
+    set scale_factor $keys(-scale_factor)
+  }
+
   if { [info exists keys(-e_wt_factors)] } {
     set e_wt_factors $keys(-e_wt_factors)
   }
@@ -392,114 +373,124 @@ proc evaluate_hypergraph_solution { args } {
   if { [info exists keys(-v_wt_factors)] } {
     set v_wt_factors $keys(-v_wt_factors)
   }
- 
+
   par::evaluate_hypergraph_solution $num_parts \
-            $balance_constraint \
-            $base_balance \
-            $vertex_dimension \
-            $hyperedge_dimension \
-            $hypergraph_file \
-            $fixed_file \
-            $group_file \
-            $solution_file \
-            $e_wt_factors \
-            $v_wt_factors
+    $balance_constraint \
+    $base_balance \
+    $scale_factor \
+    $vertex_dimension \
+    $hyperedge_dimension \
+    $hypergraph_file \
+    $fixed_file \
+    $group_file \
+    $solution_file \
+    $e_wt_factors \
+    $v_wt_factors
 }
 
 
-sta::define_cmd_args "triton_part_design" { [-num_parts num_parts] \
-                                            [-balance_constraint balance_constraint] \
-                                            [-base_balance base_balance] \
-                                            [-seed seed] \
-                                            [-timing_aware_flag timing_aware_flag] \
-                                            [-top_n top_n] \
-                                            [-placement_flag placement_flag] \
-                                            [-fence_flag fence_flag] \
-                                            [-fence_lx fence_lx] \
-                                            [-fence_ly fence_ly] \
-                                            [-fence_ux fence_ux] \
-                                            [-fence_uy fence_uy] \
-                                            [-fixed_file fixed_file] \
-                                            [-community_file community_file] \
-                                            [-group_file group_file] \
-                                            [-solution_file solution_file] \
-                                            [-net_timing_factor net_timing_factor] \
-                                            [-path_timing_factor path_timing_factor] \
-                                            [-path_snaking_factor path_snaking_factor] \
-                                            [-timing_exp_factor timing_exp_factor] \
-                                            [-extra_delay extra_delay] \
-                                            [-guardband_flag guardband_flag] \
-                                            [-e_wt_factors e_wt_factors] \
-                                            [-v_wt_factors v_wt_factors] \
-                                            [-placement_wt_factors placement_wt_factors] \
-                                            [-thr_coarsen_hyperedge_size_skip thr_coarsen_hyperedge_size_skip] \
-                                            [-thr_coarsen_vertices thr_coarsen_vertices] \
-                                            [-thr_coarsen_hyperedges thr_coarsen_hyperedges] \
-                                            [-coarsening_ratio coarsening_ratio] \
-                                            [-max_coarsen_iters max_coarsen_iters] \
-                                            [-adj_diff_ratio adj_diff_ratio] \
-                                            [-min_num_vertices_each_part min_num_vertices_each_part] \
-                                            [-num_initial_solutions num_initial_solutions] \
-                                            [-num_best_initial_solutions num_best_initial_solutions] \
-                                            [-refiner_iters refiner_iters] \
-                                            [-max_moves max_moves] \
-                                            [-early_stop_ratio early_stop_ratio] \
-                                            [-total_corking_passes total_corking_passes] \
-                                            [-v_cycle_flag v_cycle_flag ] \
-                                            [-max_num_vcycle max_num_vcycle] \
-                                            [-num_coarsen_solutions num_coarsen_solutions] \
-                                            [-num_vertices_threshold_ilp num_vertices_threshold_ilp] \
-                                            [-global_net_threshold global_net_threshold] \
-                                          }
+sta::define_cmd_args "triton_part_design" { \
+    [-num_parts num_parts] \
+    [-balance_constraint balance_constraint] \
+    [-base_balance base_balance] \
+    [-scale_factor scale_factor] \
+    [-seed seed] \
+    [-timing_aware_flag timing_aware_flag] \
+    [-top_n top_n] \
+    [-placement_flag placement_flag] \
+    [-fence_flag fence_flag] \
+    [-fence_lx fence_lx] \
+    [-fence_ly fence_ly] \
+    [-fence_ux fence_ux] \
+    [-fence_uy fence_uy] \
+    [-fixed_file fixed_file] \
+    [-community_file community_file] \
+    [-group_file group_file] \
+    [-solution_file solution_file] \
+    [-net_timing_factor net_timing_factor] \
+    [-path_timing_factor path_timing_factor] \
+    [-path_snaking_factor path_snaking_factor] \
+    [-timing_exp_factor timing_exp_factor] \
+    [-extra_delay extra_delay] \
+    [-guardband_flag guardband_flag] \
+    [-e_wt_factors e_wt_factors] \
+    [-v_wt_factors v_wt_factors] \
+    [-placement_wt_factors placement_wt_factors] \
+    [-thr_coarsen_hyperedge_size_skip thr_coarsen_hyperedge_size_skip] \
+    [-thr_coarsen_vertices thr_coarsen_vertices] \
+    [-thr_coarsen_hyperedges thr_coarsen_hyperedges] \
+    [-coarsening_ratio coarsening_ratio] \
+    [-max_coarsen_iters max_coarsen_iters] \
+    [-adj_diff_ratio adj_diff_ratio] \
+    [-min_num_vertices_each_part min_num_vertices_each_part] \
+    [-num_initial_solutions num_initial_solutions] \
+    [-num_best_initial_solutions num_best_initial_solutions] \
+    [-refiner_iters refiner_iters] \
+    [-max_moves max_moves] \
+    [-early_stop_ratio early_stop_ratio] \
+    [-total_corking_passes total_corking_passes] \
+    [-v_cycle_flag v_cycle_flag ] \
+    [-max_num_vcycle max_num_vcycle] \
+    [-num_coarsen_solutions num_coarsen_solutions] \
+    [-num_vertices_threshold_ilp num_vertices_threshold_ilp] \
+    [-global_net_threshold global_net_threshold] \
+}
 proc triton_part_design { args } {
   sta::parse_key_args "triton_part_design" args \
-      keys {-num_parts \
-            -balance_constraint \
-            -base_balance \
-            -seed \
-            -timing_aware_flag \
-            -top_n \
-            -placement_flag \
-            -fence_flag  \
-            -fence_lx  \
-            -fence_ly  \
-            -fence_ux  \
-            -fence_uy  \
-            -fixed_file \
-            -community_file \
-            -group_file \
-            -solution_file \
-            -net_timing_factor \
-            -path_timing_factor \
-            -path_snaking_factor \
-            -timing_exp_factor \
-            -extra_delay \
-            -guardband_flag \
-            -e_wt_factors \
-            -v_wt_factors \
-            -placement_wt_factors \
-            -thr_coarsen_hyperedge_size_skip \
-            -thr_coarsen_vertices \
-            -thr_coarsen_hyperedges \
-            -coarsening_ratio \
-            -max_coarsen_iters \
-            -adj_diff_ratio \
-            -min_num_vertices_each_part \
-            -num_initial_solutions \
-            -num_best_initial_solutions \
-            -refiner_iters \
-            -max_moves \
-            -early_stop_ratio \
-            -total_corking_passes \
-            -v_cycle_flag \
-            -max_num_vcycle \
-            -num_coarsen_solutions \
-            -num_vertices_threshold_ilp \
-            -global_net_threshold } \
-      flags {}
+    keys {-num_parts \
+          -balance_constraint \
+          -base_balance \
+          -scale_factor \
+          -seed \
+          -timing_aware_flag \
+          -top_n \
+          -placement_flag \
+          -fence_flag  \
+          -fence_lx  \
+          -fence_ly  \
+          -fence_ux  \
+          -fence_uy  \
+          -fixed_file \
+          -community_file \
+          -group_file \
+          -solution_file \
+          -net_timing_factor \
+          -path_timing_factor \
+          -path_snaking_factor \
+          -timing_exp_factor \
+          -extra_delay \
+          -guardband_flag \
+          -e_wt_factors \
+          -v_wt_factors \
+          -placement_wt_factors \
+          -thr_coarsen_hyperedge_size_skip \
+          -thr_coarsen_vertices \
+          -thr_coarsen_hyperedges \
+          -coarsening_ratio \
+          -max_coarsen_iters \
+          -adj_diff_ratio \
+          -min_num_vertices_each_part \
+          -num_initial_solutions \
+          -num_best_initial_solutions \
+          -refiner_iters \
+          -max_moves \
+          -early_stop_ratio \
+          -total_corking_passes \
+          -v_cycle_flag \
+          -max_num_vcycle \
+          -num_coarsen_solutions \
+          -num_vertices_threshold_ilp \
+          -global_net_threshold } \
+    flags {}
+
+  if { [ord::get_db_block] == "NULL" } {
+    utl::error PAR 103 "No design block found."
+  }
+
   set num_parts 2
   set balance_constraint 1.0
   set base_balance { 1.0 }
+  set scale_factor { 1.0 }
   set seed 1
   set timing_aware_flag true
   set top_n 1000
@@ -540,21 +531,25 @@ proc triton_part_design { args } {
   set num_coarsen_solutions 4
   set num_vertices_threshold_ilp 50
   set global_net_threshold 1000
-  
+
   if { [info exists keys(-num_parts)] } {
-      set num_parts $keys(-num_parts)
+    set num_parts $keys(-num_parts)
   }
 
   if { [info exists keys(-base_balance)] } {
     set base_balance $keys(-base_balance)
   }
 
+  if { [info exists keys(-scale_factor)] } {
+    set scale_factor $keys(-scale_factor)
+  }
+
   if { [info exists keys(-balance_constraint)] } {
-      set balance_constraint $keys(-balance_constraint)
+    set balance_constraint $keys(-balance_constraint)
   }
 
   if { [info exists keys(-seed)] } {
-      set seed $keys(-seed)
+    set seed $keys(-seed)
   }
 
   if { [info exists keys(-timing_aware_flag)] } {
@@ -569,11 +564,13 @@ proc triton_part_design { args } {
     set placement_flag $keys(-placement_flag)
   }
 
-  if { [info exists keys(-fence_flag)] && 
-       [info exists keys(-fence_lx)] && 
-       [info exists keys(-fence_ly)] && 
-       [info exists keys(-fence_ux)] && 
-       [info exists keys(-fence_uy)] } {
+  if {
+    [info exists keys(-fence_flag)] &&
+    [info exists keys(-fence_lx)] &&
+    [info exists keys(-fence_ly)] &&
+    [info exists keys(-fence_ux)] &&
+    [info exists keys(-fence_uy)]
+  } {
     set fence_flag $keys(-fence_flag)
     set fence_lx $keys(-fence_lx)
     set fence_ly $keys(-fence_ly)
@@ -594,9 +591,9 @@ proc triton_part_design { args } {
   }
 
   if { [info exists keys(-solution_file)] } {
-      set solution_file $keys(-solution_file)
+    set solution_file $keys(-solution_file)
   }
-  
+
   if { [info exists keys(-net_timing_factor)] } {
     set net_timing_factor $keys(-net_timing_factor)
   }
@@ -648,7 +645,7 @@ proc triton_part_design { args } {
   if { [info exists keys(-coarsening_ratio)] } {
     set coarsening_ratio $keys(-coarsening_ratio)
   }
-  
+
   if { [info exists keys(-max_coarsen_iters)] } {
     set max_coarsen_iters $keys(-max_coarsen_iters)
   }
@@ -705,57 +702,58 @@ proc triton_part_design { args } {
     set global_net_threshold $keys(-global_net_threshold)
   }
 
-
   par::triton_part_design $num_parts \
-            $balance_constraint \
-            $base_balance \
-            $seed \
-            $timing_aware_flag \
-            $top_n \
-            $placement_flag \
-            $fence_flag \
-            $fence_lx \
-            $fence_ly \
-            $fence_ux \
-            $fence_uy \
-            $fixed_file \
-            $community_file \
-            $group_file \
-            $solution_file \
-            $net_timing_factor \
-            $path_timing_factor \
-            $path_snaking_factor \
-            $timing_exp_factor \
-            $extra_delay \
-            $guardband_flag \
-            $e_wt_factors \
-            $v_wt_factors \
-            $placement_wt_factors \
-            $thr_coarsen_hyperedge_size_skip \
-            $thr_coarsen_vertices \
-            $thr_coarsen_hyperedges \
-            $coarsening_ratio \
-            $max_coarsen_iters \
-            $adj_diff_ratio \
-            $min_num_vertices_each_part \
-            $num_initial_solutions \
-            $num_best_initial_solutions \
-            $refiner_iters \
-            $max_moves \
-            $early_stop_ratio \
-            $total_corking_passes \
-            $v_cycle_flag \
-            $max_num_vcycle \
-            $num_coarsen_solutions \
-            $num_vertices_threshold_ilp \
-            $global_net_threshold 
+    $balance_constraint \
+    $base_balance \
+    $scale_factor \
+    $seed \
+    $timing_aware_flag \
+    $top_n \
+    $placement_flag \
+    $fence_flag \
+    $fence_lx \
+    $fence_ly \
+    $fence_ux \
+    $fence_uy \
+    $fixed_file \
+    $community_file \
+    $group_file \
+    $solution_file \
+    $net_timing_factor \
+    $path_timing_factor \
+    $path_snaking_factor \
+    $timing_exp_factor \
+    $extra_delay \
+    $guardband_flag \
+    $e_wt_factors \
+    $v_wt_factors \
+    $placement_wt_factors \
+    $thr_coarsen_hyperedge_size_skip \
+    $thr_coarsen_vertices \
+    $thr_coarsen_hyperedges \
+    $coarsening_ratio \
+    $max_coarsen_iters \
+    $adj_diff_ratio \
+    $min_num_vertices_each_part \
+    $num_initial_solutions \
+    $num_best_initial_solutions \
+    $refiner_iters \
+    $max_moves \
+    $early_stop_ratio \
+    $total_corking_passes \
+    $v_cycle_flag \
+    $max_num_vcycle \
+    $num_coarsen_solutions \
+    $num_vertices_threshold_ilp \
+    $global_net_threshold
 }
 
 
-sta::define_cmd_args "evaluate_part_design_solution" { 
+sta::define_cmd_args "evaluate_part_design_solution" {
   [-num_parts num_parts] \
   [-balance_constraint balance_constraint] \
   [-base_balance base_balance] \
+  [-scale_factor scale_factor] \
   [-timing_aware_flag timing_aware_flag] \
   [-top_n top_n] \
   [-fence_flag fence_flag] \
@@ -779,34 +777,41 @@ sta::define_cmd_args "evaluate_part_design_solution" {
   [-v_wt_factors v_wt_factors] }
 proc evaluate_part_design_solution { args } {
   sta::parse_key_args "evaluate_part_design_solution" args \
-      keys {-num_parts \
-            -balance_constraint \
-            -base_balance \
-            -timing_aware_flag \
-            -top_n \
-            -fence_flag  \
-            -fence_lx  \
-            -fence_ly  \
-            -fence_ux  \
-            -fence_uy  \
-            -fixed_file \
-            -community_file \
-            -group_file \
-            -hypergraph_file \
-            -hypergraph_int_weight_file \
-            -solution_file \
-            -net_timing_factor \
-            -path_timing_factor \
-            -path_snaking_factor \
-            -timing_exp_factor \
-            -extra_delay \
-            -guardband_flag \
-            -e_wt_factors \
-            -v_wt_factors  } \
-      flags {}
+    keys {-num_parts \
+          -balance_constraint \
+          -base_balance \
+          -scale_factor \
+          -timing_aware_flag \
+          -top_n \
+          -fence_flag  \
+          -fence_lx  \
+          -fence_ly  \
+          -fence_ux  \
+          -fence_uy  \
+          -fixed_file \
+          -community_file \
+          -group_file \
+          -hypergraph_file \
+          -hypergraph_int_weight_file \
+          -solution_file \
+          -net_timing_factor \
+          -path_timing_factor \
+          -path_snaking_factor \
+          -timing_exp_factor \
+          -extra_delay \
+          -guardband_flag \
+          -e_wt_factors \
+          -v_wt_factors  } \
+    flags {}
+
+  if { [ord::get_db_block] == "NULL" } {
+    utl::error PAR 104 "No design block found."
+  }
+
   set num_parts 2
   set balance_constraint 1.0
   set base_balance { 1.0 }
+  set scale_factor { 1.0 }
   set timing_aware_flag true
   set top_n 1000
   set fence_flag false
@@ -828,18 +833,22 @@ proc evaluate_part_design_solution { args } {
   set e_wt_factors { 1.0 }
   set v_wt_factors { 1.0 }
   # For fair evaluation, guardband_flag should be turned off
-  set guardband_flag false 
-   
+  set guardband_flag false
+
   if { [info exists keys(-num_parts)] } {
-      set num_parts $keys(-num_parts)
+    set num_parts $keys(-num_parts)
   }
 
   if { [info exists keys(-balance_constraint)] } {
-      set balance_constraint $keys(-balance_constraint)
+    set balance_constraint $keys(-balance_constraint)
   }
 
   if { [info exists keys(-base_balance)] } {
     set base_balance $keys(-base_balance)
+  }
+
+  if { [info exists keys(-scale_factor)] } {
+    set scale_factor $keys(-scale_factor)
   }
 
   if { [info exists keys(-timing_aware_flag)] } {
@@ -850,11 +859,13 @@ proc evaluate_part_design_solution { args } {
     set top_n $keys(-top_n)
   }
 
-  if { [info exists keys(-fence_flag)] && 
-       [info exists keys(-fence_lx)] && 
-       [info exists keys(-fence_ly)] && 
-       [info exists keys(-fence_ux)] && 
-       [info exists keys(-fence_uy)] } {
+  if {
+    [info exists keys(-fence_flag)] &&
+    [info exists keys(-fence_lx)] &&
+    [info exists keys(-fence_ly)] &&
+    [info exists keys(-fence_ux)] &&
+    [info exists keys(-fence_uy)]
+  } {
     set fence_flag $keys(-fence_flag)
     set fence_lx $keys(-fence_lx)
     set fence_ly $keys(-fence_ly)
@@ -877,15 +888,15 @@ proc evaluate_part_design_solution { args } {
   if { [info exists keys(-hypergraph_file)] } {
     set hypergraph_file $keys(-hypergraph_file)
   }
-  
+
   if { [info exists keys(-hypergraph_int_weight_file)] } {
     set hypergraph_int_weight_file $keys(-hypergraph_int_weight_file)
   }
 
   if { [info exists keys(-solution_file)] } {
-      set solution_file $keys(-solution_file)
+    set solution_file $keys(-solution_file)
   }
-  
+
   if { [info exists keys(-net_timing_factor)] } {
     set net_timing_factor $keys(-net_timing_factor)
   }
@@ -919,29 +930,30 @@ proc evaluate_part_design_solution { args } {
   }
 
   par::evaluate_part_design_solution $num_parts \
-            $balance_constraint \
-            $base_balance \
-            $timing_aware_flag \
-            $top_n \
-            $fence_flag \
-            $fence_lx \
-            $fence_ly \
-            $fence_ux \
-            $fence_uy \
-            $fixed_file \
-            $community_file \
-            $group_file \
-            $hypergraph_file \
-            $hypergraph_int_weight_file \
-            $solution_file \
-            $net_timing_factor \
-            $path_timing_factor \
-            $path_snaking_factor \
-            $timing_exp_factor \
-            $extra_delay \
-            $guardband_flag \
-            $e_wt_factors \
-            $v_wt_factors 
+    $balance_constraint \
+    $base_balance \
+    $scale_factor \
+    $timing_aware_flag \
+    $top_n \
+    $fence_flag \
+    $fence_lx \
+    $fence_ly \
+    $fence_ux \
+    $fence_uy \
+    $fixed_file \
+    $community_file \
+    $group_file \
+    $hypergraph_file \
+    $hypergraph_int_weight_file \
+    $solution_file \
+    $net_timing_factor \
+    $path_timing_factor \
+    $path_snaking_factor \
+    $timing_exp_factor \
+    $extra_delay \
+    $guardband_flag \
+    $e_wt_factors \
+    $v_wt_factors
 }
 
 
@@ -950,7 +962,7 @@ proc evaluate_part_design_solution { args } {
 #--------------------------------------------------------------------
 
 sta::define_cmd_args "write_partition_verilog" { \
-  [-port_prefix prefix] [-module_suffix suffix] [file]
+  [-port_prefix prefix] [-module_suffix suffix] [-partitioning_id id] [file]
 }
 
 proc write_partition_verilog { args } {
@@ -988,4 +1000,17 @@ proc read_partitioning { args } {
     set instance_file $keys(-instance_map_file)
   }
   return [par::read_file $keys(-read_file) $instance_file]
+}
+
+sta::define_cmd_args "write_artnet_spec" { [-out_file] }
+
+proc write_artnet_spec { args } {
+  sta::parse_key_args "write_artnet_spec" args \
+    keys { -out_file } flags {}
+
+  set out_file "ArtNet.spec"
+  if { [info exists keys(-out_file)] } {
+    set out_file $keys(-out_file)
+  }
+  par::artnet_write_spec $out_file
 }

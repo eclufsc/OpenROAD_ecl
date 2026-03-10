@@ -1,40 +1,16 @@
-/* Authors: Lutong Wang and Bangqi Xu */
-/*
- * Copyright (c) 2019, The Regents of the University of California
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the University nor the
- *       names of its contributors may be used to endorse or promote products
- *       derived from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS BE LIABLE FOR ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2019-2025, The OpenROAD Authors
 
 #include "db/obj/frAccess.h"
 
+#include "db/obj/frBlockObject.h"
 #include "db/tech/frViaDef.h"
 #include "distributed/frArchive.h"
 #include "serialization.h"
-using namespace std;
-using namespace fr;
 
-void frAccessPoint::addViaDef(frViaDef* in)
+namespace drt {
+
+void frAccessPoint::addViaDef(const frViaDef* in)
 {
   auto numCut = in->getNumCut();
   int numCutIdx = numCut - 1;
@@ -58,11 +34,11 @@ void frAccessPoint::serialize(Archive& ar, const unsigned int version)
     int outSz = 0;
     (ar) & outSz;
     for (int i = 0; i < outSz; i++) {
-      viaDefs_.push_back({});
+      viaDefs_.emplace_back();
       int inSz = 0;
       (ar) & inSz;
       while (inSz--) {
-        frViaDef* vd;
+        const frViaDef* vd;
         serializeViaDef(ar, vd);
         viaDefs_[i].push_back(vd);
       }
@@ -70,7 +46,7 @@ void frAccessPoint::serialize(Archive& ar, const unsigned int version)
   } else {
     int sz = viaDefs_.size();
     (ar) & sz;
-    for (auto col : viaDefs_) {
+    for (const auto& col : viaDefs_) {
       sz = col.size();
       (ar) & sz;
       for (auto vd : col) {
@@ -105,3 +81,5 @@ template void frPinAccess::serialize<frIArchive>(
 template void frPinAccess::serialize<frOArchive>(
     frOArchive& ar,
     const unsigned int file_version);
+
+}  // namespace drt

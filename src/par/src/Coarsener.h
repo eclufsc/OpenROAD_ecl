@@ -1,37 +1,6 @@
-///////////////////////////////////////////////////////////////////////////
-//
-// BSD 3-Clause License
-//
-// Copyright (c) 2022, The Regents of the University of California
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
-//
-///////////////////////////////////////////////////////////////////////////////
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2022-2025, The OpenROAD Authors
+
 #pragma once
 
 // This file contains the classes for Coarsening Phase
@@ -40,8 +9,13 @@
 // It will accept a HGraphPtr (std::shared_ptr<Hypergraph>) as input
 // and return a sequence of coarser hypergraphs
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "Evaluator.h"
 #include "Hypergraph.h"
+#include "Utilities.h"
 #include "utl/Logger.h"
 
 namespace par {
@@ -56,10 +30,10 @@ using CoarseningPtr = std::shared_ptr<Coarsener>;
 // the type for vertex ordering
 enum class CoarsenOrder
 {
-  RANDOM,
-  DEGREE,
-  SIZE,
-  DEFAULT
+  kRandom,
+  kDegree,
+  kSize,
+  kDefault
 };
 
 // function : convert CoarsenOrder to string
@@ -74,22 +48,21 @@ class Coarsener
 {
  public:
   Coarsener(
-      const int num_parts,
-      const int thr_coarsen_hyperedge_size_skip,  // ignore large hyperedge
-      const int thr_coarsen_vertices,    // the number of vertices of coarsest
-                                         // hypergraph
-      const int thr_coarsen_hyperedges,  // the number of vertices of coarsest
-                                         // hypergraph
-      const float
-          coarsening_ratio,  // coarsening ratio of two adjacent hypergraphs
-      const int max_coarsen_iters,  // the number of iterations
-      const float
+      int num_parts,
+      int thr_coarsen_hyperedge_size_skip,  // ignore large hyperedge
+      int thr_coarsen_vertices,    // the number of vertices of coarsest
+                                   // hypergraph
+      int thr_coarsen_hyperedges,  // the number of vertices of coarsest
+                                   // hypergraph
+      float coarsening_ratio,  // coarsening ratio of two adjacent hypergraphs
+      int max_coarsen_iters,   // the number of iterations
+      float
           adj_diff_ratio,  // the minimum difference of two adjacent hypergraphs
       const std::vector<float>&
           thr_cluster_weight,  // the weight of largest cluster in a hypergraph
-      const int random_seed,
-      const CoarsenOrder vertex_order_choice,  // vertex order
-      EvaluatorPtr evaluator,                  // evaluator to calculate score
+      int random_seed,
+      CoarsenOrder vertex_order_choice,  // vertex order
+      EvaluatorPtr evaluator,            // evaluator to calculate score
       utl::Logger* logger);
 
   // the function of coarsen a hypergraph
@@ -210,7 +183,7 @@ class Coarsener
 
   std::vector<float> thr_cluster_weight_;  // the maximum weight of a cluster
   int random_seed_ = 0;
-  CoarsenOrder vertex_order_choice_ = CoarsenOrder::RANDOM;
+  CoarsenOrder vertex_order_choice_ = CoarsenOrder::kRandom;
   EvaluatorPtr evaluator_ = nullptr;
   utl::Logger* logger_ = nullptr;
 };

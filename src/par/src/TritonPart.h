@@ -1,54 +1,16 @@
-///////////////////////////////////////////////////////////////////////////
-//
-// BSD 3-Clause License
-//
-// Copyright (c) 2022, The Regents of the University of California
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
-//
-///////////////////////////////////////////////////////////////////////////////
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2022-2025, The OpenROAD Authors
+
 #pragma once
-#include <fstream>
-#include <iostream>
-#include <map>
-#include <queue>
 #include <string>
 #include <vector>
 
 #include "Coarsener.h"
 #include "Hypergraph.h"
+#include "Utilities.h"
 #include "db_sta/dbReadVerilog.hh"
 #include "db_sta/dbSta.hh"
 #include "odb/db.h"
-#include "sta/Bfs.hh"
-#include "sta/Graph.hh"
-#include "sta/Liberty.hh"
-#include "sta/Sta.hh"
 #include "utl/Logger.h"
 
 namespace par {
@@ -68,7 +30,7 @@ namespace par {
 class TritonPart
 {
  public:
-  TritonPart(ord::dbNetwork* network,
+  TritonPart(sta::dbNetwork* network,
              odb::dbDatabase* db,
              sta::dbSta* sta,
              utl::Logger* logger);
@@ -84,7 +46,8 @@ class TritonPart
   // partitioning, placement information is extracted from OpenDB
   void PartitionDesign(unsigned int num_parts_arg,
                        float balance_constraint_arg,
-                       std::vector<float> base_balance_arg,
+                       const std::vector<float>& base_balance_arg,
+                       const std::vector<float>& scale_factor_arg,
                        unsigned int seed_arg,
                        bool timing_aware_flag_arg,
                        int top_n_arg,
@@ -108,7 +71,8 @@ class TritonPart
   // only used for testing
   void EvaluatePartDesignSolution(unsigned int num_parts_arg,
                                   float balance_constraint_arg,
-                                  std::vector<float> base_balance_arg,
+                                  const std::vector<float>& base_balance_arg,
+                                  const std::vector<float>& scale_factor_arg,
                                   bool timing_aware_flag_arg,
                                   int top_n_arg,
                                   bool fence_flag_arg,
@@ -134,7 +98,8 @@ class TritonPart
   // attributes both follows the hMETIS format
   void PartitionHypergraph(unsigned int num_parts,
                            float balance_constraint,
-                           std::vector<float> base_balance,
+                           const std::vector<float>& base_balance,
+                           const std::vector<float>& scale_factor,
                            unsigned int seed,
                            int vertex_dimension,
                            int hyperedge_dimension,
@@ -151,7 +116,8 @@ class TritonPart
   // The vertex balance should be satisfied
   void EvaluateHypergraphSolution(unsigned int num_parts,
                                   float balance_constraint,
-                                  std::vector<float> base_balance,
+                                  const std::vector<float>& base_balance,
+                                  const std::vector<float>& scale_factor,
                                   int vertex_dimension,
                                   int hyperedge_dimension,
                                   const char* hypergraph_file,
@@ -252,6 +218,16 @@ class TritonPart
                    const std::string& group_file);
   void BuildTimingPaths();  // Find all the critical timing paths
 
+  void informFiles(const std::string& fixed_file,
+                   const std::string& community_file,
+                   const std::string& group_file,
+                   const std::string& placement_file,
+                   const std::string& hypergraph_file,
+                   const std::string& hypergraph_int_weight_file,
+                   const std::string& solution_file);
+
+  float computeMicronArea(odb::dbInst* inst);
+
   // private member functions
   ord::dbNetwork* network_ = nullptr;
   odb::dbDatabase* db_ = nullptr;
@@ -264,6 +240,8 @@ class TritonPart
   float ub_factor_ = 1.0;            // balance constraint
   int num_parts_ = 2;                // number of partitions
   std::vector<float> base_balance_;  // the target balance for each block
+  std::vector<float> scale_factor_;  // the scale factor for each block
+                                     // (multi-technology-nodes)
 
   // random seed
   int seed_ = 0;
@@ -328,7 +306,7 @@ class TritonPart
             // for the partitioning solution of the coareset hypergraph
             // We achieve this by controlling the maximum vertex weight
             // during coarsening
-  CoarsenOrder coarsen_order_ = CoarsenOrder::RANDOM;
+  CoarsenOrder coarsen_order_ = CoarsenOrder::kRandom;
   // weight related parameter
 
   // cost related parameter

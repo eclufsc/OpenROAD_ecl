@@ -1,41 +1,20 @@
-///////////////////////////////////////////////////////////////////////////////
-// BSD 3-Clause License
-//
-// Copyright (c) 2023, Precision Innovations Inc.
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2023-2025, The OpenROAD Authors
 
 #include "layoutTabs.h"
 
+#include <QColor>
+#include <QWidget>
+#include <functional>
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "colorGenerator.h"
 #include "layoutViewer.h"
+#include "odb/db.h"
+#include "odb/geom.h"
 #include "utl/Logger.h"
 
 namespace gui {
@@ -45,9 +24,13 @@ LayoutTabs::LayoutTabs(Options* options,
                        const SelectionSet& selected,
                        const HighlightSet& highlighted,
                        const std::vector<std::unique_ptr<Ruler>>& rulers,
+                       const std::vector<std::unique_ptr<Label>>& labels,
                        Gui* gui,
-                       std::function<bool(void)> usingDBU,
-                       std::function<bool(void)> showRulerAsEuclidian,
+                       std::function<bool()> using_dbu,
+                       std::function<bool()> using_poly_decomp_view,
+                       std::function<bool()> show_ruler_as_euclidian,
+                       std::function<bool()> default_mouse_wheel_zoom,
+                       std::function<int()> arrow_keys_scroll_step,
                        QWidget* parent)
     : QTabWidget(parent),
       options_(options),
@@ -55,39 +38,75 @@ LayoutTabs::LayoutTabs(Options* options,
       selected_(selected),
       highlighted_(highlighted),
       rulers_(rulers),
+      labels_(labels),
       gui_(gui),
-      usingDBU_(std::move(usingDBU)),
-      showRulerAsEuclidian_(std::move(showRulerAsEuclidian)),
+      using_dbu_(std::move(using_dbu)),
+      using_poly_decomp_view_(std::move(using_poly_decomp_view)),
+      show_ruler_as_euclidian_(std::move(show_ruler_as_euclidian)),
+      default_mouse_wheel_zoom_(std::move(default_mouse_wheel_zoom)),
+      arrow_keys_scroll_step_(std::move(arrow_keys_scroll_step)),
       logger_(nullptr)
 {
   setTabBarAutoHide(true);
   connect(this, &QTabWidget::currentChanged, this, &LayoutTabs::tabChange);
 }
 
-void LayoutTabs::blockLoaded(odb::dbBlock* block)
+void LayoutTabs::updateBackgroundColors()
 {
-  populateModuleColors(block);
+  for (LayoutViewer* viewer : viewers_) {
+    updateBackgroundColor(viewer);
+    viewer->fullRepaint();
+  }
+}
+
+void LayoutTabs::updateBackgroundColor(LayoutViewer* viewer)
+{
+  QPalette palette;
+  palette.setColor(QPalette::Window, options_->background());
+  viewer->setPalette(palette);
+  viewer->setAutoFillBackground(true);
+}
+
+void LayoutTabs::chipLoaded(odb::dbChip* chip)
+{
+  // Check if we already have a tab for this block
+  for (LayoutViewer* viewer : viewers_) {
+    if (viewer->getChip() == chip) {
+      return;
+    }
+  }
+
+  populateModuleColors(chip->getBlock());
   auto viewer = new LayoutViewer(options_,
                                  output_widget_,
                                  selected_,
                                  highlighted_,
                                  rulers_,
+                                 labels_,
                                  modules_,
                                  focus_nets_,
                                  route_guides_,
                                  net_tracks_,
                                  gui_,
-                                 usingDBU_,
-                                 showRulerAsEuclidian_,
+                                 using_dbu_,
+                                 show_ruler_as_euclidian_,
+                                 using_poly_decomp_view_,
                                  this);
   viewer->setLogger(logger_);
   viewers_.push_back(viewer);
-  auto scroll = new LayoutScroll(viewer, this);
-  viewer->blockLoaded(block);
+  if (command_executing_) {
+    viewer->commandAboutToExecute();
+  }
+  auto scroll = new LayoutScroll(
+      viewer, default_mouse_wheel_zoom_, arrow_keys_scroll_step_, this);
+  viewer->chipLoaded(chip);
 
-  auto tech = block->getTech();
-  const auto name = fmt::format("{} ({})", block->getName(), tech->getName());
+  auto tech = chip->getTech();
+  const auto name
+      = fmt::format("{} ({})", chip->getName(), tech ? tech->getName() : "-");
   addTab(scroll, name.c_str());
+
+  updateBackgroundColor(viewer);
 
   // forward signals from the viewer upward
   connect(viewer, &LayoutViewer::location, this, &LayoutTabs::location);
@@ -112,7 +131,8 @@ void LayoutTabs::blockLoaded(odb::dbBlock* block)
 void LayoutTabs::tabChange(int index)
 {
   current_viewer_ = viewers_[index];
-  emit setCurrentBlock(current_viewer_->getBlock());
+
+  emit setCurrentChip(current_viewer_->getChip());
 }
 
 void LayoutTabs::setLogger(utl::Logger* logger)
@@ -125,14 +145,28 @@ void LayoutTabs::setLogger(utl::Logger* logger)
 void LayoutTabs::zoomIn()
 {
   if (current_viewer_) {
-    current_viewer_->zoomIn();
+    if (current_viewer_->isCursorInsideViewport()) {
+      const odb::Point focus = current_viewer_->screenToDBU(
+          current_viewer_->mapFromGlobal(QCursor::pos()));
+
+      current_viewer_->zoomIn(focus, true);
+    } else {
+      current_viewer_->zoomIn();
+    }
   }
 }
 
 void LayoutTabs::zoomOut()
 {
   if (current_viewer_) {
-    current_viewer_->zoomOut();
+    if (current_viewer_->isCursorInsideViewport()) {
+      const odb::Point focus = current_viewer_->screenToDBU(
+          current_viewer_->mapFromGlobal(QCursor::pos()));
+
+      current_viewer_->zoomOut(focus, true);
+    } else {
+      current_viewer_->zoomOut();
+    }
   }
 }
 
@@ -231,6 +265,7 @@ void LayoutTabs::addRouteGuides(odb::dbNet* net)
 {
   const auto& [itr, inserted] = route_guides_.insert(net);
   if (inserted) {
+    emit routeGuidesChanged();
     fullRepaint();
   }
 }
@@ -239,6 +274,7 @@ void LayoutTabs::addNetTracks(odb::dbNet* net)
 {
   const auto& [itr, inserted] = net_tracks_.insert(net);
   if (inserted) {
+    emit netTracksChanged();
     fullRepaint();
   }
 }
@@ -254,6 +290,7 @@ void LayoutTabs::removeFocusNet(odb::dbNet* net)
 void LayoutTabs::removeRouteGuides(odb::dbNet* net)
 {
   if (route_guides_.erase(net) > 0) {
+    emit routeGuidesChanged();
     fullRepaint();
   }
 }
@@ -261,6 +298,7 @@ void LayoutTabs::removeRouteGuides(odb::dbNet* net)
 void LayoutTabs::removeNetTracks(odb::dbNet* net)
 {
   if (net_tracks_.erase(net) > 0) {
+    emit netTracksChanged();
     fullRepaint();
   }
 }
@@ -278,6 +316,7 @@ void LayoutTabs::clearRouteGuides()
 {
   if (!route_guides_.empty()) {
     route_guides_.clear();
+    emit routeGuidesChanged();
     fullRepaint();
   }
 }
@@ -286,6 +325,7 @@ void LayoutTabs::clearNetTracks()
 {
   if (!net_tracks_.empty()) {
     net_tracks_.clear();
+    emit netTracksChanged();
     fullRepaint();
   }
 }
@@ -299,16 +339,18 @@ void LayoutTabs::exit()
 
 void LayoutTabs::commandAboutToExecute()
 {
-  if (current_viewer_) {
-    current_viewer_->commandAboutToExecute();
+  for (LayoutViewer* viewer : viewers_) {
+    viewer->commandAboutToExecute();
   }
+  command_executing_ = true;
 }
 
 void LayoutTabs::commandFinishedExecuting()
 {
-  if (current_viewer_) {
-    current_viewer_->commandFinishedExecuting();
+  for (LayoutViewer* viewer : viewers_) {
+    viewer->commandFinishedExecuting();
   }
+  command_executing_ = false;
 }
 
 void LayoutTabs::restoreTclCommands(std::vector<std::string>& cmds)
@@ -322,6 +364,13 @@ void LayoutTabs::executionPaused()
 {
   if (current_viewer_) {
     current_viewer_->executionPaused();
+  }
+}
+
+void LayoutTabs::resetCache()
+{
+  for (LayoutViewer* viewer : viewers_) {
+    viewer->resetCache();
   }
 }
 

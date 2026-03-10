@@ -1,44 +1,15 @@
-///////////////////////////////////////////////////////////////////////////
-//
-// BSD 3-Clause License
-//
-// Copyright (c) 2019, The Regents of the University of California
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
-//
-///////////////////////////////////////////////////////////////////////////////
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2019-2025, The OpenROAD Authors
 
 #pragma once
 
+#include <cstddef>
 #include <map>
 #include <memory>
-#include <random>
 #include <set>
+#include <string>
+#include <tuple>
+#include <vector>
 
 namespace ord {
 class dbVerilogNetwork;
@@ -48,6 +19,7 @@ namespace odb {
 class dbDatabase;
 class dbChip;
 class dbBlock;
+class dbInst;
 }  // namespace odb
 
 namespace sta {
@@ -66,13 +38,37 @@ class Logger;
 
 namespace par {
 
+struct MasterInfo
+{
+  int count = 0;
+  bool isMacro = false;
+};
+
+class Cluster;
+using SharedClusterVector = std::vector<std::shared_ptr<Cluster>>;
+class ModuleMgr;
+class TritonPart;
+
+struct CompareInstancePtr
+{
+ public:
+  CompareInstancePtr(sta::dbNetwork* db_network = nullptr)
+      : db_network_(db_network)
+  {
+  }
+  bool operator()(const sta::Instance* lhs, const sta::Instance* rhs) const;
+
+ private:
+  sta::dbNetwork* db_network_ = nullptr;
+};
+
 class PartitionMgr
 {
  public:
-  void init(odb::dbDatabase* db,
-            sta::dbNetwork* db_network,
-            sta::dbSta* sta,
-            utl::Logger* logger);
+  PartitionMgr(odb::dbDatabase* db,
+               sta::dbNetwork* db_network,
+               sta::dbSta* sta,
+               utl::Logger* logger);
 
   // The function for partitioning a hypergraph
   // This is used for replacing hMETIS
@@ -86,6 +82,7 @@ class PartitionMgr
   void tritonPartHypergraph(unsigned int num_parts,
                             float balance_constraint,
                             const std::vector<float>& base_balance,
+                            const std::vector<float>& scale_factor,
                             unsigned int seed,
                             int vertex_dimension,
                             int hyperedge_dimension,
@@ -129,6 +126,7 @@ class PartitionMgr
   void evaluateHypergraphSolution(unsigned int num_parts,
                                   float balance_constraint,
                                   const std::vector<float>& base_balance,
+                                  const std::vector<float>& scale_factor,
                                   int vertex_dimension,
                                   int hyperedge_dimension,
                                   const char* hypergraph_file,
@@ -151,6 +149,7 @@ class PartitionMgr
   void tritonPartDesign(unsigned int num_parts_arg,
                         float balance_constraint_arg,
                         const std::vector<float>& base_balance_arg,
+                        const std::vector<float>& scale_factor_arg,
                         unsigned int seed_arg,
                         bool timing_aware_flag_arg,
                         int top_n_arg,
@@ -201,6 +200,7 @@ class PartitionMgr
   void evaluatePartDesignSolution(unsigned int num_parts_arg,
                                   float balance_constraint_arg,
                                   const std::vector<float>& base_balance_arg,
+                                  const std::vector<float>& scale_factor_arg,
                                   bool timing_aware_flag_arg,
                                   int top_n_arg,
                                   bool fence_flag_arg,
@@ -240,6 +240,8 @@ class PartitionMgr
                              const char* port_prefix = "partition_",
                              const char* module_suffix = "_partition");
 
+  void writeArtNetSpec(const char* fileName);
+
  private:
   odb::dbBlock* getDbBlock() const;
   sta::Instance* buildPartitionedInstance(
@@ -248,12 +250,59 @@ class PartitionMgr
       sta::Library* library,
       sta::NetworkReader* network,
       sta::Instance* parent,
-      const std::set<sta::Instance*>* insts,
+      const std::set<sta::Instance*, CompareInstancePtr>* insts,
       std::map<sta::Net*, sta::Port*>* port_map);
 
   sta::Instance* buildPartitionedTopInstance(const char* name,
                                              sta::Library* library,
                                              sta::NetworkReader* network);
+  // ArtNet SpecGen
+  void printMemoryUsage();
+  void getFromODB(std::map<std::string, MasterInfo>& onlyUseMasters,
+                  std::string& top_name,
+                  int& numInsts,
+                  int& numMacros,
+                  int& numPIs,
+                  int& numPOs,
+                  int& numSeq);
+  void getFromSTA(int& Dmax, int& MDmax);
+  void BuildTimingPath(int& Dmax, int& MDmax);
+  void getFromPAR(float& Rratio, float& p, float& q, float& avgK);
+  void getRents(float& Rratio, float& p, float& q, float& avgK);
+  std::tuple<double, double, double> fitRent(const double* x,
+                                             const double* y,
+                                             int n);
+  void linCurvFit(ModuleMgr& modMgr, float& Rratio, float& p, float& q);
+  void fit_mul(const double* x,
+               size_t xstride,
+               const double* y,
+               size_t ystride,
+               size_t n,
+               double* c1,
+               double* cov_11,
+               double* sumsq);
+  bool partitionCluster(const std::shared_ptr<TritonPart>& triton_part,
+                        ModuleMgr& modMgr,
+                        SharedClusterVector& cv);
+  int getClusterIONum(std::vector<bool>& inside,
+                      const std::shared_ptr<Cluster>& cluster);
+  void Partitioning(const std::shared_ptr<TritonPart>& triton_part,
+                    const std::shared_ptr<Cluster>& cluster,
+                    SharedClusterVector& resultCV);
+  void writeFile(const std::map<std::string, MasterInfo>& onlyUseMasters,
+                 const std::string& top_name,
+                 int numInsts,
+                 int numMacros,
+                 int numPIs,
+                 int numPOs,
+                 int numSeq,
+                 int Dmax,
+                 int MDmax,
+                 float Rratio,
+                 float p,
+                 float q,
+                 float avgK,
+                 const char* fileName);
 
   odb::dbDatabase* db_ = nullptr;
   sta::dbNetwork* db_network_ = nullptr;

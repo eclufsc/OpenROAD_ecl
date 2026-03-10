@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2021-2025, The OpenROAD Authors
+
 add_library(db
     dbBTerm.cpp 
     dbStream.cpp 
@@ -7,8 +10,6 @@ add_library(db
     dbBlockItr.cpp 
     dbBox.cpp 
     dbBoxItr.cpp 
-    dbChip.cpp 
-    dbDatabase.cpp 
     dbITerm.cpp 
     dbITermItr.cpp 
     dbInst.cpp 
@@ -19,7 +20,6 @@ add_library(db
     dbMTerm.cpp 
     dbMaster.cpp 
     dbNet.cpp 
-    dbSearch.cpp
     dbTech.cpp  
     dbTechLayerSpacingRule.cpp 
     dbTechLayerAntennaRule.cpp 
@@ -37,18 +37,16 @@ add_library(db
     dbInstShapeItr.cpp 
     dbTransform.cpp 
     dbITermShapeItr.cpp 
+    dbPolygonItr.cpp
     dbSWire.cpp 
     dbSBox.cpp 
     dbSWireItr.cpp 
     dbSBoxItr.cpp 
-    dbDiff.cpp 
     dbSite.cpp 
     dbCCSeg.cpp 
     dbCCSegItr.cpp 
     dbWireShapeItr.cpp 
     dbWirePathItr.cpp 
-    dbTarget.cpp 
-    dbTargetItr.cpp 
     dbTechNonDefaultRule.cpp 
     dbTechLayerRule.cpp 
     dbCapNode.cpp 
@@ -63,7 +61,6 @@ add_library(db
     dbJournal.cpp 
     dbJournalLog.cpp 
     dbBlockCallBackObj.cpp 
-    dbRtTree.cpp 
     dbRegion.cpp 
     dbRegionInstItr.cpp 
     dbExtControl.cpp 
@@ -76,11 +73,8 @@ add_library(db
     dbTechViaGenerateRule.cpp 
     dbViaParams.cpp 
     dbNameCache.cpp 
-    dbProperty.cpp 
     dbPropertyItr.cpp 
-    dbUtil.cpp
-    gs.cpp
-    grids.cpp
+    geom.cpp
     tmg_conn.cpp
     tmg_conn_g.cpp
     tmg_conn_s.cpp
@@ -88,20 +82,54 @@ add_library(db
     wOrder.cpp
     dbGroupPowerNetItr.cpp
     dbGroupGroundNetItr.cpp
+    dbGDSLib.cpp
     # Generator Code Begin cpp
     dbAccessPoint.cpp
+    dbBusPort.cpp
+    dbCellEdgeSpacing.cpp
+    dbChip.cpp
+    dbChipBump.cpp
+    dbChipBumpInst.cpp
+    dbChipConn.cpp
+    dbChipInst.cpp
+    dbChipNet.cpp
+    dbChipRegion.cpp
+    dbChipRegionInst.cpp
+    dbDatabase.cpp
+    dbDft.cpp
     dbGCellGrid.cpp
+    dbGDSARef.cpp
+    dbGDSBoundary.cpp
+    dbGDSBox.cpp
+    dbGDSPath.cpp
+    dbGDSSRef.cpp
+    dbGDSStructure.cpp
+    dbGDSText.cpp
     dbGlobalConnect.cpp
     dbGroup.cpp
     dbGuide.cpp
     dbIsolation.cpp
+    dbLevelShifter.cpp
     dbLogicPort.cpp
+    dbMarker.cpp
+    dbMarkerCategory.cpp
+    dbMasterEdgeType.cpp
     dbMetalWidthViaMap.cpp
+    dbModBTerm.cpp
     dbModInst.cpp
+    dbModITerm.cpp
+    dbModNet.cpp
     dbModule.cpp
     dbNetTrack.cpp
+    dbPolygon.cpp
     dbPowerDomain.cpp
     dbPowerSwitch.cpp
+    dbProperty.cpp
+    dbScanChain.cpp
+    dbScanInst.cpp
+    dbScanList.cpp
+    dbScanPartition.cpp
+    dbScanPin.cpp
     dbTechLayer.cpp
     dbTechLayerAreaRule.cpp
     dbTechLayerArraySpacingRule.cpp
@@ -113,20 +141,39 @@ add_library(db
     dbTechLayerCutSpacingTableOrthRule.cpp
     dbTechLayerEolExtensionRule.cpp
     dbTechLayerEolKeepOutRule.cpp
+    dbTechLayerForbiddenSpacingRule.cpp
     dbTechLayerKeepOutZoneRule.cpp
+    dbTechLayerMaxSpacingRule.cpp
     dbTechLayerMinCutRule.cpp
     dbTechLayerMinStepRule.cpp
     dbTechLayerSpacingEolRule.cpp
     dbTechLayerSpacingTablePrlRule.cpp
+    dbTechLayerTwoWiresForbiddenSpcRule.cpp
     dbTechLayerWidthTableRule.cpp
-    dbModuleInstItr.cpp
-    dbModuleModInstItr.cpp
-    dbGroupModInstItr.cpp
-    dbGroupItr.cpp
-    dbRegionGroupItr.cpp
+    dbTechLayerWrongDirSpacingRule.cpp
+    dbChipBumpInstItr.cpp
+    dbChipConnItr.cpp
+    dbChipInstItr.cpp
+    dbChipNetItr.cpp
+    dbChipRegionInstItr.cpp
     dbGroupInstItr.cpp
+    dbGroupItr.cpp
+    dbGroupModInstItr.cpp
     dbGuideItr.cpp
+    dbModuleBusPortModBTermItr.cpp
+    dbModuleInstItr.cpp
+    dbModuleModBTermItr.cpp
+    dbModuleModInstItr.cpp
+    dbModuleModInstModITermItr.cpp
+    dbModuleModNetBTermItr.cpp
+    dbModuleModNetITermItr.cpp
+    dbModuleModNetItr.cpp
+    dbModuleModNetModBTermItr.cpp
+    dbModuleModNetModITermItr.cpp
+    dbModulePortItr.cpp
     dbNetTrackItr.cpp
+    dbRegionGroupItr.cpp
+    dbScanListScanInstItr.cpp
     # Generator Code End cpp
 )
 
@@ -134,6 +181,8 @@ target_include_directories(db
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
         ${TCL_INCLUDE_PATH}
+    PRIVATE
+        ${Boost_INCLUDE_DIRS}
 )
 
 set_target_properties(db
@@ -144,13 +193,8 @@ set_target_properties(db
 
 target_link_libraries(db
     PUBLIC
-        tm
         zutil
         utl_lib
         ${TCL_LIBRARY}
-)
 
-messages(
-  TARGET db
-  OUTPUT_DIR ../..
 )

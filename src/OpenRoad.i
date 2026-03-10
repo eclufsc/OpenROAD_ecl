@@ -1,53 +1,20 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// BSD 3-Clause License
-//
-// Copyright (c) 2019, James Cherry, Parallax Software, Inc.
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
-//
-///////////////////////////////////////////////////////////////////////////////
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2019-2025, The OpenROAD Authors
 
 %{
 
 #include "odb/db.h"
-#include "odb/lefin.h"
-#include "odb/defin.h"
 #include "odb/defout.h"
 #include "sta/Report.hh"
 #include "sta/Network.hh"
 #include "db_sta/dbSta.hh"
 #include "db_sta/dbNetwork.hh"
 #include "db_sta/dbReadVerilog.hh"
-#include "ord/Version.hh"
 #include "utl/Logger.h"
 #include "ord/OpenRoad.hh"
+#include "odb/util.h"
 
+#include <thread>
 #include <vector>
 
 ////////////////////////////////////////////////////////////////
@@ -120,6 +87,20 @@ getResizer()
   return openroad->getResizer();
 }
 
+cgt::ClockGating *
+getClockGating()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getClockGating();
+}
+
+est::EstimateParasitics *
+getEstimateParasitics()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getEstimateParasitics();
+}
+
 rmp::Restructure *
 getRestructure()
 {
@@ -141,13 +122,6 @@ getMacroPlacer()
   return openroad->getMacroPlacer();
 }
 
-mpl2::MacroPlacer2 *
-getMacroPlacer2()
-{
-  OpenRoad *openroad = getOpenRoad();
-  return openroad->getMacroPlacer2();
-}
-
 gpl::Replace*
 getReplace()
 {
@@ -162,7 +136,7 @@ getOpenRCX()
   return openroad->getOpenRCX();
 }
 
-triton_route::TritonRoute *
+drt::TritonRoute *
 getTritonRoute()
 {
   OpenRoad *openroad = getOpenRoad();
@@ -265,6 +239,8 @@ using odb::dbTech;
 //
 ////////////////////////////////////////////////////////////////
 
+%include <std_string.i>
+
 #ifdef SWIGTCL
 %include "Exception.i"
 
@@ -302,13 +278,31 @@ using odb::dbTech;
 const char *
 openroad_version()
 {
-  return OPENROAD_VERSION;
+  return ord::OpenRoad::getVersion();
 }
 
 const char *
 openroad_git_describe()
 {
-  return OPENROAD_GIT_DESCRIBE;
+  return ord::OpenRoad::getGitDescribe();
+}
+
+bool
+openroad_gpu_compiled()
+{
+  return ord::OpenRoad::getGUICompileOption();
+}
+
+bool
+openroad_python_compiled()
+{
+  return ord::OpenRoad::getPythonCompileOption();
+}
+
+bool
+openroad_gui_compiled()
+{
+  return ord::OpenRoad::getGUICompileOption();
 }
 
 void
@@ -324,26 +318,14 @@ read_lef_cmd(const char *filename,
 
 void
 read_def_cmd(const char *filename,
-             const char* tech_name,
              bool continue_on_errors,
              bool floorplan_init,
              bool incremental,
-             bool child)
+             odb::dbChip* chip)
 {
   OpenRoad *ord = getOpenRoad();
-  auto* db = ord->getDb();
-  dbTech* tech;
-  if (tech_name[0] != '\0') {
-    tech = db->findTech(tech_name);
-  } else {
-    tech = db->getTech();
-  }
-  if (!tech) {
-    auto logger = getLogger();
-    logger->error(utl::ORD, 52, "Technology {} not found", tech_name);
-  }
-  ord->readDef(filename, tech, continue_on_errors,
-               floorplan_init, incremental, child);
+  ord->readDef(filename, chip, continue_on_errors,
+               floorplan_init, incremental);
 }
 
 void
@@ -381,10 +363,24 @@ write_cdl_cmd(const char *outFilename,
 }
 
 void
-read_db_cmd(const char *filename)
+read_3dbv_cmd(const char *filename)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->readDb(filename);
+  ord->read3Dbv(filename);
+}
+
+void
+read_3dbx_cmd(const char *filename)
+{
+  OpenRoad *ord = getOpenRoad();
+  ord->read3Dbx(filename);
+}
+
+void
+read_db_cmd(const char *filename, bool hierarchy)
+{
+  OpenRoad *ord = getOpenRoad();
+  ord->readDb(filename, hierarchy);
 }
 
 void
@@ -395,13 +391,6 @@ write_db_cmd(const char *filename)
 }
 
 void
-diff_dbs(const char *filename1, const char *filename2, const char* diffs)
-{
-  OpenRoad *ord = getOpenRoad();
-  ord->diffDbs(filename1, filename2, diffs);
-}
-
-void
 read_verilog_cmd(const char *filename)
 {
   OpenRoad *ord = getOpenRoad();
@@ -409,10 +398,12 @@ read_verilog_cmd(const char *filename)
 }
 
 void
-link_design_db_cmd(const char *design_name)
+link_design_db_cmd(const char *design_name,
+                   bool hierarchy,
+                   bool omit_filename_prop)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->linkDesign(design_name);
+  ord->linkDesign(design_name, hierarchy, omit_filename_prop);
 }
 
 void
@@ -483,7 +474,7 @@ dbu_to_microns(int dbu)
     auto logger = getLogger();
     logger->error(utl::ORD, 49, "No tech is loaded");
   }
-  return static_cast<double>(dbu) / tech->getLefUnits();
+  return static_cast<double>(dbu) / tech->getDbUnitsPerMicron();
 }
 
 int
@@ -494,7 +485,7 @@ microns_to_dbu(double microns)
     auto logger = getLogger();
     logger->error(utl::ORD, 50, "No tech is loaded");
   }
-  return std::round(microns * tech->getLefUnits());
+  return std::round(microns * tech->getDbUnitsPerMicron());
 }
 
 // Common check for placement tools.
@@ -592,10 +583,44 @@ thread_count()
   return ord->getThreadCount();
 }
 
+int
+cpu_count()
+{
+  return std::thread::hardware_concurrency();
+}
+
 void design_created()
 {
   OpenRoad *ord = getOpenRoad();
   ord->designCreated();
+}
+
+std::string get_exe_path()
+{
+  OpenRoad *ord = getOpenRoad();
+  return ord->getExePath();
+}
+
+std::string get_docs_path()
+{
+  OpenRoad *ord = getOpenRoad();
+  return ord->getDocsPath();
+}
+
+void report_each_net_hpwl()
+{
+  dbDatabase *db = OpenRoad::openRoad()->getDb();
+  dbBlock *block = db->getChip()->getBlock();
+  odb::WireLengthEvaluator w(block);
+  w.reportEachNetHpwl(getLogger());
+}
+
+void report_hpwl()
+{
+  dbDatabase *db = OpenRoad::openRoad()->getDb();
+  dbBlock *block = db->getChip()->getBlock();
+  odb::WireLengthEvaluator w(block);
+  w.reportHpwl(getLogger());
 }
 
 }

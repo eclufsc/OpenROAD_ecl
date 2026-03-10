@@ -1,11 +1,51 @@
-# Copyright 2023 Google LLC
-#
-# Use of this source code is governed by a BSD-style
-# license that can be found in the LICENSE file or at
-# https://developers.google.com/open-source/licenses/bsd
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2023-2025, The OpenROAD Authors
 
-include("openroad")
+or_integration_tests(
+  "cts"
+  TESTS
+    array
+    array_ins_delay
+    array_no_blockages
+    array_repair_clock_nets
+    check_buffers
+    check_buffers_blockages
+    check_buffers_blockages_merge
+    check_buffer_inference1
+    check_buffer_inference2
+    check_buffer_inference3
+    check_charBuf
+    check_max_fanout1
+    check_max_fanout2
+    check_max_fanout3
+    check_wire_rc_cts
+    dummy_load
+    find_clock
+    find_clock_pad
+    gated_clock1
+    gated_clock2
+    gated_clock3
+    gated_clock4
+    gated_clock5
+    hier_insertion_delay
+    insertion_delay
+    inverters
+    lvt_lib
+    max_cap
+    no_clocks
+    no_sinks
+    post_cts_opt
+    simple_test
+    simple_test_clustered
+    simple_test_clustered_max_cap
+    simple_test_hier
+    skip_nets
+    twice
+)
 
+# Skipped
+#cts_man_tcl_check
+#cts_readme_msgs_check
 add_executable(cts_unittest cts_unittest.cc)
 target_include_directories(cts_unittest
   PUBLIC
@@ -13,8 +53,8 @@ target_include_directories(cts_unittest
 )
 
 target_link_libraries(cts_unittest
-    gtest
-    gtest_main
+    GTest::gtest
+    GTest::gtest_main
     cts_lib
     utl_lib
     dbSta_lib

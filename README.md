@@ -44,7 +44,9 @@ flowchart LR
     subgraph ORFlow
     direction TB
     style ORFlow fill:#ffffff00, stroke-width:0px
-        A[Verilog\n+ libraries\n + constraints] --> FLOW
+        A[Verilog
+        + libraries
+        + constraints] --> FLOW
         style A fill:#74c2b5,stroke:#000000,stroke-width:4px
         subgraph FLOW
         style FLOW fill:#FFFFFF00,stroke-width:4px
@@ -64,7 +66,8 @@ flowchart LR
             style G fill:#ff6666,stroke:#000000,stroke-width:4px
         end
 
-        FLOW --> H[GDSII\n Final Layout]
+        FLOW --> H[GDSII
+        Final Layout]
         %% H --- H1[ ]
         %% style H1 stroke-width:0px, fill: #FFFFFF00
         %% linkStyle 11 stroke-width:0px
@@ -73,7 +76,6 @@ flowchart LR
 
 ```
 
-Documentation is also available [here](https://openroad.readthedocs.io/en/latest/main/README.html).
 
 ## OpenROAD Mission
 
@@ -167,7 +169,7 @@ using OpenROAD;
   - IO pin placement (for designs without pads)
   - Tap cell and well tie insertion
   - PDN- power distribution network creation
-- `Global Placement` - Minimize wirelengths
+- `Global Placement` 
   - Macro placement (RAMs, embedded macros)
   - Standard cell placement
   - Automatic placement optimization and repair for max slew,
@@ -175,14 +177,13 @@ using OpenROAD;
 - `Detailed Placement`
   - Legalize placement - align to grid, adhere to design rules
   - Incremental timing analysis for early estimates
-- `Clock Tree Synthesis` - Generate a balanced tree to meet timing
-  and reduce skews
+- `Clock Tree Synthesis` 
   - Insert buffers and resize for high fanout nets
 - `Optimize setup/hold timing`
-- `Global routing`
+- `Global Routing`
   - Antenna repair
   - Create routing guides
-- `Detailed routing`
+- `Detailed Routing`
   - Legalize routes, DRC-correct routing to meet timing, power
     constraints
 - `Chip Finishing`
@@ -276,7 +277,7 @@ transceivers, OpenPower-based Microwatt etc.
 
 ## Build OpenROAD
 
-To build OpenROAD tools locally in your machine, follow steps
+To build OpenROAD tools locally on your machine, follow steps
 from [here](docs/user/Build.md).
 
 ## Regression Tests
@@ -328,7 +329,7 @@ save_flow_metrics_limits <TEST_NAME>
 
 ``` text
 openroad [-help] [-version] [-no_init] [-exit] [-gui]
-         [-threads count|max] [-log file_name] cmd_file
+         [-threads count|max] [-log file_name] [-db file_name] cmd_file
   -help              show help and exit
   -version           show version and exit
   -no_init           do not read .openroad init file
@@ -338,6 +339,7 @@ openroad [-help] [-version] [-no_init] [-exit] [-gui]
   -gui               start in gui mode
   -python            start with python interpreter [limited to db operations]
   -log <file_name>   write a log in <file_name>
+  -db <file_name>    open a .odb database at startup
   cmd_file           source cmd_file
 ```
 

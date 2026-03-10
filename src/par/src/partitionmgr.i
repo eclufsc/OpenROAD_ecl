@@ -1,37 +1,5 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// BSD 3-Clause License
-//
-// Copyright (c) 2019, The Regents of the University of California
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// * Redistributions of source code must retain the above copyright notice, this
-//   list of conditions and the following disclaimer.
-//
-// * Redistributions in binary form must reproduce the above copyright notice,
-//   this list of conditions and the following disclaimer in the documentation
-//   and/or other materials provided with the distribution.
-//
-// * Neither the name of the copyright holder nor the names of its
-//   contributors may be used to endorse or promote products derived from
-//   this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
-//
-///////////////////////////////////////////////////////////////////////////////
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2019-2025, The OpenROAD Authors
 
 %{
 #include <array>
@@ -72,6 +40,7 @@ int SwigDouble_As(Tcl_Interp * interp, Tcl_Obj * o, Type * val)
 void triton_part_hypergraph(unsigned int num_parts,
                             float balance_constraint,
                             const std::vector<float>& base_balance,
+                            const std::vector<float>& scale_factor,
                             unsigned int seed,
                             int vertex_dimension,
                             int hyperedge_dimension,
@@ -112,6 +81,7 @@ void triton_part_hypergraph(unsigned int num_parts,
       num_parts,
       balance_constraint,
       base_balance,
+      scale_factor,
       seed,
       vertex_dimension,
       hyperedge_dimension,
@@ -152,6 +122,7 @@ void triton_part_hypergraph(unsigned int num_parts,
 void evaluate_hypergraph_solution(unsigned int num_parts,
                                   float balance_constraint,
                                   const std::vector<float>& base_balance,
+                                  const std::vector<float>& scale_factor,
                                   int vertex_dimension,
                                   int hyperedge_dimension,
                                   const char* hypergraph_file,
@@ -164,6 +135,7 @@ void evaluate_hypergraph_solution(unsigned int num_parts,
   getPartitionMgr()->evaluateHypergraphSolution(num_parts,
                                                 balance_constraint,
                                                 base_balance,
+                                                scale_factor,
                                                 vertex_dimension,
                                                 hyperedge_dimension,
                                                 hypergraph_file,
@@ -177,6 +149,7 @@ void evaluate_hypergraph_solution(unsigned int num_parts,
 void triton_part_design(unsigned int num_parts_arg,
                         float balance_constraint_arg,
                         const std::vector<float>& base_balance_arg,
+                        const std::vector<float>& scale_factor_arg,
                         unsigned int seed_arg,
                         bool timing_aware_flag_arg,
                         int top_n_arg,
@@ -228,6 +201,7 @@ void triton_part_design(unsigned int num_parts_arg,
       num_parts_arg,
       balance_constraint_arg,
       base_balance_arg,
+      scale_factor_arg,
       seed_arg,
       timing_aware_flag_arg,
       top_n_arg,
@@ -279,6 +253,7 @@ void triton_part_design(unsigned int num_parts_arg,
 void evaluate_part_design_solution(unsigned int num_parts_arg,
                                    float balance_constraint_arg,
                                    const std::vector<float>& base_balance_arg,
+                                   const std::vector<float>& scale_factor_arg,
                                    bool timing_aware_flag_arg,
                                    int top_n_arg,
                                    bool fence_flag_arg,
@@ -307,6 +282,7 @@ void evaluate_part_design_solution(unsigned int num_parts_arg,
       num_parts_arg,
       balance_constraint_arg,
       base_balance_arg,
+      scale_factor_arg,
       timing_aware_flag_arg,
       top_n_arg,
       fence_flag_arg,
@@ -342,6 +318,11 @@ void write_partition_verilog(
 void read_file(const char* filename, const char* instance_map_file)
 {
   getPartitionMgr()->readPartitioningFile(filename, instance_map_file);
+}
+
+void artnet_write_spec(const char* filename)
+{
+  getPartitionMgr()->writeArtNetSpec(filename);
 }
 
 %}

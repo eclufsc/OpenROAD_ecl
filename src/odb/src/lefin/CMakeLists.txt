@@ -1,7 +1,11 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2019-2025, The OpenROAD Authors
+
 add_library(lefin
     lefin.cpp
     reader.cpp
     lefTechLayerSpacingEolParser.cpp
+    lefTechLayerWrongDirSpacingParser.cpp
     lefTechLayerMinStepParser.cpp
     lefTechLayerCornerSpacingParser.cpp
     lefTechLayerSpacingTablePrlParser.cpp
@@ -16,12 +20,17 @@ add_library(lefin
     lefTechLayerEolKeepOutRuleParser.cpp
     lefTechLayerAreaRuleParser.cpp
     lefTechLayerPitchRuleParser.cpp
+    lefTechLayerForbiddenSpacingRuleParser.cpp
+    lefTechLayerTwoWiresForbiddenSpcRuleParser.cpp
     lefMacroClassParser.cpp
+    lefMacroEdgeTypeParser.cpp
+    CellEdgeSpacingTableParser.cpp
     ArraySpacingParser.cpp
     WidthTableParser.cpp
     MinCutParser.cpp
     MetalWidthViaMapParser.cpp
     KeepOutZoneParser.cpp
+    MaxSpacingParser.cpp
 )
 
 target_include_directories(lefin

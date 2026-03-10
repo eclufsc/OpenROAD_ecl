@@ -131,6 +131,7 @@ class CellMoveRouter {
     int getTreeWl(const stt::Tree &tree);
 
     stt::Tree buildSteinerTree(odb::dbNet * net);
+    stt::Tree buildSteinerTree(odb::dbNet * net, odb::dbITerm* movedInst, int x, int y);
     
     bool debug() {return debug_; };
 
