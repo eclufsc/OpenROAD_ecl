@@ -17,13 +17,6 @@ using rcm::CellMoveRouter;
 namespace rcm {
 
 void
-helloWorld()
-{
-  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
-  cellMoveRouter->helloWorld();
-}
-
-void
 drawRect(int x1, int y1, int x2, int y2)
 {
   CellMoveRouter* cellMoveRouter = getCellMoveRouter();
@@ -42,20 +35,6 @@ test_init_cells_wight()
 {
   CellMoveRouter* cellMoveRouter = getCellMoveRouter();
   cellMoveRouter->InitCellsWeight();
-}
-
-void
-run_cmro()
-{
-  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
-  cellMoveRouter->RunCMRO();
-}
-
-void
-select_cells_by_net()
-{
-  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
-  cellMoveRouter->SelectCellsToMove();
 }
 
 void

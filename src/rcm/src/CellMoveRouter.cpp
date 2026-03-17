@@ -6,9 +6,11 @@
 #include "grt/GlobalRouter.h"
 #include "stt/SteinerTreeBuilder.h"
 
-#include <vector>
+#include <chrono>
 #include <iostream>
 #include <unordered_map>
+#include <vector>
+
 
 namespace rcm {
 
@@ -27,7 +29,7 @@ private:
 void
 RectangleRender::drawObjects(gui::Painter &painter)
 {
-  for(int i; i < rectangles_.size();i++)
+  for(int i = 0; i < rectangles_.size(); i++)
   {
     auto color = gui::Painter::Color(255, 0, 0, 40);
     if (i == rectangles_.size()-1)
@@ -58,12 +60,6 @@ CellMoveRouter::CellMoveRouter():
 }
 
 void
-CellMoveRouter::helloWorld()
-{
-  logger_->report("Hello World!");
-}
-
-void
 CellMoveRouter::drawRectangle(int x1, int y1, int x2, int y2)
 {
   gui::Gui* gui = gui::Gui::get();
@@ -75,36 +71,6 @@ CellMoveRouter::drawRectangle(int x1, int y1, int x2, int y2)
   odb::Rect rect{x1, y1, x2, y2};
   rectangleRender_->addRectangle(rect);
   gui->redraw();
-}
-
-void
-CellMoveRouter::ShowFirstNetRout() {
-  auto block = db_->getChip()->getBlock();
-  auto nets = block->getNets();
-  //creates a list of all nets
-  std::vector<odb::dbNet*>  net_list;
-  net_list.reserve(nets.size());
-  for(auto cell : nets)
-    net_list.push_back(cell); //TODO should check if a cell is a macro
-
-  //makes the global routing
-  grt_->globalRoute();
-
-  //gets the segment for the first net
-  grt::NetRouteMap routs = grt_->getRoutes();
-  odb::dbNet* net1 = net_list[100];
-  grt::GRoute route = routs[net1];
-
-  for (auto segment : route)
-  {
-    logger_->report("{:6d} {:6d} {:2d} -> {:6d} {:6d} {:2d}",
-                    segment.init_x,
-                    segment.init_y,
-                    segment.init_layer,
-                    segment.final_x,
-                    segment.final_y,
-                    segment.final_layer);
-  }
 }
 
 stt::Tree
@@ -314,8 +280,8 @@ CellMoveRouter::InitGCellTree() {
 void
 CellMoveRouter::Cell_Move_Rerout(){
 
+  auto grcmo_start = std::chrono::high_resolution_clock::now();
   auto block = db_->getChip()->getBlock();
-  auto cells = block->getInsts();
   std::unordered_map<odb::dbInst*,int> cells_movement;
 
   icr_grt_ = new grt::IncrementalGRoute(grt_, block);
@@ -346,6 +312,7 @@ CellMoveRouter::Cell_Move_Rerout(){
   int iterations = 0;
   int n_move_cells = 0;
   for(int j = 0; j < 20; j++) {
+    auto itt_start = std::chrono::high_resolution_clock::now();
     InitCellsWeight();
     if(limit_candidate_size_) {
       n_move_cells = std::floor(cells_weight_.size() * candidate_percentage_);
@@ -375,39 +342,27 @@ CellMoveRouter::Cell_Move_Rerout(){
       }
     }
 
-    if(success == 0) {
-      break;
-    }
-
     total_moved += success;
     total_rejected += rejected;
     total_worse += worse;
     iterations ++;
+    auto itt_end = std::chrono::high_resolution_clock::now();
+    auto itt_duration = std::chrono::duration_cast<std::chrono::milliseconds>(itt_end - itt_start);
     long after_wl = grt_->computeWirelength();
     std::cout<<"iteração: "<<iterations<<std::endl;
-    std::cout<<"wl (um): "<<after_wl<<std::endl;
-    std::cout<<"#vias: "<<grt_->getViaCount()<<std::endl;
-    std::cout<<"movimentos: "<<success<<std::endl;
-    std::cout<<"movidas: "<< cells_movement.size()<<std::endl;
-    std::cout<<"rejeitadas: "<<rejected<<std::endl;
-    std::cout<<"worse: "<<worse<<std::endl;
+    std::cout<<" wl (um): "<<after_wl<<std::endl;
+    std::cout<<" #vias: "<<grt_->getViaCount()<<std::endl;
+    std::cout<<" movimentos: "<<success<<std::endl;
+    std::cout<<" movidas: "<< cells_movement.size()<<std::endl;
+    std::cout<<" rejeitadas: "<<rejected<<std::endl;
+    std::cout<<" worse: "<<worse<<std::endl;
+    std::cout<<" duration (ms): "<<itt_duration.count()<<std::endl;
+    if(success == 0) {
+      break;
+    }
 
   }
 
-  std::cout<<"\ntotal moved cells  "<<total_moved<<std::endl;
-  std::cout<<"total rejected cells  "<<total_rejected<<std::endl;
-  std::cout<<"total move worsed cells  "<<total_worse<<std::endl;
-  long after_wl = grt_->computeWirelength();
-  std::cout<<"final wl  "<<after_wl<<std::endl;
-  std::cout<<"final #vias  "<<grt_->getViaCount()<<std::endl;
-  std::cout<<"iterations  "<<iterations<<std::endl;
-
-  /*for(auto [inst, count] : cells_movement) {
-    std::cout<<"Inst "<<inst->getName()<<" moved: "<<count<<" times"<< std::endl;
-  }*/
-  std::cout<<"Effectvly moved: "<< cells_movement.size()<<std::endl;
-  auto last = cells_movement.begin();
-  std::cout<<"check inst : "<< last->first->getName()<<std::endl;
   std::vector<odb::dbNet*> nets;
   nets.reserve(db_->getChip()->getBlock()->getNets().size());
   for (odb::dbNet* db_net : db_->getChip()->getBlock()->getNets()) {
@@ -416,15 +371,30 @@ CellMoveRouter::Cell_Move_Rerout(){
   grt_->saveGuides(nets);
   delete icr_grt_;
   icr_grt_ = nullptr;
+  auto grcmo_end = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::seconds>(grcmo_end - grcmo_start);
 
+  std::cout<<"\ntotal moved cells  "<<total_moved<<std::endl;
+  std::cout<<"total rejected cells  "<<total_rejected<<std::endl;
+  std::cout<<"total move worsed cells  "<<total_worse<<std::endl;
+  long after_wl = grt_->computeWirelength();
+  std::cout<<"final wl  "<<after_wl<<std::endl;
+  std::cout<<"final #vias  "<<grt_->getViaCount()<<std::endl;
+  std::cout<<"iterations  "<<iterations<<std::endl;
+  std::cout<<"total duration (ms): "<<duration.count()<<std::endl;
+
+  /*for(auto [inst, count] : cells_movement) {
+    std::cout<<"Inst "<<inst->getName()<<" moved: "<<count<<" times"<< std::endl;
+  }*/
+  std::cout<<"Effectvly moved: "<< cells_movement.size()<<std::endl;
 }
 
 bool
 CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
                                 int& failed_legalization,
                                 int& worse_wl,
-                                int before_estimate) {
-  auto block = db_->getChip()->getBlock();
+                                int before_estimate)
+{
   std::map<odb::dbNet*, grt::GRoute>  affected_nets;
   std::vector<int>  nets_Bbox_Xs;
   std::vector<int>  nets_Bbox_Ys;
@@ -434,19 +404,13 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   int original_x, original_y;
   //logger_->report("moving cell: {}", moving_cell->getName()); 
   moving_cell->getLocation(original_x, original_y);
-  if(!use_steiner_) {
-    before_estimate = 0;
-  }
 
   for(auto pin : moving_cell->getITerms())
   {
     auto net = pin->getNet();
-    if(net != NULL){
+    if(net != NULL) {
       if (net->getSigType().isSupply()) {
         continue;
-      }
-      if(!use_steiner_) {
-        before_estimate += getNetHPWLFast(net);
       }
 
       int xll = std::numeric_limits<int>::max();
@@ -470,8 +434,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       for (auto bterm : net->getBTerms()) {
         int x=0, y=0;
         const bool pinExist = bterm->getFirstPinLocation(x, y);
-        
-        rectangleRender_->addRectangle(bterm->getBBox());
+
         if(pinExist) {
           //logger_->report("Net: {}", net->getName());
           xur = std::max(xur, x);
@@ -532,10 +495,8 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   yll = std::max(yll, result[0].second.yMin());
   
   auto [best_x, best_y, has_enoght_space] = abacus_.get_free_spaces(moving_cell_width, xll, yll, xur, yur);
-  //abacus_.get_free_spaces_old(xll, yll, xur, yur);
   
   if(!has_enoght_space) {
-    //logger_->report("Sem espaço!");
     return false;
   }
 
@@ -543,7 +504,6 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
     return false;
   }
 
-  moving_cell->setLocation(best_x, best_y.yMin());
   int after_estimate = 0;
   for(auto pin : moving_cell->getITerms())
   {
@@ -552,21 +512,20 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       if (net->getSigType().isSupply()) {
         continue;
       }
-      if(use_steiner_) {
-        auto tree = buildSteinerTree(net); //make net steiner tree
-        after_estimate += getTreeWl(tree);
-      } else {
-        after_estimate += getNetHPWLFast(net);
-      }
+      int pinX, pinY;
+      pin->getAvgXY(&pinX, &pinY);
+      int moveX = best_x - original_x;
+      int moveY = best_y.yMin() - original_y;
+      auto tree = buildSteinerTree(net, pin, pinX + moveX, pinY + moveY); //make net steiner tree
+      after_estimate += getTreeWl(tree);
     }
   }
   if(after_estimate > before_estimate) {
-    moving_cell->setLocation(original_x, original_y); 
     return false;
   }
 
-  //Call abacus for legalization area
-  //rectangleRender_->addRectangle(odb::Rect(xll, best_y.yMin(), xur, best_y.yMax()));
+  //Move cell and call abacus for legalization area
+  moving_cell->setLocation(best_x, best_y.yMin());
   auto changed_cells = abacus_.abacus(xll, best_y.yMin(), xur, best_y.yMax());
 
   if(debug()) {
@@ -583,11 +542,9 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       rectangleRender_->addRectangle(odb::Rect(xll, best_y.yMin(), xur, best_y.yMax()));
       std::cout<<"Legalization area: ("<<xll<<", "<<best_y.yMin()<<")"<<"  ("<<xur<<", "<<best_y.yMax()<<")"<<std::endl;
       std::cout<<"Legalization area: ("<<xll<<", "<<yll<<")"<<"  ("<<xur<<", "<<yur<<")"<<std::endl;
-      //drawRectangle(xur, yur, xll, yll);
     }
   }
 
-  //Put back!!!!!!!!
   for(auto [cell, original_location] : changed_cells) {
     if(cell == moving_cell) {
       continue;
@@ -600,7 +557,6 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
         if (affected_net->getSigType().isSupply() || affected_net->isSpecial()) {
           continue;
         }
-        //wl_before_moving += grt_->computeNetWirelength(affected_net);
         grt::GRoute net_init_route = grt_->getNetRoute(affected_net);
         affected_nets[affected_net] = net_init_route;
       }
@@ -808,6 +764,7 @@ CellMoveRouter::compute_cells_nets_median(odb::dbInst* cell) {
       if (net->getSigType().isSupply()) {
         continue;
       }
+
       int xll = std::numeric_limits<int>::max();
       int yll = std::numeric_limits<int>::max();
       int xur = std::numeric_limits<int>::min();
@@ -830,8 +787,7 @@ CellMoveRouter::compute_cells_nets_median(odb::dbInst* cell) {
       for (auto bterm : net->getBTerms()) {
         int x=0, y=0;
         const bool pinExist = bterm->getFirstPinLocation(x, y);
-        
-        rectangleRender_->addRectangle(bterm->getBBox());
+
         if(pinExist) {
           //logger_->report("Net: {}", net->getName());
           xur = std::max(xur, x);
@@ -884,20 +840,14 @@ CellMoveRouter::compute_net_median(odb::dbNet* net) {
 void
 CellMoveRouter::InitCellsWeight()
 {
-  cells_weight_.clear();
-  cells_to_move_.clear();
-
   odb::dbBlock *block = db_->getChip()->getBlock(); //pega o bloco
-  auto cellNumber = block->getInsts().size();
-
   if(stt_ == nullptr) {
     stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder(); // create object before using
     block->setDrivingItermsforNets(); //set net drivers
   }
-  
-  std::map <std::string, int> netDeltaLookup; //mapa de nets e delta
+  cells_weight_.clear();
+  cells_to_move_.clear();
   std::map <std::string, int> netSteinerLookup; //mapa de nets e stwl
-  std::map <std::string, int> netWlLookup; //mapa de nets e WL
 
   for (auto net: block->getNets()){ //cálculo do delta hpwl-wl de uma net
     if (net->getSigType().isSupply()) {
@@ -907,31 +857,16 @@ CellMoveRouter::InitCellsWeight()
     
     auto netName = net->getName(); //pega o nome desta net
 
-    int estimate_wl=0, routing_wl=0;
+    int estimate_wl=0;
   
-    
-    if(use_steiner_) {
-      auto tree = buildSteinerTree(net); //make net steiner tree
-      estimate_wl = getTreeWl(tree); //get net STWL from tree
-      netSteinerLookup[netName] = estimate_wl;
-    } else {
-      estimate_wl = getNetHPWLFast(net); //transformei esse metodo pra public - WL da net
-    }
-
-    routing_wl = grt_->computeNetWirelength(net);
-    netWlLookup[netName] = routing_wl;
-
-
-    int netDelta = routing_wl - estimate_wl; //calculo do delta da net/pino
-    netDeltaLookup[netName] = netDelta;
+    auto tree = buildSteinerTree(net); //make net steiner tree
+    estimate_wl = getTreeWl(tree); //get net STWL from tree
+    netSteinerLookup[netName] = estimate_wl;
   }
 
-
-  std::vector<std::pair<int, odb::dbInst*>> cells_weight_steiner;
   for(auto cell : block->getInsts()) {
-    int delta_sum = 0, steiner_sum = 0, steiner_moved_sum = 0;
+    int delta_sum = 0, steiner_sum = 0;
     if(cell->isFixed()) {
-      cells_weight_.push_back({cell, 0, 0, 0,{0,0}});
       continue;
     }
     if(cell->isBlock()) {
@@ -939,16 +874,10 @@ CellMoveRouter::InitCellsWeight()
       continue;
     }
     int original_x, original_y;
-    median cellMedian;
-    if(compare_stiener_) {
-      
-      cell->getLocation(original_x, original_y);
-      
-      cellMedian = compute_cells_nets_median(cell);
-      if(cellMedian.first == 0 && cellMedian.second == 0) {
-        cells_weight_.push_back({cell, 0, 0, 0,{0,0}});
-        continue;
-      }
+    cell->getLocation(original_x, original_y);
+    median cellMedian = compute_cells_nets_median(cell);
+    if(cellMedian.first == 0 && cellMedian.second == 0) {
+      continue;
     }
 
     for (auto pin : cell->getITerms()) {
@@ -957,19 +886,16 @@ CellMoveRouter::InitCellsWeight()
         if (net->getSigType().isSupply()) {
           continue;
         }
-        if(compare_stiener_) {
-          auto tree = buildSteinerTree(net, pin, cellMedian.first, cellMedian.second);
-          steiner_moved_sum += getTreeWl(tree); //get net STWL from tree
-          steiner_sum += netSteinerLookup[net->getName()];
-          delta_sum += netSteinerLookup[net->getName()] - getTreeWl(tree);
-        } else {
-          delta_sum += netDeltaLookup[net->getName()];
-        }
+        int pinX, pinY;
+        pin->getAvgXY(&pinX, &pinY);
+        int moveX = cellMedian.first - original_x;
+        int moveY = cellMedian.second - original_y;
+        auto tree = buildSteinerTree(net, pin, pinX + moveX, pinY + moveY); //make net steiner tree
+        steiner_sum += netSteinerLookup[net->getName()];
+        delta_sum += netSteinerLookup[net->getName()] - getTreeWl(tree);
       }
     }
-    if(compare_stiener_) {
-      cell->setLocation(original_x, original_y);
-    }
+
     RcmCell cell_weight = {cell, delta_sum, 0, steiner_sum, {0,0}};
     cells_weight_.push_back(cell_weight);
   }
@@ -977,42 +903,6 @@ CellMoveRouter::InitCellsWeight()
             [](const RcmCell a, const RcmCell b) {
                 return a.weight < b.weight;
             });
-}
-
-void
-CellMoveRouter::InitNetsWeight() {
-  nets_weight_.clear();
-  odb::dbBlock *block = db_->getChip()->getBlock(); //pega o bloco
-  
-  std::map <std::string, int> netDeltaLookup; //mapa de nets e hpwl,stwl
-
-  for (auto net: block->getNets()){ //cálculo do delta hpwl-wl de uma net
-    if (net == nullptr || net->getSigType().isSupply()) {
-      continue;
-    }
-
-    int estimate_wl=0, routing_wl=0;
-
-
-    if(use_steiner_) {
-      auto tree = buildSteinerTree(net); //make net steiner tree
-      estimate_wl = getTreeWl(tree); //get net STWL from tree
-    } else {
-      estimate_wl = getNetHPWLFast(net); //transformei esse metodo pra public - WL da net
-    }
-
-    if(compare_stiener_) {
-      /*Compute position for every cell*/
-      /*Get steiner for new cell pos*/
-      /*Compare both stieners*/
-    } else {
-      routing_wl = grt_->computeNetWirelength(net);
-    }
-
-    int delta = (routing_wl - estimate_wl);// / net->getITermCount();
-    nets_weight_.push_back(std::make_pair(delta, net));
-  }
-  std::sort(nets_weight_.begin(),nets_weight_.end());
 }
 
 void
@@ -1031,433 +921,10 @@ CellMoveRouter::sortCellsToMoveMedian() {
           });
 }
 
-void
-CellMoveRouter::SelectCellsToMove() {
-  auto block = db_->getChip()->getBlock();
-  auto cells = block->getInsts();
-
-  // Inital Global Rout by OpenROAD
-  grt_->globalRoute();
-  long init_wl = grt_->computeWirelength();
-  std::cout<<"initial wl  "<<init_wl<<std::endl;
-  gui::Gui* gui = gui::Gui::get();
-  if (rectangleRender_ == nullptr)
-  {
-    rectangleRender_ = std::make_unique<RectangleRender>();
-    gui->registerRenderer(rectangleRender_.get());
-  }
-
-  //Initalize Rtrees
-  InitCellTree();
-  InitGCellTree();
-  abacus_.InitRowTree();
-
-  InitNetsWeight();
-  int prev_w = 1000000;
-  int n_cells_to_move = block->getInsts().size() * 5/100;
-  int n_cells_selected = 0;
-  for(int i = nets_weight_.size() - 1; i >=0; i--) {
-    if(prev_w < nets_weight_[i].first) {
-      std::cout<<"erro no peso"<<std::endl;
-      std::cout<<"Peso da atual: "<<nets_weight_[i].first<<std::endl;
-      if(i != nets_weight_.size() - 1)
-        std::cout<<"Peso da anterior: "<<nets_weight_[i+1].first<<std::endl;
-    }
-    prev_w = nets_weight_[i].first;
-    odb::dbNet* net = nets_weight_[i].second;
-    median net_median = compute_net_median(net);
-
-    odb::dbInst* cell_to_move = nullptr;
-    int smalledt_dis = std::numeric_limits<int>::max();
-    
-    for(auto iterm : net->getITerms()) {
-      odb::dbInst* candidate_cell = iterm->getInst();
-
-      if(candidate_cell->isFixed() || candidate_cell->isBlock()) {
-        continue;
-      }
-
-      median candidate_cell_median = compute_cell_median(candidate_cell);
-      int distance = compute_manhattan_distance(net_median, candidate_cell_median);
-      if(distance < smalledt_dis) {
-        smalledt_dis = distance;
-        cell_to_move = candidate_cell;
-      }
-    }
-    RcmCell cell_weight = {cell_to_move, nets_weight_[i].first, 0, 0,net_median};
-    if(cell_to_move != nullptr) {
-      cells_to_move_.push_back(cell_weight);
-      n_cells_selected += 1;
-    }
-    if(n_cells_selected == n_cells_to_move){
-      break;
-    }
-  }
-  std::cout<<"Ncell to move = "<<n_cells_to_move<<std::endl;
-  std::cout<<"Size of selected cells: "<<cells_to_move_.size()<<std::endl;
-}
-
-void
-CellMoveRouter::SelectCandidateCells() {
-  auto block = db_->getChip()->getBlock();
-  auto cells = block->getInsts();
-  cells_to_move_.clear();
-  cells_weight_.clear();
-
-  std::map <std::string, int> netSteinerLookup; //mapa de nets e stwl
-  int n_cells_to_move = block->getInsts().size() * 5/100;
-  int n_cells_selected = 0;
-  std::unordered_map<odb::dbNet*, odb::dbInst*> net_selected_cell;
-  for(odb::dbNet* net : block->getNets()) {
-    if(net->getSigType().isSupply()) {
-      continue;
-    }
-    auto tree = buildSteinerTree(net); //make net steiner tree
-    int estimate_wl = getTreeWl(tree); //get net STWL from tree
-    if(estimate_wl != tree.length) {
-      logger_->report("Algo errado no calculo do stwl para net {}", net->getName());
-    }
-    netSteinerLookup[net->getName()] = estimate_wl;
-
-    median net_median = compute_net_median(net);
-
-    odb::dbInst* cell_to_move = nullptr;
-    int smalledt_dis = std::numeric_limits<int>::max();
-    
-    for(auto iterm : net->getITerms()) {
-      odb::dbInst* candidate_cell = iterm->getInst();
-
-      if(candidate_cell->isFixed() || candidate_cell->isBlock()) {
-        continue;
-      }
-
-      median candidate_cell_median = compute_cell_median(candidate_cell);
-      int distance = compute_manhattan_distance(net_median, candidate_cell_median);
-      if(distance < smalledt_dis) {
-        smalledt_dis = distance;
-        cell_to_move = candidate_cell;
-      }
-    }
-    net_selected_cell[net] = cell_to_move;
-  }
-
-  for(auto [net, cell_to_move] : net_selected_cell) {
-    if(cell_to_move == nullptr) {
-      continue;
-    }
-    // Move cell to median and compare the before and after steiners
-    int original_x, original_y;
-    cell_to_move->getLocation(original_x, original_y);
-    median net_median = compute_net_median(net);
-    cell_to_move->setLocation(net_median.first, net_median.second);
-
-    int moved_estimated_wl  = 0;
-    int original_estimed_wl = 0;
-    int n_pins = 0;
-    for(odb::dbITerm* pin : cell_to_move->getITerms()) {
-      odb::dbNet* affected_net = pin->getNet();
-      if (affected_net == nullptr || affected_net->getSigType().isSupply()) {
-        continue;
-      }
-      n_pins += 1;
-      auto tree = buildSteinerTree(affected_net); //make net steiner tree
-      moved_estimated_wl += getTreeWl(tree); //get net STWL from tree
-      original_estimed_wl += netSteinerLookup[affected_net->getName()];
-    }
-    cell_to_move->setLocation(original_x, original_y);
-    int weight = original_estimed_wl - moved_estimated_wl;
-    auto erase = findInstIteratorWeight(cell_to_move);
-    if(erase != cells_weight_.end()) {
-      if(weight > erase->weight) {
-        erase->mediana = net_median;
-        erase->init_stwl = original_estimed_wl;
-        erase->weight = weight;
-      }
-    } else {
-      RcmCell cell_weight = {cell_to_move, weight, 0, original_estimed_wl, net_median};
-      cells_weight_.push_back(cell_weight);
-    }
-  }
-  std::sort(cells_weight_.begin(),cells_weight_.end(),
-            [](const RcmCell a, const RcmCell b) {
-                return a.weight > b.weight;
-            });
-  for(int i = 0; i < cells_weight_.size(); i++) {
-    if(cells_weight_[i].weight <= 0 ){
-      break;
-    }
-    cells_to_move_.push_back(cells_weight_[i]);
-  }
-  logger_->report("Cells to move: {}", cells_to_move_.size());
-}
-
-void
-CellMoveRouter::RunCMRO() {
-  int total_moved = 0;
-  int total_rejected = 0;
-  int failed = 0;
-  int worse = 0;
-  int movements = 0;
-  int rejected = 0;
-  auto block = db_->getChip()->getBlock();
-  long after_wl;
-  std::unordered_map<odb::dbInst*,int> cells_movement;
-  // Inital Global Rout by OpenROAD
-  grt_->globalRoute();
-  long init_wl = grt_->computeWirelength();
-  std::cout<<"initial wl  "<<init_wl<<std::endl;
-  gui::Gui* gui = gui::Gui::get();
-  if (rectangleRender_ == nullptr)
-  {
-    rectangleRender_ = std::make_unique<RectangleRender>();
-    gui->registerRenderer(rectangleRender_.get());
-  }
-
-  //Initalize Rtrees
-  InitCellTree();
-  InitGCellTree();
-  abacus_.InitRowTree();
-
-  if(stt_ == nullptr) {
-    stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder(); // create object before using
-    block->setDrivingItermsforNets(); //set net drivers
-  }
-
-  // Init incremental global router
-  icr_grt_ = new grt::IncrementalGRoute(grt_, block);
-  for(int iteration = 1; iteration <=20; iteration++){
-    movements = 0;
-    rejected = 0;
-    SelectCandidateCells();
-    gui->redraw();
-    while(!cells_to_move_.empty()) {
-      auto moving_cell = cells_to_move_[0];
-      //std::cout<<"iter: "<<cont+1<<"\n   cell"<<moving_cell->getName()<<std::endl;
-      bool complete = MoveCell(moving_cell, worse);
-      if(complete) {
-        cells_movement[moving_cell.inst] += 1;
-        movements++;
-      } else {
-        rejected++;
-        cells_to_move_.erase(cells_to_move_.begin());
-      }
-    }
-    after_wl = grt_->computeWirelength();
-    std::cout<<"iteração: "<<iteration<<std::endl;
-    std::cout<<"wl (um): "<<after_wl<<std::endl;
-    std::cout<<"#vias: "<<grt_->getViaCount()<<std::endl;
-    std::cout<<"movimentos: "<<movements<<std::endl;
-    std::cout<<"movidas: "<< cells_movement.size()<<std::endl;
-    std::cout<<"rejeitadas: "<<rejected<<std::endl;
-    std::cout<<"worse: "<<worse<<std::endl;
-    total_moved += movements;
-    total_rejected += rejected;
-  }
-  std::cout<<"Celulas movidas "<<total_moved<<std::endl;
-  std::cout<<"Celulas rejeitadas "<<total_rejected<<std::endl;
-  std::cout<<"Celulas movidas total "<<cells_movement.size()<<std::endl;
-  std::cout<<"move worsed cells  "<<worse<<std::endl;
-  std::cout<<"final wl  "<<after_wl<<std::endl;
-}
-
-bool CellMoveRouter::MoveCell(RcmCell cell, int& worse_wl) {
-  std::vector<std::pair<odb::dbNet*, grt::GRoute>>  affected_nets;
-  std::vector<int>  nets_Bbox_Xs;
-  std::vector<int>  nets_Bbox_Ys;
-  gui::Gui* gui = gui::Gui::get();
-  //Initial info of the cell
-  auto block = db_->getChip()->getBlock();
-  //int wl_before_moving = grt_->computeWirelength();
-  int moving_cell_width = cell.inst->getBBox()->getDX();
-  int original_x, original_y;
-  cell.inst->getLocation(original_x, original_y);
-  //move cell to median point
-  for (auto iterm : cell.inst->getITerms()) {
-    auto affected_net = iterm->getNet();
-    if(affected_net == nullptr || affected_net->getSigType().isSupply()) {
-      continue;
-    }
-    grt::GRoute net_init_route = grt_->getNetRoute(affected_net);
-    affected_nets.push_back(std::make_pair(affected_net, net_init_route));
-  }
-  int xll = ggrid_min_x_;
-  int yll = ggrid_min_y_;
-  int xur = ggrid_max_x_;
-  int yur = ggrid_max_y_;
-  if(debug()) {
-    std::cout<<"  New Position: ("<<cell.mediana.first<<", "<<cell.mediana.second<<")"<<std::endl;
-  }
-
-  //Find median Gcell
-  std::vector<GCellElement> result;
-  gcellTree_->query(bgi::intersects(point_t(cell.mediana.first, cell.mediana.second)), std::back_inserter(result));
-
-  if(debug()) {
-    std::cout<<"Grid limit xmax: "<<xur<<std::endl;
-    std::cout<<"Grid limit xmin: "<<xll<<std::endl;
-    std::cout<<"Grid limit ymax: "<<yur<<std::endl;
-    std::cout<<"Grid limit ymin: "<<yll<<std::endl;
-    std::cout<<"tamanho da busca: "<<result.size()<<std::endl;
-    std::cout<<"Optimal Gcell: ("<<result[0].second.xMin()<<", "<<result[0].second.yMin()<<"), ";
-    std::cout<<"("<<result[0].second.xMax()<<", "<<result[0].second.yMax()<<")\n";
-    std::cout<<std::endl;
-  }
-
-
-  // Expend Legalization Area to be 10x10 GCells
-  int gcell_height = result[0].second.yMax() - result[0].second.yMin();
-
-  //Expanding legalization Area
-  xur = std::min(xur, result[0].second.xMax() + 14 * gcell_height);
-  yur = std::min(yur, result[0].second.yMax());
-  xll = std::max(xll, result[0].second.xMin() - 14 * gcell_height);
-  yll = std::max(yll, result[0].second.yMin());
-  auto [best_x, best_y, has_enoght_space] = abacus_.get_free_spaces(moving_cell_width, xll, yll, xur, yur);
-  
-  if(!has_enoght_space) {
-    //logger_->report("Sem espaço!");
-    return false;
-  }
-
-  cell.inst->setLocation(best_x, best_y.yMin());
-
-  int after_estimate = 0;
-  int n_pin = 0;
-  for(auto pin : cell.inst->getITerms())
-  {
-    auto net = pin->getNet();
-    if(net != nullptr){
-      if (net->getSigType().isSupply()) {
-        continue;
-      }
-      n_pin+= 1;
-      auto tree = buildSteinerTree(net); //make net steiner tree
-      after_estimate += getTreeWl(tree);
-    }
-  }
-  if(after_estimate > cell.init_stwl) {
-    cell.inst->setLocation(original_x, original_y); 
-    return false;
-  }
-  auto changed_cells = abacus_.abacus(xll, best_y.yMin(), xur, best_y.yMax());
-
-  if(abacus_.failed()) {
-    //failed_legalization++;
-    if(debug()) {
-      rectangleRender_->addRectangle(odb::Rect(xll, best_y.yMin(), xur, best_y.yMax()));
-      std::cout<<"Legalization area: ("<<xll<<", "<<best_y.yMin()<<")"<<"  ("<<xur<<", "<<best_y.yMax()<<")"<<std::endl;
-      std::cout<<"Legalization area: ("<<xll<<", "<<yll<<")"<<"  ("<<xur<<", "<<yur<<")"<<std::endl;
-      //drawRectangle(xur, yur, xll, yll);
-    }
-  }
-
-  for(auto [ints, original_location] : changed_cells) {
-    if(ints == cell.inst) {
-      continue;
-    }
-
-    for(auto pin : ints->getITerms())
-    {
-      auto affected_net = pin->getNet();
-      if(affected_net != NULL){
-        if (affected_net->getSigType().isSupply()) {
-          continue;
-        }
-        //wl_before_moving += grt_->computeNetWirelength(affected_net);
-        grt::GRoute net_init_route = grt_->getNetRoute(affected_net);
-        affected_nets.push_back(std::make_pair(affected_net, net_init_route));
-      }
-    }
-  }
-
-  //std::cout<<"Reroteando nets afetadas....."<<std::endl;
-  //clear dirty nets and update the new nets ot be rerouted
-  std::vector<odb::dbNet*>rerouted_nets;
-  grt_->clearDirtyNets();
-  for (auto affected_net : affected_nets) {
-    if(affected_net.first->getSigType().isSupply()) {
-      logger_->report("Erro nas nets afetadas");
-    }
-    rerouted_nets.push_back(affected_net.first);
-    grt_->addDirtyNet(affected_net.first);
-  }
-
-  icr_grt_->updateRoutes();
-  if(!grt_->getDirtyNets().empty()) {
-    grt_->clearDirtyNets();
-  }
-
-  for(auto pin : cell.inst->getITerms())
-  {
-    auto net = pin->getNet();
-    if(net != NULL){
-      if (net->getSigType().isSupply()) {
-        continue;
-      }
-      for (auto iterm : net->getITerms()) {
-        auto inst = iterm->getInst();
-        //std::cout<<"Celula sendo procurada: "<<inst->getName()<<std::endl;
-        auto erase = findInstIterator(inst);
-        if(erase != cells_to_move_.end()) {
-          cells_to_move_.erase(erase);
-        }
-      }
-    }
-  }
-
-  /*int wl_after_moving = grt_->computeWirelength();
-  if(wl_after_moving > wl_before_moving) {
-    worse_wl += 1;
-  }  cell.inst->setLocation(original_x, original_y);
-    for (auto [inst, original_location] : changed_cells) {
-      inst->setLocation(original_location.first, original_location.second);
-    }
-    grt_->updateNetsIncr(rerouted_nets);
-    // Atualizar as informações das nets com o incremental.
-    for (auto affected_net : affected_nets) {
-      grt_->loadGuidesFromUser(affected_net.first, affected_net.second);
-    }
-   std::cout<<"Tamanho das outras celulas movidas: "<<changed_cells.size()<<std::endl;
-    worse_wl += 1;
-    return false;
-  }*/
-
-  gui->redraw();
-  //std::cout<<"nets afetadas reroteadas..."<<std::endl;
-  return true;
-}
-
 int
 CellMoveRouter::compute_manhattan_distance(median loc1, median loc2) {
   int distance = std::abs(loc1.first - loc2.first) + std::abs(loc1.second - loc2.second);
   return distance;
-}
-
-int
-CellMoveRouter::getNetHPWLFast(odb::dbNet * net) const
-{
-  int xll = std::numeric_limits<int>::max();
-  int yll = std::numeric_limits<int>::max();
-  int xur = std::numeric_limits<int>::min();
-  int yur = std::numeric_limits<int>::min();
-  for(auto iterm : net->getITerms())
-  {
-    int x=0, y=0;
-    //Using Cell LL location (fast)
-    odb::dbInst* inst = iterm->getInst();
-    if(inst)// is connected
-    {
-      inst->getLocation(x, y);
-      xur = std::max(xur, x);
-      yur = std::max(yur, y);
-      xll = std::min(xll, x);
-      yll = std::min(yll, y);
-    }
-  }
-  const int width = std::abs(xur-xll);
-  const int height = std::abs(yur-yll);
-  int hpwl = width + height;
-  return hpwl;
 }
 
 void

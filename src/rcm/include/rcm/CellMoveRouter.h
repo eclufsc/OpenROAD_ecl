@@ -68,53 +68,30 @@ class CellMoveRouter {
 
     CellMoveRouter();
 
-    void test_error_cell();
-
     void testRevertingRouting();
 
     void runAbacus();
 
     void shuffleAbacus() { abacus_.shuffle(); };
 
-    void helloWorld();
-
     void drawRectangle(int x1, int y1, int x2, int y2);
-
-    void ShowFirstNetRout();
 
     void Cell_Move_Rerout();
 
     void InitCellsWeight();
-
-    void InitNetsWeight();
     
     void set_debug(bool debug) { debug_ = debug; };
 
-    void setUseSteiner(bool use_steiner) { use_steiner_ = use_steiner; };
-    
-    void setCompareSteiner(bool compare_steiner) { compare_stiener_ = compare_steiner; };
-
     void report_nets_pins();
-
-    void RunCMRO();
-
-    void SelectCellsToMove();
-
-    void SelectCandidateCells();
 
   private:
 
     void InitCellTree();
 
     void InitGCellTree();
-
-    void InitAbacus();
   
     bool Swap_and_Rerout(odb::dbInst * moving_cell, int& failed_legalization, int& worse_wl, int before_estimate);
 
-    int getNetHPWLFast(odb::dbNet * net) const;
-
-    bool MoveCell(RcmCell cell, int& worse_wl);
     
     median nets_Bboxes_median(std::vector<int>& Xs, std::vector<int>& Ys);
 
@@ -151,8 +128,6 @@ class CellMoveRouter {
     std::unique_ptr<CRTree> cellrTree_;
     std::unique_ptr<GRTree> gcellTree_;
     bool debug_ = false;
-    bool use_steiner_ = true;
-    bool compare_stiener_ = true;
     int candidate_percentage_ = 0.05;
     bool limit_candidate_size_ = false;
     Abacus abacus_;
