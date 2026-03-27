@@ -53,8 +53,8 @@ RectangleRender::clear_rectangles()
 
 CellMoveRouter::CellMoveRouter():
   db_{ord::OpenRoad::openRoad()->getDb()},
-  grt_{ord::OpenRoad::openRoad()->getGlobalRouter()},
   logger_{ord::OpenRoad::openRoad()->getLogger()},
+  grt_{ord::OpenRoad::openRoad()->getGlobalRouter()},
   debug_{false}
 {
 }
@@ -79,9 +79,9 @@ CellMoveRouter::buildSteinerTree(odb::dbNet * net)
 
   if ((net->getSigType() == odb::dbSigType::GROUND)
       || (net->getSigType() == odb::dbSigType::POWER)
-      || (net->getITermCount() + net->getBTermCount() < 2))
+      || (net->getITermCount() + net->getBTermCount() < 2)) {
     return stt::Tree{};
-
+  }
   const int driverID = net->getDrivingITerm();
   //std::cout<<"driver id: "<<driverID<<"\n";
   /*if(driverID == 0 || driverID == -1) {
@@ -200,8 +200,10 @@ CellMoveRouter::getTreeWl(const stt::Tree &tree) //get steiner wirelength from s
   for(int i = 0; i < tree.branchCount(); ++i)
   {
     const stt::Branch& branch = tree.branch[i];
-    if(i == branch.n)
+    if(i == branch.n) {
       continue;
+    }
+
     const int x1 = branch.x;
     const int y1 = branch.y;
     const stt::Branch& neighbor = tree.branch[branch.n];
@@ -489,9 +491,9 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   int gcell_height = result[0].second.yMax() - result[0].second.yMin();
 
   //Expanding legalization Area
-  xur = std::min(xur, result[0].second.xMax() + 14 * gcell_height);
+  xur = std::min(xur, result[0].second.xMax() + (14 * gcell_height));
   yur = std::min(yur, result[0].second.yMax());
-  xll = std::max(xll, result[0].second.xMin() - 14 * gcell_height);
+  xll = std::max(xll, result[0].second.xMin() - (14 * gcell_height));
   yll = std::max(yll, result[0].second.yMin());
   
   auto [best_x, best_y, has_enoght_space] = abacus_.get_free_spaces(moving_cell_width, xll, yll, xur, yur);
@@ -567,7 +569,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   //clear dirty nets and update the new nets ot be rerouted
   std::vector<odb::dbNet*>rerouted_nets;
   grt_->clearDirtyNets();
-  for (auto [affected_net, net_route] : affected_nets) {
+  for (const auto& [affected_net, net_route] : affected_nets) {
     if(affected_net->getSigType().isSupply()) {
       logger_->report("Erro nas nets afetadas");
     }
@@ -603,7 +605,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   if(wl_after_moving > wl_before_moving) {
     int curr_x, curr_y;
     moving_cell->getLocation(curr_x, curr_y);
-    /*logger_->report("cell: {}", moving_cell->getName());
+    logger_->report("cell: {}", moving_cell->getName());
     logger_->report("original pos: ({}, {})", original_x, original_y);
     logger_->report("current pos: ({}, {})", curr_x, curr_y);
 
@@ -612,14 +614,14 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       if(inst == moving_cell) {
         continue;
       }
-      /*int x_atual, y_atual;
+      int x_atual, y_atual;
       inst->getLocation(x_atual, y_atual);
       if(x_atual == original_location.first && y_atual == original_location.second) {
         logger_->report("Inst não moveu: {}", inst->getName());
       }
       inst->setLocation(original_location.first, original_location.second);
     }
-    /*std::cout<<"\nUsos iniciais:"<<std::endl;
+    std::cout<<"\nUsos iniciais:"<<std::endl;
     logger_->report("H 2d usages: {}", total_usages_antes.first.first);
     logger_->report("V 2d usages: {}", total_usages_antes.first.second);
     logger_->report("H 3d usages: {}", total_usages_antes.second.first);
@@ -631,7 +633,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
     logger_->report("H 3d usages: {}", total_usages_pre_remove.second.first);
     logger_->report("V 3d usages: {}", total_usages_pre_remove.second.second);
     auto nets_reroteadas = grt_->updateNetsIncr(rerouted_nets);
-    /*std::cout<<"\nUsos depois do updateNets:"<<std::endl;
+    std::cout<<"\nUsos depois do updateNets:"<<std::endl;
     auto total_usages_pos_remove = grt_->reportTotalUsages();
     logger_->report("H 2d usages: {}", total_usages_pos_remove.first.first);
     logger_->report("V 2d usages: {}", total_usages_pos_remove.first.second);
@@ -644,7 +646,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
       grt_->loadGuidesFromUser(affected_net, net_guide);
     }
     worse_wl += 1;
-    /*std::cout<<"Usos dpeois:"<<std::endl;
+    std::cout<<"Usos dpeois:"<<std::endl;
     auto total_usages_depois = grt_->reportTotalUsages();
     logger_->report("H 2d usages: {}", total_usages_depois.first.first);
     logger_->report("V 2d usages: {}", total_usages_depois.first.second);
@@ -1047,4 +1049,5 @@ void CellMoveRouter::runAbacus() {
   odb::Rect area = block->getCoreArea();
   abacus_.abacus(area.xMin(), area.yMin(), area.xMax(), area.yMax());
 };
+
 }
