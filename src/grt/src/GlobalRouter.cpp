@@ -376,6 +376,7 @@ void GlobalRouter::globalRoute(bool save_guides,
     computeWirelength();
     if (verbose_) {
       logger_->info(GRT, 14, "Routed nets: {}", routes_.size());
+      logger_->info(GRT, 16, "Total nets: {}", block_->getNets().size());
     }
     if (save_guides) {
       std::vector<odb::dbNet*> nets;
@@ -5458,7 +5459,7 @@ GRouteDbCbk::GRouteDbCbk(GlobalRouter* grouter) : grouter_(grouter)
 
 void GRouteDbCbk::inDbPostMoveInst(odb::dbInst* inst)
 {
-  //instItermsDirty(inst);
+  instItermsDirty(inst);
 }
 
 void GRouteDbCbk::inDbInstSwapMasterAfter(odb::dbInst* inst)
