@@ -286,12 +286,12 @@ CellMoveRouter::Cell_Move_Rerout(){
   auto block = db_->getChip()->getBlock();
   std::unordered_map<odb::dbInst*,int> cells_movement;
 
-  icr_grt_ = new grt::IncrementalGRoute(grt_, block);
 
 
   // Inital Global Rout by OpenROAD
   // grt_->globalRoute();
 
+  grt_->setCongestionReportFile("~/UFSC/mestrado/OpenROAD-flow-scripts/flow/reports/nangate45/ibex/grcmo_flow1/grcmo_congestion.rpt");
   long init_wl = grt_->computeWirelength();
   std::cout<<"initial wl  "<<init_wl<<std::endl;
   std::cout<<"initial #vias  "<<grt_->getViaCount()<<std::endl;
@@ -371,8 +371,6 @@ CellMoveRouter::Cell_Move_Rerout(){
     nets.push_back(db_net);
   }
   grt_->saveGuides(nets);
-  delete icr_grt_;
-  icr_grt_ = nullptr;
   auto grcmo_end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::seconds>(grcmo_end - grcmo_start);
 
@@ -526,6 +524,8 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
     return false;
   }
 
+  grt_->globalRoute(true, true, false);
+
   //Move cell and call abacus for legalization area
   moving_cell->setLocation(best_x, best_y.yMin());
   auto changed_cells = abacus_.abacus(xll, best_y.yMin(), xur, best_y.yMax());
@@ -565,7 +565,9 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
     }
   }
 
-  //std::cout<<"Reroteando nets afetadas....."<<std::endl;
+  grt_->globalRoute(true, false, true);
+
+  /*std::cout<<"Reroteando nets afetadas....."<<std::endl;
   //clear dirty nets and update the new nets ot be rerouted
   std::vector<odb::dbNet*>rerouted_nets;
   grt_->clearDirtyNets();
@@ -580,7 +582,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
   icr_grt_->updateRoutes();
   if(!grt_->getDirtyNets().empty()) {
     grt_->clearDirtyNets();
-  }
+  }*/
 
   for(auto pin : moving_cell->getITerms())
   {
