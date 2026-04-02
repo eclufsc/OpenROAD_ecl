@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <ranges>
 #include <set>
 #include <stack>
 #include <string>
@@ -16,8 +17,10 @@
 #include "Clock.h"
 #include "CtsOptions.h"
 #include "TreeBuilder.h"
+#include "Util.h"
 #include "cts/TritonCTS.h"
 #include "odb/db.h"
+#include "odb/dbObject.h"
 #include "odb/dbSet.h"
 #include "odb/geom.h"
 #include "sta/Clock.hh"
@@ -25,9 +28,9 @@
 #include "sta/Graph.hh"
 #include "sta/GraphDelayCalc.hh"
 #include "sta/Liberty.hh"
+#include "sta/Mode.hh"
 #include "sta/NetworkClass.hh"
 #include "sta/Path.hh"
-#include "sta/PathAnalysisPt.hh"
 #include "sta/PathEnd.hh"
 #include "sta/PathExpanded.hh"
 #include "sta/Sdc.hh"
@@ -61,11 +64,15 @@ int LatencyBalancer::run()
 void LatencyBalancer::initSta()
 {
   openSta_->ensureGraph();
-  openSta_->ensureClkNetwork();
+  for (auto mode : openSta_->modes()) {
+    openSta_->ensureClkNetwork(mode);
+  }
   openSta_->updateTiming(false);
   timingGraph_ = openSta_->graph();
 }
 
+// This SHOULD return float. It would need to call LumpedCapDelayCalc::gateDelay
+// instead of accessing the models directly to get POCV parameters.
 sta::ArcDelay LatencyBalancer::computeBufferDelay(double extra_out_cap)
 {
   odb::dbMaster* bufferMaster
@@ -76,13 +83,13 @@ sta::ArcDelay LatencyBalancer::computeBufferDelay(double extra_out_cap)
 
   sta::LibertyPort *input, *output;
   buffer_cell->bufferPorts(input, output);
-  for (sta::Corner* corner : *openSta_->corners()) {
-    const sta::DcalcAnalysisPt* dcalc_ap
-        = corner->findDcalcAnalysisPt(sta::MinMax::max());
-    const sta::Pvt* pvt = dcalc_ap->operatingConditions();
+  for (sta::Scene* corner : openSta_->scenes()) {
+    const sta::Pvt* pvt
+        = openSta_->cmdMode()->sdc()->operatingConditions(sta::MinMax::max());
 
     for (sta::TimingArcSet* arc_set :
-         buffer_cell->timingArcSets(input, output)) {
+         buffer_cell->sceneCell(corner, sta::MinMax::max())
+             ->timingArcSets(input, output)) {
       for (sta::TimingArc* arc : arc_set->arcs()) {
         sta::GateTimingModel* model
             = dynamic_cast<sta::GateTimingModel*>(arc->model());
@@ -93,15 +100,14 @@ sta::ArcDelay LatencyBalancer::computeBufferDelay(double extra_out_cap)
             && out_rf == sta::RiseFall::rise()) {
           double in_cap = input->capacitance(in_rf, sta::MinMax::max());
           double load_cap = in_cap + extra_out_cap;
-          sta::ArcDelay arc_delay;
-          sta::Slew arc_slew;
-          model->gateDelay(pvt, 0.0, load_cap, false, arc_delay, arc_slew);
+          float arc_delay, arc_slew;
+          model->gateDelay(pvt, 0.0, load_cap, arc_delay, arc_slew);
           // Cycle the arc_slew through the gate delay calculator once more
-          model->gateDelay(pvt, arc_slew, load_cap, false, arc_delay, arc_slew);
+          model->gateDelay(pvt, arc_slew, load_cap, arc_delay, arc_slew);
           // and once more
-          model->gateDelay(pvt, arc_slew, load_cap, false, arc_delay, arc_slew);
+          model->gateDelay(pvt, arc_slew, load_cap, arc_delay, arc_slew);
 
-          if (arc_delay > max_rise_delay) {
+          if (delayGreater(arc_delay, max_rise_delay, openSta_)) {
             max_rise_delay = arc_delay;
           }
         }
@@ -196,7 +202,10 @@ void LatencyBalancer::buildGraph(odb::dbNet* clkInputNet)
                     0.0, sta::RiseFall::fall(), sta::MinMax::max());
 
                 if (rise != 0 || fall != 0) {
-                  insDelay = (rise + fall) / 2.0;
+                  insDelay = (rise + fall);
+                  if (rise != 0 && fall != 0) {
+                    insDelay /= 2.0;
+                  }
                 }
               }
             }
@@ -248,7 +257,7 @@ float LatencyBalancer::getVertexClkArrival(sta::Vertex* sinkVertex,
       continue;
     }
 
-    if (path->dcalcAnalysisPt(openSta_)->delayMinMax() != sta::MinMax::max()) {
+    if (path->minMax(openSta_) != sta::MinMax::max()) {
       continue;
       // only populate with max delay
     }
@@ -338,7 +347,10 @@ void LatencyBalancer::computeSinkArrivalRecur(odb::dbNet* topClokcNet,
                   0.0, sta::RiseFall::fall(), sta::MinMax::max());
 
               if (rise != 0 || fall != 0) {
-                insDelay = (rise + fall) / 2.0;
+                insDelay = (rise + fall);
+                if (rise != 0 && fall != 0) {
+                  insDelay /= 2.0;
+                }
               }
             }
           }
@@ -432,11 +444,8 @@ void LatencyBalancer::balanceLatencies(int nodeId)
   }
 
   // If the children need a different amount of buffers insert this difference
-  for (auto it = buffersNeeded2Childern.rbegin();
-       it != buffersNeeded2Childern.rend();
-       ++it) {
-    int bufToInsert = it->first;
-    std::vector<odb::dbITerm*> children = it->second;
+  for (auto& [bufToInsert, children] :
+       std::ranges::reverse_view(buffersNeeded2Childern)) {
     if (bufToInsert == -1) {
       continue;
     }
@@ -495,94 +504,66 @@ odb::dbITerm* LatencyBalancer::insertDelayBuffers(
   float offsetY = (float) (loadPinsBbox.yCenter() - srcY) / (numBuffers + 1);
 
   odb::dbInst* returnBuffer = nullptr;
-  odb::dbInst* lastBuffer = nullptr;
+
   for (int i = 0; i < numBuffers; i++) {
-    double locX = (double) (srcX + offsetX * (i + 1)) / wireSegmentUnit_;
-    double locY = (double) (srcY + offsetY * (i + 1)) / wireSegmentUnit_;
+    // Set the location
+    double locX = (double) (srcX + (offsetX * (i + 1))) / wireSegmentUnit_;
+    double locY = (double) (srcY + (offsetY * (i + 1))) / wireSegmentUnit_;
     Point<double> bufferLoc(locX, locY);
     Point<double> legalBufferLoc
         = root_->legalizeOneBuffer(bufferLoc, options_->getRootBuffer());
-    lastBuffer = createDelayBuffer(drivingNet,
-                                   root_->getClock().getSdcName(),
-                                   legalBufferLoc.getX() * wireSegmentUnit_,
-                                   legalBufferLoc.getY() * wireSegmentUnit_);
 
-    drivingNet = lastBuffer->getFirstOutput()->getNet();
+    odb::Point loc{static_cast<int>(legalBufferLoc.getX() * wireSegmentUnit_),
+                   static_cast<int>(legalBufferLoc.getY() * wireSegmentUnit_)};
+
+    // Insert buffer
+    std::string clkName = root_->getClock().getSdcName();
+    std::string newNetName
+        = fmt::format("delaynet_{}_{}", delayBufIndex_, clkName);
+    std::string newBufferName
+        = fmt::format("delaybuf_{}_{}", delayBufIndex_++, clkName);
+    odb::dbMaster* bufferMaster
+        = db_->findMaster(options_->getRootBuffer().c_str());
+
+    odb::dbInst* lastBuffer = nullptr;
+
+    // Use load pins buffering at the end
+    std::set<odb::dbObject*> load_pins;
+    for (odb::dbITerm* sinkInput : sinksInput) {
+      load_pins.insert(sinkInput);
+    }
+
+    // load_pins are not connected yet. So this option is required.
+    bool loads_on_different_nets = true;
+    lastBuffer = drivingNet->insertBufferBeforeLoads(
+        load_pins,
+        bufferMaster,
+        &loc,
+        newBufferName.c_str(),
+        newNetName.c_str(),
+        odb::dbNameUniquifyType::IF_NEEDED,
+        loads_on_different_nets);
+
+    debugPrint(logger_,
+               CTS,
+               "insertion delay",
+               1,
+               "new delay buffer {} is inserted at ({} {})",
+               lastBuffer->getName(),
+               loc.getX(),
+               loc.getY());
+
+    // Update the driving iterm & net to insert a next buffer on it
+    odb::dbITerm* drvrPin = lastBuffer->getFirstOutput();
+    drivingNet = drvrPin->getNet();
+
+    // Update return buffer (the first buffer inserted)
     if (returnBuffer == nullptr) {
       returnBuffer = lastBuffer;
     }
   }
 
-  for (odb::dbITerm* sinkInput : sinksInput) {
-    sinkInput->connect(drivingNet);
-    if (network_->hasHierarchy()) {
-      network_->hierarchicalConnect(lastBuffer->getFirstOutput(),
-                                    sinkInput,
-                                    drivingNet->getName().c_str());
-    }
-  }
   return getFirstInput(returnBuffer);
-}
-
-// Create a new delay buffer and connect output pin of driver to input pin of
-// new buffer. Output pin of new buffer will be connected later.
-odb::dbInst* LatencyBalancer::createDelayBuffer(odb::dbNet* driverNet,
-                                                const std::string& clockName,
-                                                int locX,
-                                                int locY)
-{
-  odb::dbBlock* block = db_->getChip()->getBlock();
-  // creat a new input net
-  std::string newNetName
-      = "delaynet_" + std::to_string(delayBufIndex_) + "_" + clockName;
-
-  // hierarchy fix, make the net in the right scope
-  sta::Pin* driver = nullptr;
-  odb::dbModule* module = network_->getNetDriverParentModule(
-      network_->dbToSta(driverNet), driver);
-  if (module == nullptr) {
-    // if none put in top level
-    module = block->getTopModule();
-  }
-  sta::Instance* scope
-      = (module == nullptr || (module == block->getTopModule()))
-            ? network_->topInstance()
-            : (sta::Instance*) (module->getModInst());
-  odb::dbNet* newNet = network_->staToDb(network_->makeNet(
-      newNetName.c_str(), scope, odb::dbNameUniquifyType::IF_NEEDED));
-
-  newNet->setSigType(odb::dbSigType::CLOCK);
-
-  // create a new delay buffer
-  std::string newBufName
-      = "delaybuf_" + std::to_string(delayBufIndex_++) + "_" + clockName;
-  odb::dbMaster* master = db_->findMaster(options_->getRootBuffer().c_str());
-
-  // fix: make buffer in same hierarchical module as driver
-
-  odb::dbInst* newBuf
-      = odb::dbInst::create(block, master, newBufName.c_str(), false, module);
-
-  newBuf->setSourceType(odb::dbSourceType::TIMING);
-  newBuf->setLocation(locX, locY);
-  newBuf->setPlacementStatus(odb::dbPlacementStatus::PLACED);
-
-  // connect driver output with new buffer input
-  odb::dbITerm* newBufOutTerm = newBuf->getFirstOutput();
-  odb::dbITerm* newBufInTerm = getFirstInput(newBuf);
-  newBufInTerm->connect(driverNet);
-  newBufOutTerm->connect(newNet);
-
-  debugPrint(logger_,
-             CTS,
-             "insertion delay",
-             1,
-             "new delay buffer {} is inserted at ({} {})",
-             newBuf->getName(),
-             locX,
-             locY);
-
-  return newBuf;
 }
 
 bool LatencyBalancer::propagateClock(odb::dbITerm* input)

@@ -4,9 +4,9 @@
 #include "search.h"
 
 #include <atomic>
-#include <mutex>
 #include <vector>
 
+#include "absl/synchronization/mutex.h"
 #include "boost/geometry/geometry.hpp"
 #include "odb/db.h"
 #include "odb/dbShape.h"
@@ -61,9 +61,29 @@ void Search::inDbBPinCreate(odb::dbBPin* pin)
   clearShapes();
 }
 
+void Search::inDbBPinAddBox(odb::dbBox* box)
+{
+  clearShapes();
+  clearBPins();
+}
+
+void Search::inDbBPinRemoveBox(odb::dbBox* box)
+{
+  clearShapes();
+  clearBPins();
+}
+
 void Search::inDbBPinDestroy(odb::dbBPin* pin)
 {
   clearShapes();
+  clearBPins();
+}
+
+void Search::inDbBPinPlacementStatusBefore(odb::dbBPin* pin,
+                                           const odb::dbPlacementStatus& status)
+{
+  clearShapes();
+  clearBPins();
 }
 
 void Search::inDbFillCreate(odb::dbFill* fill)
@@ -200,6 +220,7 @@ void Search::clear()
   clearBlockages();
   clearObstructions();
   clearRows();
+  clearBPins();
 }
 
 void Search::clearShapes()
@@ -232,6 +253,11 @@ void Search::clearRows()
   announceModified(top_block_data_.rows_init);
 }
 
+void Search::clearBPins()
+{
+  announceModified(top_block_data_.bpins_init);
+}
+
 Search::BlockData& Search::getData(odb::dbBlock* block)
 {
   return block->getChip() == top_chip_ ? top_block_data_
@@ -241,7 +267,7 @@ Search::BlockData& Search::getData(odb::dbBlock* block)
 void Search::updateShapes(odb::dbBlock* block)
 {
   BlockData& data = getData(block);
-  std::lock_guard<std::mutex> lock(data.shapes_init_mutex);
+  absl::MutexLock lock(&data.shapes_init_mutex);
   if (data.shapes_init) {
     return;  // already done by another thread
   }
@@ -295,10 +321,45 @@ void Search::updateShapes(odb::dbBlock* block)
   data.shapes_init = true;
 }
 
+void Search::updateBPins(odb::dbBlock* block)
+{
+  BlockData& data = getData(block);
+  absl::MutexLock lock(&data.bpins_init_mutex);
+  if (data.bpins_init) {
+    return;  // already done by another thread
+  }
+
+  data.bpins.clear();
+
+  LayerMap<std::vector<BoxValue<odb::dbBPin*>>> shapes;
+
+  for (odb::dbBTerm* term : block->getBTerms()) {
+    for (odb::dbBPin* pin : term->getBPins()) {
+      odb::dbPlacementStatus status = pin->getPlacementStatus();
+      if (!status.isPlaced()) {
+        continue;
+      }
+      for (odb::dbBox* box : pin->getBoxes()) {
+        if (!box) {
+          continue;
+        }
+        odb::dbTechLayer* layer = box->getTechLayer();
+        shapes[layer].emplace_back(box, pin);
+      }
+    }
+  }
+  for (const auto& [layer, layer_shapes] : shapes) {
+    data.bpins[layer]
+        = RtreeBox<odb::dbBPin*>(layer_shapes.begin(), layer_shapes.end());
+  }
+
+  data.bpins_init = true;
+}
+
 void Search::updateFills(odb::dbBlock* block)
 {
   BlockData& data = getData(block);
-  std::lock_guard<std::mutex> lock(data.fills_init_mutex);
+  absl::MutexLock lock(&data.fills_init_mutex);
   if (data.fills_init) {
     return;  // already done by another thread
   }
@@ -319,7 +380,7 @@ void Search::updateFills(odb::dbBlock* block)
 void Search::updateInsts(odb::dbBlock* block)
 {
   BlockData& data = getData(block);
-  std::lock_guard<std::mutex> lock(data.insts_init_mutex);
+  absl::MutexLock lock(&data.insts_init_mutex);
   if (data.insts_init) {
     return;  // already done by another thread
   }
@@ -340,7 +401,7 @@ void Search::updateInsts(odb::dbBlock* block)
 void Search::updateBlockages(odb::dbBlock* block)
 {
   BlockData& data = getData(block);
-  std::lock_guard<std::mutex> lock(data.blockages_init_mutex);
+  absl::MutexLock lock(&data.blockages_init_mutex);
   if (data.blockages_init) {
     return;  // already done by another thread
   }
@@ -363,7 +424,7 @@ void Search::updateBlockages(odb::dbBlock* block)
 void Search::updateObstructions(odb::dbBlock* block)
 {
   BlockData& data = getData(block);
-  std::lock_guard<std::mutex> lock(data.obstructions_init_mutex);
+  absl::MutexLock lock(&data.obstructions_init_mutex);
   if (data.obstructions_init) {
     return;  // already done by another thread
   }
@@ -389,7 +450,7 @@ void Search::updateObstructions(odb::dbBlock* block)
 void Search::updateRows(odb::dbBlock* block)
 {
   BlockData& data = getData(block);
-  std::lock_guard<std::mutex> lock(data.rows_init_mutex);
+  absl::MutexLock lock(&data.rows_init_mutex);
   if (data.rows_init) {
     return;  // already done by another thread
   }
@@ -471,7 +532,7 @@ void Search::addNet(
 
   for (itr.begin(wire); itr.next(s);) {
     if (s.isVia()) {
-      addVia(net, &s, itr._prev_x, itr._prev_y, tree_shapes);
+      addVia(net, &s, itr.prev_x_, itr.prev_y_, tree_shapes);
     } else {
       tree_shapes[s.getTechLayer()].emplace_back(s.getBox(), WIRE, net);
     }
@@ -496,6 +557,11 @@ class Search::MinSizePredicate
   }
 
   bool operator()(const SNetDBoxValue<T>& o) const
+  {
+    return checkBox(o.first->getBox());
+  }
+
+  bool operator()(const BoxValue<T>& o) const
   {
     return checkBox(o.first->getBox());
   }
@@ -816,6 +882,37 @@ Search::RowRange Search::searchRows(odb::dbBlock* block,
   }
 
   return RowRange(data.rows.qbegin(bgi::intersects(query)), data.rows.qend());
+}
+
+Search::BPinRange Search::searchBPins(odb::dbBlock* block,
+                                      odb::dbTechLayer* layer,
+                                      int x_lo,
+                                      int y_lo,
+                                      int x_hi,
+                                      int y_hi,
+                                      int min_size)
+{
+  BlockData& data = getData(block);
+  if (!data.bpins_init) {
+    updateBPins(block);
+  }
+
+  auto it = data.bpins.find(layer);
+  if (it == data.bpins.end()) {
+    return BPinRange();
+  }
+
+  auto& rtree = it->second;
+  const odb::Rect query(x_lo, y_lo, x_hi, y_hi);
+  if (min_size > 0) {
+    return BPinRange(
+        rtree.qbegin(
+            bgi::intersects(query)
+            && bgi::satisfies(MinSizePredicate<odb::dbBPin*>(min_size))),
+        rtree.qend());
+  }
+
+  return BPinRange(rtree.qbegin(bgi::intersects(query)), rtree.qend());
 }
 
 }  // namespace gui

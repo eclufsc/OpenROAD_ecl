@@ -75,22 +75,12 @@ enum frBlockObjectEnum
   frcInstBlockage,
   frcAccessPattern,
   frcMarker,
-  frcNode,
   frcPatchWire,
-  frcRPin,
   frcAccessPoint,
-  frcAccessPoints,
   frcPinAccess,
   frcCMap,
   frcGCellPattern,
   frcTrackPattern,
-  grcNode,
-  grcNet,
-  grcPin,
-  grcAccessPattern,
-  grcPathSeg,
-  grcRef,
-  grcVia,
   drcNet,
   drcPin,
   drcAccessPattern,
@@ -118,33 +108,27 @@ enum class frGuideEnum
   frcGuideTrunk,
   frcGuideShortConn
 };
-enum class frNodeTypeEnum
-{
-  frcSteiner,
-  frcBoundaryPin,
-  frcPin
-};
 
 enum class frConstraintTypeEnum
 {  // check FlexDR.h fixMode
-  frcShortConstraint = 0,
-  frcAreaConstraint = 1,
-  frcMinWidthConstraint = 2,
-  frcSpacingConstraint = 3,
-  frcSpacingEndOfLineConstraint = 4,
-  frcSpacingEndOfLineParallelEdgeConstraint = 5,  // not supported
-  frcSpacingTableConstraint = 6,                  // not supported
-  frcSpacingTablePrlConstraint = 7,
-  frcSpacingTableTwConstraint = 8,
-  frcLef58SpacingTableConstraint = 9,               // not supported
-  frcLef58CutSpacingTableConstraint = 10,           // not supported
-  frcLef58CutSpacingTablePrlConstraint = 11,        // not supported
-  frcLef58CutSpacingTableLayerConstraint = 12,      // not supported
-  frcLef58CutSpacingConstraint = 13,                // not supported
-  frcLef58CutSpacingParallelWithinConstraint = 14,  // not supported
-  frcLef58CutSpacingAdjacentCutsConstraint = 15,    // not supported
-  frcLef58CutSpacingLayerConstraint = 16,           // not supported
-  frcCutSpacingConstraint = 17,
+  frcShortConstraint,
+  frcAreaConstraint,
+  frcMinWidthConstraint,
+  frcSpacingConstraint,
+  frcSpacingEndOfLineConstraint,
+  frcSpacingEndOfLineParallelEdgeConstraint,  // not supported
+  frcSpacingTableConstraint,                  // not supported
+  frcSpacingTablePrlConstraint,
+  frcSpacingTableTwConstraint,
+  frcLef58SpacingTableConstraint,              // not supported
+  frcLef58CutSpacingTableConstraint,           // not supported
+  frcLef58CutSpacingTablePrlConstraint,        // not supported
+  frcLef58CutSpacingTableLayerConstraint,      // not supported
+  frcLef58CutSpacingConstraint,                // not supported
+  frcLef58CutSpacingParallelWithinConstraint,  // not supported
+  frcLef58CutSpacingAdjacentCutsConstraint,    // not supported
+  frcLef58CutSpacingLayerConstraint,           // not supported
+  frcCutSpacingConstraint,
   frcMinStepConstraint,
   frcLef58MinStepConstraint,
   frcMinimumcutConstraint,
