@@ -1,6 +1,6 @@
-load("@openroad_rules_python//python:defs.bzl", "py_library", "py_test")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
-load("//test:regression.bzl", "regression_test")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("//test:regression.bzl", "doc_check_test", "regression_test")
 
 package(features = ["layering_check"])
 
@@ -47,16 +47,7 @@ py_library(
     srcs = ["helpers.py"],
     imports = ["."],
     deps = [
-        "//openroad:openroadpy",
-    ],
-)
-
-py_library(
-    name = "gpl_aux",
-    srcs = ["gpl_aux.py"],
-    imports = ["."],
-    deps = [
-        "//openroad:openroadpy",
+        "//python/openroad:openroadpy",
     ],
 )
 
@@ -118,7 +109,6 @@ PY_TESTS = [
     "simple03",
     "simple04",
     "simple05",
-    "simple06",
     "simple07",
     "simple08",
     "simple09",
@@ -133,9 +123,8 @@ PY_TESTS = [
             ":test_resources",
         ],
         deps = [
-            ":gpl_aux",
             ":helpers",
-            "//openroad:openroadpy",
+            "//python/openroad:openroadpy",
         ],
     )
     for test_name in PY_TESTS
@@ -176,8 +165,25 @@ cc_test(
         "//src/stt",
         "//src/tst",
         "//src/utl",
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/strings",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
     ],
+)
+
+py_test(
+    name = "gpl_man_tcl_check",
+    srcs = ["gpl_man_tcl_check.py"],
+    data = ["//src/gpl:doc_files"],
+    tags = ["doc_check"],
+    deps = ["//docs/src/scripts:extract_utils"],
+)
+
+doc_check_test(
+    name = "gpl_readme_msgs_check",
+    data = [
+        "//src/gpl:doc_files",
+        "//src/gpl:messages_txt",
+    ],
+    visibility = ["//visibility:public"],
 )

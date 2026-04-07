@@ -70,13 +70,13 @@ All database objects are in the `odb` namespace.
 -   `dbLib`
 
 All database objects have a 32bit object identifier accessed with the
-`dbObject::getOID` base class member function that returns a `uint`. This
+`dbObject::getOID` base class member function that returns a `uint32_t`. This
 identifier is preserved across save/restores of the database so it should
 be used to reference database object by data structures instead of pointers
 if the reference lifetime is across database save/restores. OIDs allow the
 database to have exactly the same layout across save/restores.
 
-The database distance units are **nanometers** and use the type `uint`.
+The database distance units are **nanometers** and use the type `uint32_t`.
 
 ### Create Physical Cluster
 
@@ -112,49 +112,6 @@ create_child_physical_clusters
 | `top_module` | TBC. |
 | `-modinst` | TBC. |
 
-### Set NDR Layer Rule
-
-Description TBC.
-
-```tcl
-set_ndr_layer_rule  
-    tech
-    ndr
-    layerName
-    input
-    isSpacing
-```
-
-#### Options
-
-| Switch Name | Description |
-| ----- | ----- |
-| `tech` | TBC. |
-| `ndr` | TBC. |
-| `values` | TBC. |
-| `isSpacing` | TBC. |
-
-### Set NDR Rules
-
-Description TBC.
-
-```tcl
-set_ndr_rules
-    tech
-    ndr
-    values
-    isSpacing
-```
-
-#### Options
-
-| Switch Name | Description |
-| ----- | ----- |
-| `tech` | TBC. |
-| `ndr` | TBC. |
-| `layerName` | TBC. |
-| `input` | TBC. |
-
 ### Create NDR
 
 Description TBC.
@@ -175,6 +132,52 @@ create_ndr
 | `-spacing` | TBC. |
 | `-width` | TBC. |
 | `-via` | TBC. |
+
+### Set NDR Layer Rule
+
+This command sets a non-default rule (NDR) for a specific routing layer.
+
+<!-- checker: skip -->
+```tcl
+set_ndr_layer_rule
+    tech
+    ndr
+    layerName
+    input
+    isSpacing
+```
+
+#### Options
+
+| Switch Name | Description |
+| ----- | ----- |
+| `tech` | Technology database object. |
+| `ndr` | NDR database object to apply the rule to. |
+| `layerName` | Name of the routing layer. |
+| `input` | Spacing or width value (absolute in microns, or multiplier using `*N` syntax). |
+| `isSpacing` | Boolean — `1` to set spacing, `0` to set width. |
+
+### Set NDR Rules
+
+This command sets non-default rules for spacing or width across all or a range of routing layers.
+
+<!-- checker: skip -->
+```tcl
+set_ndr_rules
+    tech
+    ndr
+    values
+    isSpacing
+```
+
+#### Options
+
+| Switch Name | Description |
+| ----- | ----- |
+| `tech` | Technology database object. |
+| `ndr` | NDR database object to apply the rules to. |
+| `values` | Single value (applied to all layers) or a list of `{layer value}` pairs. |
+| `isSpacing` | Boolean — `1` to set spacing, `0` to set width. |
 
 ### Create Voltage Domain
 
@@ -387,26 +390,6 @@ design_is_routed [-verbose]
 | `verbose` | Flag that allow the command to show all the nets that are not routed. |
 
 
-### Replace Design
-
-This command swaps a hierarchical module with another module.
-Two modules must have identical number of ports and port names must match.
-Functional equivalence is not required.
-New module is not allowed to have multiple levels of hierarchy for now.
-Newly instantiated module is uniquified.
-
-```tcl
-replace_design instance_name module_name
-```
-
-#### Options
-
-| Switch Name | Description |
-| ----- | ----- |
-| `instance_name` | Name of a hierarchical instance for which the module swap needs to happen.  For example, 'l1/l2/U3' |
-| `module_name`   | Name of a new module that needs to be swapped in.  |
-
-
 ### Create Blockage
 
 This command provides a unified interface for creating placement blockages. The command supports hard, soft, and partial blockages with flexible configuration options.
@@ -427,6 +410,35 @@ create_blockage
 | `inst`   | (optional): Associate blockage with a specific instance.  |
 | `max_density`   | (optional): Maximum density for partial blockages (0-100).  |
 | `soft`   | (optional): Create a soft blockage only blocked during initial placement.  |
+
+
+### Create Routing Obstruction
+
+This command provides a unified interface for creating routing blockages.
+
+```tcl
+create_obstruction
+    -region {x1 y1 x2 y2}
+    -layer layer
+    [-inst instance]
+    [-slot]
+    [-fill]
+    [-except_pg]
+    [-min_spacing space]
+    [-effective_width width]
+```
+
+#### Options
+
+| Switch Name | Description |
+| ----- | ----- |
+| `region` | (required) Obstruction coordinates in microns. For example, {0 0 10 10} |
+| `layer`| (required) Layer to apply the obstruction on. |
+| `inst` | (optional): Associate obstruction with a specific instance.  |
+| `slot` | (optional): Mark as a slot obstruction.
+| `fill` | (optional): Mark as a fill obstruction.
+| `min_spacing` | (optional): Add a minimum spacing to the obstruction.  |
+| `effective_width` | (optional): Add an effective width to the obstruction.  |
 
 
 ## Example scripts
@@ -529,4 +541,4 @@ about this tool.
 
 ## LICENSE
 
-BSD 3-Clause License. See [LICENSE](LICENSE) file.
+BSD 3-Clause License. See [LICENSE](../../LICENSE) file.

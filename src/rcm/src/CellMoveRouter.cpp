@@ -82,7 +82,7 @@ CellMoveRouter::buildSteinerTree(odb::dbNet * net)
       || (net->getITermCount() + net->getBTermCount() < 2)) {
     return stt::Tree{};
   }
-  const int driverID = net->getDrivingITerm();
+  const odb::dbITerm* driver = net->getDrivingITerm();
   //std::cout<<"driver id: "<<driverID<<"\n";
   /*if(driverID == 0 || driverID == -1) {
     net->get1stSignalInput()
@@ -99,7 +99,7 @@ CellMoveRouter::buildSteinerTree(odb::dbNet * net)
     const bool pinExist = dbITerm->getAvgXY(&x, &y);
     if(pinExist)
     {
-      if(driverID == dbITerm->getId())
+      if(driver == dbITerm)
       {
         rootIndex = xcoords.size();
       }
@@ -141,7 +141,7 @@ CellMoveRouter::buildSteinerTree(odb::dbNet * net, odb::dbITerm* movedTerm, int 
       || (net->getITermCount() + net->getBTermCount() < 2))
     return stt::Tree{};
 
-  const int driverID = net->getDrivingITerm();
+  const odb::dbITerm* driver = net->getDrivingITerm();
 
   // Get pin coords and driver
   std::vector<int> xcoords, ycoords;
@@ -152,14 +152,14 @@ CellMoveRouter::buildSteinerTree(odb::dbNet * net, odb::dbITerm* movedTerm, int 
     const bool pinExist = dbITerm->getAvgXY(&x, &y);
     if(pinExist && dbITerm != movedTerm)
     {
-      if(driverID == dbITerm->getId())
+      if(driver == dbITerm)
       {
         rootIndex = xcoords.size();
       }
       xcoords.push_back(x);
       ycoords.push_back(y);
     } else if(dbITerm == movedTerm) {
-      if(driverID == dbITerm->getId())
+      if(driver == dbITerm)
       {
         rootIndex = xcoords.size();
       }
@@ -524,7 +524,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
     return false;
   }
 
-  grt_->globalRoute(true, true, false);
+  grt_->startIncremental();
 
   //Move cell and call abacus for legalization area
   moving_cell->setLocation(best_x, best_y.yMin());
@@ -565,7 +565,7 @@ CellMoveRouter::Swap_and_Rerout(odb::dbInst * moving_cell,
     }
   }
 
-  grt_->globalRoute(true, false, true);
+  grt_->endIncremental();
 
   /*std::cout<<"Reroteando nets afetadas....."<<std::endl;
   //clear dirty nets and update the new nets ot be rerouted

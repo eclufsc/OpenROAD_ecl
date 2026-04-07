@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "odb/db.h"
-#include "sta/Corner.hh"
+#include "sta/LibertyClass.hh"
 #include "sta/NetworkClass.hh"
 
 namespace utl {
@@ -27,6 +27,7 @@ class dbSta;
 class FuncExpr;
 class LibertyCell;
 class LibertyPort;
+class Scene;
 }  // namespace sta
 
 namespace gpl {
@@ -35,20 +36,6 @@ struct Point;
 struct Tray;
 struct Flop;
 class AbstractGraphics;
-enum PortName
-{
-  d,
-  si,
-  se,
-  preset,
-  clear,
-  q,
-  qn,
-  vss,
-  vdd,
-  func,
-  ifunc
-};
 
 class MBFF
 {
@@ -69,6 +56,21 @@ class MBFF
   void Run(int mx_sz, float alpha, float beta);
 
  private:
+  enum PortName
+  {
+    d,
+    si,
+    se,
+    preset,
+    clear,
+    q,
+    qn,
+    vss,
+    vdd,
+    func,
+    ifunc
+  };
+
   // get the respective q/qn pins for a d pin
   struct FlopOutputs
   {
@@ -88,14 +90,14 @@ class MBFF
     std::string to_string() const;
     bool operator<(const Mask& rhs) const;
   };
-  using DataToOutputsMap = std::map<const sta::LibertyPort*, FlopOutputs>;
+  using DataToOutputsMap
+      = std::map<const sta::LibertyPort*, FlopOutputs, sta::LibertyPortLess>;
   DataToOutputsMap GetPinMapping(odb::dbInst* tray);
 
   // MBFF functions
   const sta::LibertyCell* getLibertyCell(const sta::Cell* cell);
   float GetDist(const Point& a, const Point& b);
   float GetDistAR(const Point& a, const Point& b, float AR);
-  int GetRows(int slot_cnt, const Mask& array_mask);
   int GetBitCnt(int bit_idx);
   int GetBitIdx(int bit_cnt);
 
@@ -146,8 +148,7 @@ class MBFF
   Point GetTrayCenter(const Mask& array_mask, int idx);
   // get slots w.r.t. tray center
   void GetSlots(const Point& tray,
-                int rows,
-                int cols,
+                int bit_cnt,
                 std::vector<Point>& slots,
                 const Mask& array_mask);
 
@@ -229,12 +230,14 @@ class MBFF
   void displayFlopClusters(const char* stage,
                            std::vector<std::vector<Flop>>& clusters);
 
+  float getLeakage(odb::dbMaster* master);
+
   // OpenROAD vars
   odb::dbDatabase* db_;
   odb::dbBlock* block_;
   sta::dbSta* sta_;
   sta::dbNetwork* network_;
-  sta::Corner* corner_;
+  sta::Scene* corner_;
   std::unique_ptr<AbstractGraphics> graphics_;
   utl::Logger* log_;
   rsz::Resizer* resizer_;

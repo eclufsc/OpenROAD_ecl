@@ -69,97 +69,27 @@ proc create_menu_item { args } {
   return [gui::create_menu_item $name $path $action_text $tcl_script $shortcut $echo]
 }
 
-sta::define_cmd_args "save_image" {[-area {x0 y0 x1 y1}] \
-                                   [-width width] \
-                                   [-resolution microns_per_pixel] \
-                                   [-display_option option] \
-                                   path
-} ;# checker off
-
-proc save_image { args } {
-  ord::parse_list_args "save_image" args list {-display_option}
-  sta::parse_key_args "save_image" args \
-    keys {-area -width -resolution} flags {} ;# checker off
-
-  set options [gui::DisplayControlMap]
-  foreach opt $list(-display_option) {
-    if { [llength $opt] != 2 } {
-      utl::error GUI 19 "Display option must have 2 elements {control name} {value}."
-    }
-
-    set key [lindex $opt 0]
-    set val [lindex $opt 1]
-
-    $options set $key $val
-  }
-
-  set resolution 0
-  if { [info exists keys(-resolution)] } {
-    sta::check_positive_float "-resolution" $keys(-resolution)
-    set tech [ord::get_db_tech]
-    if { $tech == "NULL" } {
-      utl::error GUI 17 "No technology loaded."
-    }
-    set resolution [expr $keys(-resolution) * [$tech getLefUnits]]
-    if { $resolution < 1 } {
-      set resolution 1.0
-      set res_per_pixel [expr $resolution / [$tech getLefUnits]]
-      utl::warn GUI 31 "Resolution too high for design, defaulting to ${res_per_pixel}um per pixel"
-    }
-  }
-
-  set area "0 0 0 0"
-  if { [info exists keys(-area)] } {
-    set area $keys(-area)
-    if { [llength $area] != 4 } {
-      utl::error GUI 18 "Area must contain 4 elements."
-    }
-  }
-
-  set width 0
-  if { [info exists keys(-width)] } {
-    if { $resolution != 0 } {
-      utl::error GUI 96 "Cannot set -width if -resolution has already been specified."
-    }
-    sta::check_positive_int "-width" $keys(-width)
-    set width $keys(-width)
-    if { $width == 0 } {
-      utl::error GUI 98 "Specified -width cannot be zero."
-    }
-  }
-
-  sta::check_argc_eq1 "save_image" $args
-  set path [lindex $args 0]
-
-  gui::save_image $path {*}$area $width $resolution $options
-
-  # delete map
-  rename $options ""
-}
-
 sta::define_cmd_args "save_animated_gif" {-start|-add|-end \
                                           [-area {x0 y0 x1 y1}] \
                                           [-width width] \
                                           [-resolution microns_per_pixel] \
                                           [-delay delay] \
+                                          [-key key] \
                                           [path]
 }
 
 proc save_animated_gif { args } {
   sta::parse_key_args "save_animated_gif" args \
-    keys {-area -width -resolution -delay} flags {-start -end -add}
+    keys {-area -width -resolution -delay -key} flags {-start -end -add}
 
   set resolution 0
   if { [info exists keys(-resolution)] } {
     sta::check_positive_float "-resolution" $keys(-resolution)
-    set tech [ord::get_db_tech]
-    if { $tech == "NULL" } {
-      utl::error GUI 52 "No technology loaded."
-    }
-    set resolution [expr $keys(-resolution) * [$tech getLefUnits]]
+    set db [ord::get_db]
+    set resolution [expr $keys(-resolution) * [$db getDbuPerMicron]]
     if { $resolution < 1 } {
       set resolution 1.0
-      set res_per_pixel [expr $resolution / [$tech getLefUnits]]
+      set res_per_pixel [expr $resolution / [$db getDbuPerMicron]]
       utl::warn GUI 55 "Resolution too high for design, defaulting to ${res_per_pixel}um per pixel"
     }
   }
@@ -189,19 +119,24 @@ proc save_animated_gif { args } {
     set delay $keys(-delay)
   }
 
+  set key -1
+  if { [info exists keys(-key)] } {
+    set key $keys(-key)
+  }
+
   if { [info exists flags(-start)] } {
     sta::check_argc_eq1 "save_animated_gif" $args
     set path [lindex $args 0]
 
-    gui::gif_start $path
+    return [gui::gif_start $path]
   } elseif { [info exists flags(-add)] } {
     sta::check_argc_eq0 "save_animated_gif" $args
 
-    gui::gif_add {*}$area $width $resolution $delay
+    gui::gif_add $key {*}$area $width $resolution $delay
   } elseif { [info exists flags(-end)] } {
     sta::check_argc_eq0 "save_animated_gif" $args
 
-    gui::gif_end
+    gui::gif_end $key
   } else {
     utl::error GUI 106 "-start, -end, or -add is required"
   }
@@ -210,14 +145,14 @@ proc save_animated_gif { args } {
 sta::define_cmd_args "save_clocktree_image" {
   [-width width] \
   [-height height] \
-  [-corner corner] \
+  [-scene scene] \
   -clock clock \
   path
 }
 
 proc save_clocktree_image { args } {
   sta::parse_key_args "save_clocktree_image" args \
-    keys {-clock -width -height -corner} flags {}
+    keys {-clock -width -height -scene -corner} flags {}
 
   sta::check_argc_eq1 "save_clocktree_image" $args
   set path [lindex $args 0]
@@ -230,10 +165,7 @@ proc save_clocktree_image { args } {
   if { [info exists keys(-height)] } {
     set height $keys(-height)
   }
-  set corner ""
-  if { [info exists keys(-corner)] } {
-    set corner $keys(-corner)
-  }
+  set scene [sta::parse_scene keys]
 
   if { [info exists keys(-clock)] } {
     set clock $keys(-clock)
@@ -241,7 +173,7 @@ proc save_clocktree_image { args } {
     utl::error GUI 88 "-clock is required"
   }
 
-  gui::save_clocktree_image $path $clock $corner $width $height
+  gui::save_clocktree_image $path $clock $scene $width $height
 }
 
 sta::define_cmd_args "save_histogram_image" {
@@ -463,3 +395,30 @@ proc add_label { args } {
     $size \
     $name]
 }
+
+namespace eval gui {
+proc show_worst_path { args } {
+  sta::parse_key_args "show_worst_path" args \
+    keys {} flags {-setup -hold} ;# checker off
+
+  sta::check_argc_eq0 "show_worst_path" $args
+
+  set setup 1
+  if { [info exists flags(-hold)] } {
+    set setup 0
+  }
+
+  gui::show_worst_path_internal $setup
+}
+
+sta::define_cmd_args "clear_timing_path" {} ;# checker off
+
+proc clear_timing_path { args } {
+  sta::parse_key_args "clear_timing_path" args \
+    keys {} flags {} ;# checker off
+
+  sta::check_argc_eq0 "clear_timing_path" $args
+
+  gui::clear_timing_path_internal
+}
+} ;# namespace gui

@@ -2,6 +2,7 @@
 # Copyright (c) 2025, The OpenROAD Authors
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:python_wrap_cc.bzl", "python_wrap_cc")
 load("//bazel:tcl_encode_or.bzl", "tcl_encode")
 load("//bazel:tcl_wrap_cc.bzl", "tcl_wrap_cc")
 
@@ -16,16 +17,17 @@ cc_library(
     name = "cgt",
     srcs = [
         "src/ClockGating.cpp",
+        "src/ClockGatingImpl.h",
         "src/MakeClockGating.cpp",
         "src/NetworkBuilder.cpp",
+        "src/NetworkBuilder.h",
+        "src/RandomBits.h",
         ":swig",
         ":tcl",
     ],
     hdrs = [
         "include/cgt/ClockGating.h",
         "include/cgt/MakeClockGating.h",
-        "include/cgt/NetworkBuilder.h",
-        "include/cgt/RandomBits.h",
     ],
     defines = [
         "ABC_NAMESPACE=abc",
@@ -40,9 +42,9 @@ cc_library(
         "//src/odb",
         "//src/sta:opensta_lib",
         "//src/utl",
+        "@abc",
         "@boost.stacktrace",
-        "@edu_berkeley_abc//:abc-lib",
-        "@tk_tcl//:tcl",
+        "@tcl_lang//:tcl",
     ],
 )
 
@@ -64,4 +66,21 @@ tcl_wrap_cc(
     module = "cgt",
     namespace_prefix = "cgt",
     root_swig_src = "src/cgt.i",
+)
+
+python_wrap_cc(
+    name = "swig-py",
+    srcs = [
+        "include/cgt/ClockGating.h",
+        "src/cgt-py.i",
+        "//:error_swig-py",
+    ],
+    module = "cgt_py",
+    root_swig_src = "src/cgt-py.i",
+    swig_includes = [
+        "include",
+    ],
+    deps = [
+        "//src/odb:swig-py",
+    ],
 )

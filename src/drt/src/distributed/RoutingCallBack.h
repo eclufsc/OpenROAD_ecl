@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
-#include <mutex>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -19,15 +18,17 @@
 #include "distributed/PinAccessJobDescription.h"
 #include "distributed/RoutingJobDescription.h"
 #include "distributed/frArchive.h"
+#include "distributed/paUpdate.h"
 #include "dr/FlexDR.h"
+#include "drt/TritonRoute.h"
 #include "dst/Distributed.h"
 #include "dst/JobCallBack.h"
 #include "dst/JobMessage.h"
 #include "global.h"
 #include "omp.h"
 #include "pa/FlexPA.h"
-#include "triton_route/TritonRoute.h"
 #include "utl/Logger.h"
+#include "utl/exception.h"
 
 namespace asio = boost::asio;
 namespace odb {
@@ -44,7 +45,6 @@ class RoutingCallBack : public dst::JobCallBack
       : router_(router),
         dist_(dist),
         logger_(logger),
-        init_(true),
         pa_(router->getDesign(),
             logger,
             nullptr,
@@ -168,10 +168,16 @@ class RoutingCallBack : public dst::JobCallBack
       case PinAccessJobDescription::INST_ROWS: {
         auto instRows = deserializeInstRows(desc->getPath());
         omp_set_num_threads(router_->getRouterConfiguration()->MAX_THREADS);
+        utl::ThreadException exception;
 #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < instRows.size(); i++) {  // NOLINT
-          pa_.genInstRowPattern(instRows.at(i));
+          try {
+            pa_.genInstRowPattern(instRows.at(i));
+          } catch (...) {
+            exception.capture();
+          }
         }
+        exception.rethrow();
         paUpdate update;
         for (const auto& row : instRows) {
           for (auto inst : row) {
@@ -241,7 +247,7 @@ class RoutingCallBack : public dst::JobCallBack
   utl::Logger* logger_;
   std::string design_path_;
   std::string router_cfg_path_;
-  bool init_;
+  bool init_{true};
   FlexDRViaData via_data_;
   FlexPA pa_;
 };

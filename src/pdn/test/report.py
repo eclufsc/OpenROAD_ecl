@@ -2,6 +2,9 @@ from openroad import Design, Tech
 import pdn_aux
 import helpers
 
+bazel_working_dir = "/_main/src/pdn/test/"
+helpers.if_bazel_change_working_dir_to(bazel_working_dir)
+
 tech = Tech()
 tech.readLef("Nangate45/Nangate45.lef")
 tech.readLef("nangate_bsg_black_parrot/dummy_pads.lef")
@@ -33,7 +36,13 @@ pdn_aux.add_pdn_stripe(
 )
 
 pdn_aux.add_pdn_stripe(
-    design, layer="metal4", width=0.48, pitch=56.0, offset=2.0, extend_to_core_ring=True
+    design,
+    layer="metal4",
+    width=0.48,
+    pitch=56.0,
+    offset=2.0,
+    extend_to_core_ring=True,
+    nets=["VDD"],
 )
 pdn_aux.add_pdn_stripe(
     design, layer="metal7", width=1.40, pitch=40.0, offset=2.0, extend_to_core_ring=True
@@ -45,9 +54,9 @@ pdn_aux.add_pdn_stripe(
     design, layer="metal9", width=1.40, pitch=40.0, offset=2.0, extend_to_core_ring=True
 )
 
-pdn_aux.add_pdn_connect(design, layers=["metal1", "metal4"])
 pdn_aux.add_pdn_connect(design, layers=["metal4", "metal7"])
-pdn_aux.add_pdn_connect(design, layers=["metal7", "metal8"])
+pdn_aux.add_pdn_connect(design, layers=["metal1", "metal4"])
 pdn_aux.add_pdn_connect(design, layers=["metal8", "metal9"])
+pdn_aux.add_pdn_connect(design, layers=["metal7", "metal8"])
 
 pdngen.report()

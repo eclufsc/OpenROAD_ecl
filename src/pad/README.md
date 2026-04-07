@@ -148,7 +148,7 @@ make_io_sites -horizontal_site IOSITE_H -vertical_site IOSITE_V -corner_site IOS
 ```
 
 ```tcl
-make_io_sites 
+make_io_sites
     -horizontal_site site
     -vertical_site site
     -corner_site site
@@ -167,7 +167,7 @@ make_io_sites
 | `-vertical_site` | Name of the site for the vertical pads (north and south). |
 | `-corner_site` | Name of the site for the corner cells. |
 | `-offset` | Offset from the die edge to place the rows. |
-| `-rotation_horizontal` | Rotation to apply to the horizontal sites to ensure pads are placed correctly. The default value is `R0` for the western (left) row when different sites are specified for hortizontal and vertical rows, the default value is `MXR90` when the same site is specified. |
+| `-rotation_horizontal` | Rotation to apply to the horizontal sites to ensure pads are placed correctly. The default value is `R0` for the western (left) row when different sites are specified for horizontal and vertical rows; the default value is `MXR90` when the same site is specified. |
 | `-rotation_vertical` | Rotation to apply to the vertical sites to ensure pads are placed correctly. The default value is `R0` for the southern (bottom) row. |
 | `-rotation_corner` | Rotation to apply to the corner sites to ensure pads are placed correctly. The default value is `R0` for the south west (lower left) corner. |
 | `-ring_index` | Used to specify the index of the ring in case of multiple rings. |
@@ -219,6 +219,7 @@ place_pads -row IO_SOUTH u_reset.u_in u_reset.u_out
 ```tcl
 place_pads
     -row row_name
+    [-mode mode]
     pads
 ```
 
@@ -227,8 +228,30 @@ place_pads
 | Switch Name | Description |
 | ----- | ----- |
 | `-row` | Name of the row to place the pad into, examples include: `IO_NORTH`, `IO_SOUTH`, `IO_WEST`, `IO_EAST`, `IO_NORTH_0`, `IO_NORTH_1`. |
+| `-mode` | Select the mode to use during pad placement, choices are `bump_aligned`, `linear`, `placer`, and `uniform`. Default will select `bump_aligned` if possible, otherwise fallback to `uniform`. |
 | `pads` | Name of the instances in the order they should be placed (left to right for `IO_SOUTH` and `IO_NORTH` and bottom to top for `IO_WEST` and `IO_EAST`). |
 
+#### Modes
+
+In `uniform` mode, the pads will be evenly spread out across the row they are assigned to, as shown in the figure below.
+
+<img src="./doc/image/mode_uniform.png" width=450px>
+
+In `bump_aligned` mode, the pads will be clustered near their assigned bumps to minimize RDL routing distances, as shown below.
+
+<img src="./doc/image/mode_bump_aligned.png" width=450px>
+
+In `linear` mode, the pads will be place starting from the bottom or left of the row next to eachother.
+
+<img src="./doc/image/mode_linear.png" width=450px>
+
+In `placer` mode, the pads will be placed according to the following algorithm:
+1. Find the ideal position of each pad to minimize RDL routing.
+2. Find the best anchor point for each pad taking into account the ordering of the pads and the ideal positions.
+3. Perform iterative pad spreading to push pads apart and avoid any obstuctions that may exist.
+4. Fix the placement of the pads.
+
+<img src="./doc/image/mode_placer.png" width=450px>
 
 ### Placing Pads Manually
 
@@ -386,6 +409,19 @@ rdl_route
 | `-max_iterations` | Maximum number of router iterations. The default value is `10`. |
 | `-allow45` | Specifies that 45 degree routing is permitted. |
 | `nets` | Nets to route. |
+
+### Selectively routing terminals
+
+If some of of the terminals in the design do not need to be RDL routed, this can be done by assigning `RDL_ROUTE 0` to a terminal.
+
+<!-- checker: skip -->
+```tcl
+# Assumes iterm is the pin to be not be routed
+set prop [odb::dbBoolProperty_create $iterm RDL_ROUTE 0]
+
+# Change to route iterm
+$prop setValue 1
+```
 
 ## Useful Developer Commands
 

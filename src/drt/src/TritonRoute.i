@@ -5,8 +5,8 @@
 %{
 
 #include <cstring>
+#include "drt/TritonRoute.h"
 #include "ord/OpenRoad.hh"
-#include "triton_route/TritonRoute.h"
 #include "utl/Logger.h"
 %}
 
@@ -50,7 +50,6 @@ void detailed_route_set_unidirectional_layer(const char* layerName)
 
 void detailed_route_cmd(const char* outputMazeFile,
                         const char* outputDrcFile,
-                        const char* outputCmapFile,
                         const char* outputGuideCoverageFile,
                         const char* dbProcessNode,
                         bool enableViaGen,
@@ -78,7 +77,6 @@ void detailed_route_cmd(const char* outputMazeFile,
   router->setParams({outputMazeFile,
                     outputDrcFile,
                     drcReportIterStepOpt,
-                    outputCmapFile,
                     outputGuideCoverageFile,
                     dbProcessNode,
                     enableViaGen,

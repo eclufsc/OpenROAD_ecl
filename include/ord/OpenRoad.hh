@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -132,6 +130,10 @@ namespace est {
 class EstimateParasitics;
 }
 
+namespace web {
+class WebServer;
+}
+
 namespace ord {
 
 class dbVerilogNetwork;
@@ -186,6 +188,7 @@ class OpenRoad
   {
     return estimate_parasitics_;
   }
+  web::WebServer* getWebServer() { return web_server_; }
 
   // Return the bounding box of the db rows.
   odb::Rect getCore();
@@ -229,6 +232,10 @@ class OpenRoad
 
   void read3Dbv(const std::string& filename);
   void read3Dbx(const std::string& filename);
+  void write3Dbv(const std::string& filename);
+  void write3Dbx(const std::string& filename);
+  void read3DBloxBMap(const std::string& filename);
+  void check3DBlox();
 
   void readDb(std::istream& stream);
   void readDb(const char* filename, bool hierarchy = false);
@@ -286,6 +293,7 @@ class OpenRoad
   rcm::CellMoveRouter *cellMoveRouter_;
   dft::Dft* dft_ = nullptr;
   est::EstimateParasitics* estimate_parasitics_ = nullptr;
+  web::WebServer* web_server_ = nullptr;
   utl::CallBackHandler* callback_handler_ = nullptr;
 
   int threads_ = 1;
