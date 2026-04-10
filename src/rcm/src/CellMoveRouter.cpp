@@ -291,7 +291,6 @@ CellMoveRouter::Cell_Move_Rerout(){
   // Inital Global Rout by OpenROAD
   // grt_->globalRoute();
 
-  grt_->setCongestionReportFile("~/UFSC/mestrado/OpenROAD-flow-scripts/flow/reports/nangate45/ibex/grcmo_flow1/grcmo_congestion.rpt");
   long init_wl = grt_->computeWirelength();
   std::cout<<"initial wl  "<<init_wl<<std::endl;
   std::cout<<"initial #vias  "<<grt_->getViaCount()<<std::endl;
