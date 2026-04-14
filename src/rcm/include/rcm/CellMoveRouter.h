@@ -78,6 +78,8 @@ class CellMoveRouter {
 
     void Cell_Move_Rerout();
 
+    bool isClockBuffer(odb::dbInst* cell);
+
     void InitCellsWeight();
     
     void set_debug(bool debug) { debug_ = debug; };

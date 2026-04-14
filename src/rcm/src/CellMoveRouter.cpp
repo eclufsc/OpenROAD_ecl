@@ -839,6 +839,11 @@ CellMoveRouter::compute_net_median(odb::dbNet* net) {
   return nets_Bboxes_median(nets_Bbox_Xs, nets_Bbox_Ys);
 }
 
+bool CellMoveRouter::isClockBuffer(odb::dbInst* cell)
+{
+  auto outTerm = cell->getFirstOutput();
+  bool isClock = outTerm->getNet()->getSigType() == odb::dbSigType::CLOCK;
+}
 
 void
 CellMoveRouter::InitCellsWeight()
@@ -874,6 +879,10 @@ CellMoveRouter::InitCellsWeight()
     }
     if(cell->isBlock()) {
       std::cout<<"É um Bloco"<<std::endl;
+      continue;
+    }
+
+    if(isClockBuffer(cell)) {
       continue;
     }
     int original_x, original_y;
