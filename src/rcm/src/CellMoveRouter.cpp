@@ -842,7 +842,11 @@ CellMoveRouter::compute_net_median(odb::dbNet* net) {
 bool CellMoveRouter::isClockBuffer(odb::dbInst* cell)
 {
   auto outTerm = cell->getFirstOutput();
+  if(!outTerm || !outTerm->getNet()) {
+    return false;
+  }
   bool isClock = outTerm->getNet()->getSigType() == odb::dbSigType::CLOCK;
+  return isClock;
 }
 
 void
