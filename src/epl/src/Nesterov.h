@@ -13,6 +13,7 @@ class Instance;
 namespace epl {
 class WAwirelength;
 class EDensity;
+class EPlace;
 
 class NesterovInst
 {
@@ -86,6 +87,7 @@ class NesterovOptimizer
 {
  public:
   NesterovOptimizer(  // tconst NesterovOptimizer& npVars,
+      EPlace* eplace,
       const std::shared_ptr<WAwirelength>& wa_wirelength,
       const std::vector<std::shared_ptr<EDensity>>& e_density_vec,
       utl::Logger* log);
@@ -107,6 +109,7 @@ class NesterovOptimizer
   void init();
 
  private:
+  EPlace* epl_;
   std::shared_ptr<WAwirelength> wa_wirelength_;
   std::vector<std::shared_ptr<EDensity>> e_density_vec_;
   utl::Logger* log_;

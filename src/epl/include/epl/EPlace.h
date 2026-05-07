@@ -56,16 +56,11 @@ class EPlace
              int info_interval);
   void randomPlace(int threads);
   void calcualteWaHPWL(float gamma);
+  void updateGradient();
 
  private:
   bool initEPlace(float density, bool uniform_density);
-  void updateGradient(float density_penalty,
-                      bool disable_wirelength = false,
-                      bool disable_density = false,
-                      bool use_density_field = false,
-                      bool use_preconditioning = true);
-  float updateDensityPenalty(float density_penalty,
-                             float curr_hpwl,
+  void updateDensityPenalty(float curr_hpwl,
                              float last_hpwl,
                              float dhpwl_ref);
   float updateGamma(float curr_overflow);
@@ -90,10 +85,14 @@ class EPlace
   bool draw_bins_ = false;
   bool disable_wirelength_ = false;
   bool disable_density_ = false;
+  bool use_density_field_ = false;
+  bool use_preconditioning_ = true;
   int pause_interval_ = -1;
 
   float cost_ = 0;
   float density_cost_ = 0;
+
+  float density_penalty_ = 0;
 
   float total_density_gradient_ = 0;
   float total_wa_gradient_ = 0;

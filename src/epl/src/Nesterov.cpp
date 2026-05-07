@@ -1,15 +1,17 @@
 #include "Nesterov.h"
 
+#include "epl/EPlace.h"
 #include "utl/Logger.h"
 namespace epl {
 
 using utl::EPL;
 
 NesterovOptimizer::NesterovOptimizer(
+    EPlace* eplace,
     const std::shared_ptr<WAwirelength>& wa_wirelength,
     const std::vector<std::shared_ptr<EDensity>>& e_density_vec,
     utl::Logger* log)
-    : wa_wirelength_(std::move(wa_wirelength)), log_(log)
+    : epl_(eplace), wa_wirelength_(std::move(wa_wirelength)), log_(log)
 {
   for (auto ed : e_density_vec) {
     e_density_vec_.push_back(std::move(ed));
