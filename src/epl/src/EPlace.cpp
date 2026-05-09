@@ -214,18 +214,7 @@ void EPlace::place(int threads,
     }
 
     // Do a nesterov step
-    int curr_backtracking = 0;
-    bool backtraking = true;
-    while (backtraking) {
-      updateGradient();
-      backtraking = nesterov_->step();
-      curr_backtracking++;
-      if (curr_backtracking > max_backtracking) {
-        std::cout << "reached max backtracking: " << curr_backtracking
-                  << std::endl;
-        break;
-      }
-    }
+    nesterov_->step(max_backtracking);
 
     if (gui_ && gui_->enabled()) {
       gui_->cellPlot((pause_interval_ > 0)
@@ -295,9 +284,9 @@ void EPlace::updateGradient()
 
   // update the gradient on each instance
   density_cost_ = 0;
-  int idx = 0;
   total_density_gradient_ = 0;
   total_wa_gradient_ = 0;
+  int idx = 0;
   for (auto& ed : e_density_vec_) {
     float filler_area = 1;
     if (use_density_field_) {

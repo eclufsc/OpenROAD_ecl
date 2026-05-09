@@ -21,7 +21,7 @@ class NesterovInst
   NesterovInst(gpl::Instance* inst) : inst_(inst)
   {
     v_x_ = u_x_ = v_x_old_ = u_x_old_ = inst_->cx();
-    v_y_ = u_y_ = v_y_old_ = u_x_old_ = inst_->cy();
+    v_y_ = u_y_ = v_y_old_ = u_y_old_ = inst_->cy();
   };
   ~NesterovInst(){};
 
@@ -93,7 +93,9 @@ class NesterovOptimizer
       utl::Logger* log);
   ~NesterovOptimizer(){};
 
-  int step();
+  int stepNew();
+  int step(int max_backtracking);
+  bool backtrack(int max_backtracking);
   float currStepLength() { return curr_step_length_; }
   std::vector<std::vector<NesterovInst>>& nesterovInsts()
   {
@@ -117,8 +119,8 @@ class NesterovOptimizer
   std::vector<std::vector<NesterovInst>> inst_ed_vec_;
   float curr_step_length_ = 0;
   float lst_step_length_ = 0;
-  float curr_a_ = std::numbers::phi_v<float>;
-  float lst_a_ = 1;
+  float curr_a_ = 1;
+  float lst_a_ = 0;
   bool backtracking_ = true;
 };
 
