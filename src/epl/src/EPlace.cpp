@@ -127,7 +127,8 @@ void EPlace::place(int threads,
                    float dhpwl_ref,
                    int iterations,
                    float initial_density_penalty_mult,
-                   int info_interval)
+                   int info_interval,
+                   bool use_step_new)
 {
   debugPrint(log_, EPL, "place", 1, "place: number of threads {}", threads);
   if (!initEPlace(density, uniform_density)) {
@@ -213,8 +214,23 @@ void EPlace::place(int threads,
                  nesterov_->currStepLength());
     }
 
-    // Do a nesterov step
-    nesterov_->step(max_backtracking);
+    // Do a nesterov step.
+    if (use_step_new) {
+      int curr_backtracking = 0;
+      bool backtracking = true;
+      while (backtracking) {
+        updateGradient();
+        backtracking = nesterov_->stepNew();
+        curr_backtracking++;
+        if (curr_backtracking >= max_backtracking) {
+          std::cout << "reached max backtracking: " << curr_backtracking
+                    << std::endl;
+          break;
+        }
+      }
+    } else {
+      nesterov_->step(max_backtracking);
+    }
 
     if (gui_ && gui_->enabled()) {
       gui_->cellPlot((pause_interval_ > 0)

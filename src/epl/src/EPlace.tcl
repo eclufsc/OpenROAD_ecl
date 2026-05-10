@@ -24,12 +24,13 @@ sta::define_cmd_args "eplace_place" { \
     [-iterations max_iterations] \
     [-dhpwl_ref dhpwl_ref] \
     [-initial_density_penalty_mult initial_density_penalty_mult] \
-    [-info_interval info_interval]
+    [-info_interval info_interval] \
+    [-nesterov_step step|step_new]
 }
 
 proc eplace_place { args } {
   sta::parse_key_args "global_placement" args \
-    keys {-density -iterations -dhpwl_ref -initial_density_penalty_mult -info_interval} \
+    keys {-density -iterations -dhpwl_ref -initial_density_penalty_mult -info_interval -nesterov_step} \
     flags {}
   
   # density settings
@@ -73,7 +74,17 @@ proc eplace_place { args } {
     set info_interval $keys(-info_interval)
   }
 
-  epl::eplace_place_cmd $target_density $uniform_mode $dhpwl_ref $iterations $initial_density_penalty_mult $info_interval
+  set use_step_new 0
+  if { [info exists keys(-nesterov_step)] } {
+    set nesterov_step $keys(-nesterov_step)
+    if { $nesterov_step == "step_new" } {
+      set use_step_new 1
+    } elseif { $nesterov_step != "step" } {
+      utl::error EPL 22 "Invalid -nesterov_step value '$nesterov_step'. Use 'step' or 'step_new'."
+    }
+  }
+
+  epl::eplace_place_cmd $target_density $uniform_mode $dhpwl_ref $iterations $initial_density_penalty_mult $info_interval $use_step_new
 }
 
 sta::define_cmd_args "eplace_debug" { \

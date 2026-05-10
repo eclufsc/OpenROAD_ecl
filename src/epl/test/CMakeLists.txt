@@ -3,4 +3,5 @@ or_integration_tests(
   TESTS
     simple01-random
     simple01
+    medium01
 )

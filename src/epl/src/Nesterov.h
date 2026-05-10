@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <vector>
+#include <limits>
 
 #include "EDensity.h"
 #include "Grid.h"
@@ -95,7 +96,6 @@ class NesterovOptimizer
 
   int stepNew();
   int step(int max_backtracking);
-  bool backtrack(int max_backtracking);
   float currStepLength() { return curr_step_length_; }
   std::vector<std::vector<NesterovInst>>& nesterovInsts()
   {
@@ -109,6 +109,8 @@ class NesterovOptimizer
  private:
   float stepLength();
   void init();
+  void updateInstances(bool commit_values);
+  bool backtrack(int max_backtracking);
 
  private:
   EPlace* epl_;
@@ -117,11 +119,11 @@ class NesterovOptimizer
   utl::Logger* log_;
 
   std::vector<std::vector<NesterovInst>> inst_ed_vec_;
-  float curr_step_length_ = 0;
+  float curr_step_length_ = std::numeric_limits<float>::infinity();
   float lst_step_length_ = 0;
   float curr_a_ = 1;
   float lst_a_ = 0;
-  bool backtracking_ = true;
+  bool backtracking_ = false;
 };
 
 }  // namespace epl

@@ -53,7 +53,8 @@ class EPlace
              float dhpwl_ref,
              int iterations,
              float initial_density_penalty_mult,
-             int info_interval);
+             int info_interval,
+             bool use_step_new);
   void randomPlace(int threads);
   void calcualteWaHPWL(float gamma);
   void updateGradient();
