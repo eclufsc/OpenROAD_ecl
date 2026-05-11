@@ -33,6 +33,13 @@ class SteinerTreeBuilder;
 class Tree;
 }
 
+namespace sta {
+class dbSta;
+class dbNetwork;
+class LibertyCell;
+class Pin;
+}
+
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 typedef bg::model::point<int64_t, 2, bg::cs::cartesian> point_t;
@@ -79,6 +86,8 @@ class CellMoveRouter {
     void Cell_Move_Rerout();
 
     bool isClockBuffer(odb::dbInst* cell);
+
+    bool isSequential(odb::dbInst* cell);
 
     void InitCellsWeight();
     
@@ -134,5 +143,6 @@ class CellMoveRouter {
     bool limit_candidate_size_ = false;
     Abacus abacus_;
     stt::SteinerTreeBuilder *stt_ = nullptr;
+    sta::dbNetwork* network_ = nullptr;
 };
 }

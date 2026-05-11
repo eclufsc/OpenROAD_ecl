@@ -5,6 +5,8 @@
 #include "utl/Logger.h"
 #include "grt/GlobalRouter.h"
 #include "stt/SteinerTreeBuilder.h"
+#include "db_sta/dbNetwork.hh"
+#include "sta/Liberty.hh"
 
 #include <chrono>
 #include <iostream>
@@ -55,7 +57,8 @@ CellMoveRouter::CellMoveRouter():
   db_{ord::OpenRoad::openRoad()->getDb()},
   logger_{ord::OpenRoad::openRoad()->getLogger()},
   grt_{ord::OpenRoad::openRoad()->getGlobalRouter()},
-  debug_{false}
+  debug_{false},
+  network_{ord::OpenRoad::openRoad()->getDbNetwork()}
 {
 }
 
@@ -283,7 +286,6 @@ void
 CellMoveRouter::Cell_Move_Rerout(){
 
   auto grcmo_start = std::chrono::high_resolution_clock::now();
-  auto block = db_->getChip()->getBlock();
   std::unordered_map<odb::dbInst*,int> cells_movement;
 
 
@@ -849,6 +851,23 @@ bool CellMoveRouter::isClockBuffer(odb::dbInst* cell)
   return isClock;
 }
 
+bool CellMoveRouter::isSequential(odb::dbInst* cell)
+{
+  
+  sta::Cell* masterCell = network_->dbToSta(cell->getMaster());
+  sta::LibertyCell* libertyCell = network_->libertyCell(masterCell);
+
+  if (!libertyCell) {
+    return false;
+  }
+  // Combinational components
+  if (libertyCell->hasSequentials()) {
+    return true;
+  }
+
+  return false;
+}
+
 void
 CellMoveRouter::InitCellsWeight()
 {
@@ -886,7 +905,7 @@ CellMoveRouter::InitCellsWeight()
       continue;
     }
 
-    if(isClockBuffer(cell)) {
+    if(isClockBuffer(cell) || isSequential(cell)) {
       continue;
     }
     int original_x, original_y;

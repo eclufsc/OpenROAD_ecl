@@ -24,6 +24,7 @@ target_link_libraries(rcm
   utl
   odb
   gui
+  dbSta_lib
   OpenSTA
   grt
 )
