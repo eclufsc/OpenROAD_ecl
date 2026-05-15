@@ -24,17 +24,20 @@ sta::define_cmd_args "eplace_place" { \
     [-iterations max_iterations] \
     [-dhpwl_ref dhpwl_ref] \
     [-initial_density_penalty_mult initial_density_penalty_mult] \
+    [-pad_left pad_left] \
+    [-pad_right pad_right] \
+    [-skip_io_mode] \
     [-info_interval info_interval] \
     [-nesterov_step step|step_new]
 }
 
 proc eplace_place { args } {
-  sta::parse_key_args "global_placement" args \
-    keys {-density -iterations -dhpwl_ref -initial_density_penalty_mult -info_interval -nesterov_step} \
-    flags {}
+  sta::parse_key_args "eplace_place" args \
+    keys {-density -iterations -dhpwl_ref -initial_density_penalty_mult -pad_left -pad_right -info_interval -nesterov_step} \
+    flags {-skip_io_mode}
   
   # density settings
-  set target_density 0
+  set target_density 0.7
   set uniform_mode 1
 
   if { [info exists keys(-density)] } {
@@ -54,7 +57,7 @@ proc eplace_place { args } {
     }
   }
 
-  set iterations 100
+  set iterations 10000
   if { [info exists keys(-iterations)] } {
     set iterations $keys(-iterations)
   }
@@ -68,6 +71,18 @@ proc eplace_place { args } {
   if { [info exists keys(-initial_density_penalty_mult)] } {
     set initial_density_penalty_mult $keys(-initial_density_penalty_mult)
   }
+
+  set pad_left 0
+  if { [info exists keys(-pad_left)] } {
+    set pad_left $keys(-pad_left)
+  }
+
+  set pad_right 0
+  if { [info exists keys(-pad_right)] } {
+    set pad_right $keys(-pad_right)
+  }
+
+  set skip_io_mode [info exists flags(-skip_io_mode)]
 
   set info_interval 10
   if { [info exists keys(-info_interval)] } {
@@ -84,7 +99,7 @@ proc eplace_place { args } {
     }
   }
 
-  epl::eplace_place_cmd $target_density $uniform_mode $dhpwl_ref $iterations $initial_density_penalty_mult $info_interval $use_step_new
+  epl::eplace_place_cmd $target_density $uniform_mode $dhpwl_ref $iterations $initial_density_penalty_mult $pad_left $pad_right $skip_io_mode $info_interval $use_step_new
 }
 
 sta::define_cmd_args "eplace_debug" { \

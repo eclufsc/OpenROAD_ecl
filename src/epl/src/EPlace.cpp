@@ -46,14 +46,14 @@ void EPlace::clear()
   gui_.reset();
 }
 
-bool EPlace::initEPlace(float density, bool uniform_density)
+bool EPlace::initEPlace(float density, bool uniform_density, int pad_left, int pad_right, bool skip_io_mode)
 {
   if (nesterov_) {
     log_->warn(EPL, 3, "EPlacer already initialized.");
     return true;
   }
 
-  if (!initPlacer()) {
+  if (!initPlacer(pad_left, pad_right, skip_io_mode)) {
     return false;
   }
 
@@ -80,17 +80,14 @@ bool EPlace::initEPlace(float density, bool uniform_density)
   return true;
 }
 
-bool EPlace::initPlacer()
+bool EPlace::initPlacer(int pad_left, int pad_right, bool skip_io_mode)
 {
   if (pbc_) {
     log_->warn(EPL, 2, "Placer already initialized.");
     return true;
   }
   // Init PlacerBaseCommon
-  int padLeft = 0;
-  int padRight = 0;
-  bool skipIoMode = false;
-  gpl::PlacerBaseVars pbVars(padLeft, padRight, skipIoMode, true);
+  gpl::PlacerBaseVars pbVars(pad_left, pad_right, skip_io_mode, true);
 
   pbc_ = std::make_shared<gpl::PlacerBaseCommon>(db_, pbVars, log_);
   if (pbc_->placeInsts().size() == 0) {
@@ -127,11 +124,14 @@ void EPlace::place(int threads,
                    float dhpwl_ref,
                    int iterations,
                    float initial_density_penalty_mult,
+                   int pad_left,
+                   int pad_right,
+                   bool skip_io_mode,
                    int info_interval,
                    bool use_step_new)
 {
   debugPrint(log_, EPL, "place", 1, "place: number of threads {}", threads);
-  if (!initEPlace(density, uniform_density)) {
+  if (!initEPlace(density, uniform_density, pad_left, pad_right, skip_io_mode)) {
     return;
   }
   std::cout << "db_->getDbuPerMicron(): " << db_->getDbuPerMicron()
@@ -188,6 +188,8 @@ void EPlace::place(int threads,
   // Main placement loop
   int max_backtracking = 50;
   int iter = 0;
+  float best_overflow = 100000;
+  int best_iter = -1;
   log_->info(EPL,
              16,
              "Step | Overflow | HPWL (um) |  WA (um)  |    Cost    |     WA    "
@@ -245,6 +247,20 @@ void EPlace::place(int threads,
     updateDensityPenalty(wa_wirelength_->getHPWL(), last_hpwl_, dhpwl_ref);
 
     curr_overflow = e_density_vec_[0]->grid()->total_overflow();
+    if (curr_overflow < best_overflow) {
+      updateBest();
+      best_overflow = curr_overflow;
+      best_iter = iter;
+    } else {
+      if (iter - best_iter >= 100){
+        restoreBest();
+        log_->warn(EPL, 100, "Overflow didn't improve for 100 iterations. Restoring position of iter {}.", best_iter);
+        updateGradient();
+        iter = best_iter;
+        iterations = iter;
+        curr_overflow = e_density_vec_[0]->grid()->total_overflow();
+      }
+    }
     wa_wirelength_->setGamma(updateGamma(curr_overflow));
     last_hpwl_ = wa_wirelength_->getHPWL();
     iter++;
@@ -287,6 +303,24 @@ void EPlace::place(int threads,
     gui_->cellPlot(false);
   }
   gui_.reset();
+}
+
+void EPlace::updateBest()
+{
+  for (auto& ed_insts : nesterov_->nesterovInsts()) {
+    for (auto& inst : ed_insts) {
+      inst.updateBest();
+    }
+  }
+}
+
+void EPlace::restoreBest()
+{
+  for (auto& ed_insts : nesterov_->nesterovInsts()) {
+    for (auto& inst : ed_insts) {
+      inst.restoreBest();
+    }
+  }
 }
 
 void EPlace::updateGradient()
@@ -385,7 +419,7 @@ float EPlace::updateGamma(float curr_overflow)
 
 void EPlace::calcualteWaHPWL(float gamma)
 {
-  initPlacer();
+  initPlacer(0, 0, false);
   wa_wirelength_ = std::make_shared<WAwirelength>(log_, 1);
 
   wa_wirelength_->update(pbc_->getNets());
@@ -418,7 +452,7 @@ void EPlace::randomPlace(int threads)
              1,
              "random_place: number of threads {}",
              threads);
-  if (!initPlacer()) {
+  if (!initPlacer(0, 0, false)) {
     return;
   }
 

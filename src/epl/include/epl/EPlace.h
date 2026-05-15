@@ -53,6 +53,9 @@ class EPlace
              float dhpwl_ref,
              int iterations,
              float initial_density_penalty_mult,
+             int pad_left,
+             int pad_right,
+             bool skip_io_mode,
              int info_interval,
              bool use_step_new);
   void randomPlace(int threads);
@@ -60,14 +63,16 @@ class EPlace
   void updateGradient();
 
  private:
-  bool initEPlace(float density, bool uniform_density);
-  void updateDensityPenalty(float curr_hpwl,
-                             float last_hpwl,
-                             float dhpwl_ref);
+  bool initEPlace(float density,
+                  bool uniform_density,
+                  int pad_left,
+                  int pad_right,
+                  bool skip_io_mode);
+  bool initPlacer(int pad_left, int pad_right, bool skip_io_mode);
+  void updateDensityPenalty(float curr_hpwl, float last_hpwl, float dhpwl_ref);
   float updateGamma(float curr_overflow);
-
- private:
-  bool initPlacer();
+  void updateBest();
+  void restoreBest();
 
  private:
   odb::dbDatabase* db_;

@@ -21,8 +21,8 @@ class NesterovInst
  public:
   NesterovInst(gpl::Instance* inst) : inst_(inst)
   {
-    v_x_ = u_x_ = v_x_old_ = u_x_old_ = inst_->cx();
-    v_y_ = u_y_ = v_y_old_ = u_y_old_ = inst_->cy();
+    v_x_ = u_x_ = v_x_old_ = u_x_old_ = best_x_ = inst_->cx();
+    v_y_ = u_y_ = v_y_old_ = u_y_old_ = best_y_ = inst_->cy();
   };
   ~NesterovInst(){};
 
@@ -61,6 +61,15 @@ class NesterovInst
     u_x_ = x;
     u_y_ = y;
   };
+  void updateBest()
+  {
+    best_x_ = v_x_;
+    best_y_ = v_y_;
+  };
+  void restoreBest()
+  {
+    setPos(best_x_, best_y_);
+  };
   void commitValues()
   {
     gradient_x_old_ = gradient_x_;
@@ -82,6 +91,7 @@ class NesterovInst
   float v_x_old_ = 0, v_y_old_ = 0;
   float u_x_ = 0, u_y_ = 0;
   float u_x_old_ = 0, u_y_old_ = 0;
+  float best_x_ = 0, best_y_ = 0;
 };
 
 class NesterovOptimizer

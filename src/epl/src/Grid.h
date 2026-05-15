@@ -72,6 +72,5 @@ class Grid : public gpl::FFT
   int64_t** bin_area_fixed_macro_ = nullptr;
   float target_density_ = 0;
   int64_t total_inst_area_ = 0;
-  int64_t total_inst_area_old_ = 0;
 };
 }  // namespace epl

@@ -62,7 +62,7 @@ void EDensity::initFillers()
   const int64_t region_area = pb_->getRegionArea();
 
   double curr_density
-      = static_cast<double>(place_area + fixed_area) / region_area;
+      = static_cast<double>(place_area) / (region_area - fixed_area);
   if (edVars_.uniform_density) {
     log_->info(utl::EPL, 4, "Using uniform density", curr_density);
     target_density_ = curr_density;
@@ -70,8 +70,8 @@ void EDensity::initFillers()
   if (curr_density > target_density_) {
     log_->warn(utl::EPL,
                5,
-               "Target density ({}) is lower than the minimum possible. Target "
-               "density set to {}",
+               "Target density ({:10.3f}) is lower than the minimum possible. Target "
+               "density set to {:10.3f}",
                target_density_,
                curr_density);
     target_density_ = curr_density;
@@ -82,7 +82,7 @@ void EDensity::initFillers()
              "Original target density:",
              target_density_);
 
-  filler_area_ = (target_density_ - curr_density) * region_area;
+  filler_area_ = (region_area - fixed_area) * target_density_ - static_cast<double>(place_area);
   log_->info(utl::EPL,
              6,
              "{:27} {:10.3f}",
@@ -132,8 +132,8 @@ void EDensity::initFillers()
                                           region_rect.xMax() - filler_size_y_);
   for (int i = 0; i < n_fillers; i++) {
     int pos_x = distr_x(randVal), pos_y = distr_y(randVal);
-    fillers_.push_back(gpl::Instance(
-        pos_x, pos_y, pos_x + filler_size_x_, pos_y + filler_size_y_, false));
+    fillers_.emplace_back(
+        pos_x, pos_y, pos_x + filler_size_x_, pos_y + filler_size_y_, false);
   }
   log_->info(utl::EPL,
              7,
@@ -144,8 +144,8 @@ void EDensity::initFillers()
 
   // Re-update the target density
   filler_area_ = n_fillers * (filler_size_x_ * filler_size_y_);
-  target_density_ = (place_area + fixed_area + filler_area_)
-                    / static_cast<double>(region_area);
+  target_density_ = (place_area + filler_area_)
+                    / static_cast<double>(region_area - fixed_area);
   log_->info(utl::EPL,
              8,
              "{:27} {:10.3f} um^2",
@@ -162,7 +162,7 @@ void EDensity::initGrid()
 {
   auto region_rect = pb_->getRegionBBox();
   // Number of bins in the grid should be approximately the number of instances
-  double ratio = region_rect.dx() / region_rect.dy();
+  double ratio = region_rect.dx() / static_cast<double>(region_rect.dy());
   int n_movable_intances = pb_->placeInsts().size() + fillers_.size();
   double y = std::sqrt(n_movable_intances / ratio);
   double x = y * ratio;

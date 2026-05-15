@@ -71,12 +71,11 @@ void Grid::clearMovable()
   for (int x = 0; x < bin_cnt_X_; x++) {
     for (int y = 0; y < bin_cnt_y_; y++) {
       bin_area_[x][y] = (bin_area_fixed_[x][y]
-                         + bin_area_fixed_macro_[x][y] * target_density_);
+                         + bin_area_fixed_macro_[x][y]) * target_density_;
       bin_area_filler_[x][y] = 0;
     }
   }
   total_inst_area_ = 0;
-  total_inst_area_old_ = 0;
 }
 
 void Grid::addFixedInst(const gpl::Instance* inst)
@@ -104,13 +103,13 @@ void Grid::addMovableInst(const gpl::Instance* inst)
   if (inst->isInstance()) {
     filler = 0.f;
     total_inst_area_ += static_cast<int64_t>(scaling * inst_rect.area());
-    if (std::abs((scaling * inst_rect.area()) - inst->getArea()) > 10) {
+    /* if (std::abs((scaling * inst_rect.area()) - inst->getArea()) > 10) {
       std::cout << inst->dbInst()->getName() << " diff "
                 << scaling * inst_rect.area() - inst->getArea()
                 << " scaling * inst_rect.area()): "
                 << scaling * inst_rect.area()
                 << " inst->getArea(): " << inst->getArea() << std::endl;
-    }
+    } */
   }
 
   for (int x = idxX.first; x < idxX.second; x++) {
@@ -226,8 +225,8 @@ float Grid::total_overflow() const
           (bin_area_[x][y] - bin_area_filler_[x][y]) - target_area, 0.f);
       total_overflow += inst_overflow;
       float fixed_overflow
-          = std::max((bin_area_fixed_[x][y]
-                      + bin_area_fixed_macro_[x][y] * target_density_)
+          = std::max(((bin_area_fixed_[x][y]
+                      + bin_area_fixed_macro_[x][y]) * target_density_)
                          - target_area,
                      0.f);
       total_overflow -= fixed_overflow;
