@@ -90,7 +90,8 @@ float NesterovOptimizer::stepLength()
   return std::sqrt(pos_diff / grad_diff);
 }
 
-void NesterovOptimizer::updateInstances(bool commit_values) {
+void NesterovOptimizer::updateInstances(bool commit_values)
+{
   int idx = 0;
   for (auto& ed_insts : inst_ed_vec_) {
     const auto bbox = e_density_vec_[idx++]->getRegionBBox();
@@ -106,7 +107,7 @@ void NesterovOptimizer::updateInstances(bool commit_values) {
                                                  y - curr_step_length_ * fy,
                                                  inst.gplInst());
       inst.setRef(x_ref_new, y_ref_new);
-    
+
       // calc new pos (v)
       auto [x_ref_old, y_ref_old] = inst.getOldRef();
       auto [x_new, y_new] = snapPosition(
@@ -139,13 +140,13 @@ int NesterovOptimizer::stepNew()
     backtracking_ = lst_step_length_ > (epsilon * curr_step_length_);
 
     debugPrint(log_,
-              EPL,
-              "Nesterov",
-              3,
-              "lst_step_length_: {} curr_step_length_: {} backtrack {}",
-              lst_step_length_,
-              curr_step_length_,
-              backtracking_);
+               EPL,
+               "Nesterov",
+               3,
+               "lst_step_length_: {} curr_step_length_: {} backtrack {}",
+               lst_step_length_,
+               curr_step_length_,
+               backtracking_);
   }
   return backtracking_;
 }
@@ -153,45 +154,28 @@ int NesterovOptimizer::stepNew()
 bool NesterovOptimizer::backtrack(int max_backtracking)
 {
   epl_->updateGradient();
-  curr_step_length_ = stepLength();
-
-  // Update the location
-  updateInstances(true);
-  epl_->updateGradient();
-  lst_step_length_ = curr_step_length_;
-  curr_step_length_ = stepLength();
-
+  float next_step_length = stepLength();
   float epsilon = 0.95;
-  debugPrint(log_,
-    EPL,
-    "Nesterov",
-    3,
-    "lst_step_length_: {} curr_step_length_: {} backtrack {}",
-    lst_step_length_,
-    curr_step_length_,
-    lst_step_length_ > epsilon * curr_step_length_);
 
-  int backtrack = 0;
-  while (lst_step_length_ > epsilon * curr_step_length_) {
-    if (backtrack >= max_backtracking) {
-      return false;
-    }
-    lst_step_length_ = curr_step_length_;
-    updateInstances(false);
-
+  for (int backtrack = 0; backtrack <= max_backtracking; backtrack++) {
+    curr_step_length_ = next_step_length;
+    // Update the location
+    updateInstances(backtrack == 0);
     epl_->updateGradient();
-    curr_step_length_ = stepLength();
-    backtrack++;
+    next_step_length = stepLength();
     debugPrint(log_,
-      EPL,
-      "Nesterov",
-      3,
-      "lst_step_length_: {} curr_step_length_: {} backtrack {}",
-      lst_step_length_,
-      curr_step_length_,
-      lst_step_length_ > epsilon * curr_step_length_);
+               EPL,
+               "Nesterov",
+               3,
+               "curr_step_length_: {} next_step_length: {} backtrack {}",
+               curr_step_length_,
+               next_step_length,
+               curr_step_length_ > epsilon * next_step_length);
+    if (curr_step_length_ <= epsilon * next_step_length) {
+      return true;
+    }
   }
-  return true;
+  return false;
 }
 
 int NesterovOptimizer::step(int max_backtracking)
