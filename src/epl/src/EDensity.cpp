@@ -168,8 +168,8 @@ void EDensity::initGrid()
   double x = y * ratio;
 
   // Change this approximation to a better one later
-  int binCntX = std::pow(2, std::floor(std::log2(x)));
-  int binCntY = std::pow(2, std::floor(std::log2(y)));
+  int binCntX = std::pow(2, std::ceil(std::log2(x)));
+  int binCntY = std::pow(2, std::ceil(std::log2(y)));
   float binSizeX = region_rect.dx() / static_cast<float>(binCntX);
   float binSizeY = region_rect.dy() / static_cast<float>(binCntY);
 
