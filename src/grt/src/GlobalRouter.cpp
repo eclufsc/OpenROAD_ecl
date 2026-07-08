@@ -875,9 +875,17 @@ void GlobalRouter::updateDirtyNets(std::vector<Net*>& dirty_nets)
     Net* net = db_net_map_[db_net];
     updateNetPins(net);
     destroyNetWire(net);
+    // If a restore from guides is attempted and fails, routes_ is left with
+    // the partial route built from the guides, so the net must be rerouted
+    // even when its pin positions are unchanged. This happens with CUGR,
+    // whose guides follow its own access points instead of the grt on-grid
+    // pin positions.
+    const bool restore_attempted
+        = !db_net->getGuides().empty() && net->restoreRouteFromGuides();
     std::string pins_not_covered;
     // compare new positions with last positions & add on vector
-    if (!loadRoutingFromDBGuides(db_net) && pinPositionsChanged(net)
+    if (!loadRoutingFromDBGuides(db_net)
+        && (restore_attempted || pinPositionsChanged(net))
         && (!net->isMergedNet() || !netIsCovered(db_net, pins_not_covered))) {
       dirty_nets.push_back(db_net_map_[db_net]);
       if (net->areSegmentsRestored()) {
