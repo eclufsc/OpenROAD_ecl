@@ -402,6 +402,7 @@ void CUGR::analyzeSteinerCongestion(
 {
   int total_steiner = 0;
   int total_steiner_overflow = 0;
+  int total_pins = 0;
 
   const bool enable_markers = []() {
     const char* env = std::getenv("CUGR_STEINER_MARKERS");
@@ -429,6 +430,7 @@ void CUGR::analyzeSteinerCongestion(
         pin_positions.emplace(gpt.x(), gpt.y());
       }
     }
+    total_pins += pin_positions.size();
 
     std::set<std::pair<int, int>> steiner_positions;
     std::set<std::pair<int, int>> congestion_steiner_positions;
@@ -510,6 +512,7 @@ void CUGR::analyzeSteinerCongestion(
     total_steiner_overflow += congestion_steiner_positions.size();
   }
 
+  logger_->report("number of pins: {}", total_pins);
   logger_->report("number of steiner points: {}", total_steiner);
   logger_->report("total number of Steiner points with congestion: {}",
                   total_steiner_overflow);
