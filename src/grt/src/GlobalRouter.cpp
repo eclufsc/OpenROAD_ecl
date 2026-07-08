@@ -484,6 +484,14 @@ void GlobalRouter::updateDbCongestion()
   }
 }
 
+void GlobalRouter::cugrVisualizeSteinerTree(const std::string& net_name)
+{
+  if (!use_cugr_ || cugr_ == nullptr) {
+    logger_->error(GRT, 305, "cugrVisualizeSteinerTree requires -use_cugr.");
+  }
+  cugr_->visualizeSteinerTree(net_name);
+}
+
 int GlobalRouter::repairAntennas(odb::dbMTerm* diode_mterm,
                                  int iterations,
                                  float ratio_margin,
@@ -6186,6 +6194,77 @@ std::size_t GSegmentHash::operator()(const GSegment& seg) const
        seg.final_x,
        seg.final_y,
        seg.final_layer});
+}
+
+void GlobalRouter::verifyUnroutedNets()
+{
+  std::vector<odb::dbNet*> unrouted_nets;
+  std::vector<odb::dbNet*> unrouted_nets_ground;
+  std::vector<odb::dbNet*> unrouted_nets_clock;
+  std::map<std::string, int> reason_counts;
+
+  for (odb::dbNet* db_net : block_->getNets()) {
+    const odb::dbSet<odb::dbGuide> guides = db_net->getGuides();
+    if (!guides.empty()) {
+      continue;
+    }
+
+    unrouted_nets.push_back(db_net);
+    if (db_net->getSigType().isSupply()) {
+      unrouted_nets_ground.push_back(db_net);
+    }
+    if (db_net->getSigType() == odb::dbSigType::CLOCK) {
+      unrouted_nets_clock.push_back(db_net);
+    }
+
+    std::string reason = "unknown";
+    auto net_it = db_net_map_.find(db_net);
+    if (net_it == db_net_map_.end() || net_it->second == nullptr) {
+      if (db_net->isSpecial() || db_net->getSigType().isSupply()
+          || !db_net->getSWires().empty() || db_net->isConnectedByAbutment()) {
+        reason = "filtered_non_routable_net";
+      } else {
+        reason = "missing_from_grt_netlist";
+      }
+    } else {
+      Net* net = net_it->second;
+      if (net->getNumPins() < 2) {
+        reason = "pin_count_lt_2";
+      } else {
+        int min_layer, max_layer;
+        getNetLayerRange(db_net, min_layer, max_layer);
+        odb::dbTechLayer* max_routing_layer
+            = db_->getTech()->findRoutingLayer(max_layer);
+        if (net->hasWires() && !net->hasStackedVias(max_routing_layer)) {
+          reason = "pre_routed_net_skipped";
+        } else {
+          auto route_it = routes_.find(db_net);
+          if (route_it == routes_.end()) {
+            reason = "no_route_entry";
+          } else if (route_it->second.empty()) {
+            if (net->isLocal()) {
+              reason = "local_net";
+            } else {
+              reason = use_cugr_ ? "cugr_empty_route" : "fastroute_empty_route";
+            }
+          } else {
+            reason = "route_exists_but_no_guides";
+          }
+        }
+      }
+    }
+    reason_counts[reason]++;
+  }
+
+  logger_->report("total unrouted nets: {}", unrouted_nets.size());
+  logger_->report("total power unrouted nets: {}", unrouted_nets_ground.size());
+  logger_->report("total clock unrouted nets: {}", unrouted_nets_clock.size());
+  if (!reason_counts.empty()) {
+    logger_->report("unrouted net reasons:");
+    for (const auto& [reason, count] : reason_counts) {
+      logger_->report("  {}: {}", reason, count);
+    }
+  }
 }
 
 }  // namespace grt

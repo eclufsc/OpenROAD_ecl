@@ -94,6 +94,7 @@ class CUGR
   void addDirtyNet(odb::dbNet* net);
   void updateNet(odb::dbNet* net);
   void routeIncremental();
+  void visualizeSteinerTree(const std::string& net_name);
 
  private:
   float calculatePartialSlack();
@@ -107,6 +108,8 @@ class CUGR
   void getGuides(const GRNet* net,
                  std::vector<std::pair<int, grt::BoxT>>& guides);
   void printStatistics() const;
+  void analyzeSteinerCongestion(
+      const std::vector<std::vector<double>>& heatmap) const;
 
   std::unique_ptr<Design> design_;
   std::unique_ptr<GridGraph> grid_graph_;
@@ -129,6 +132,7 @@ class CUGR
   float critical_nets_percentage_ = 0;
 
   std::vector<int> nets_to_route_;
+  std::vector<std::vector<double>> last_heatmap_;
 };
 
 }  // namespace grt

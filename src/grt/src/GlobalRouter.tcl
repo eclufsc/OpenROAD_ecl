@@ -435,6 +435,12 @@ proc global_route_debug { args } {
   }
 }
 
+sta::define_cmd_args "cugr_visualize_steiner_tree" { net_name }
+
+proc cugr_visualize_steiner_tree { net_name } {
+  grt::cugr_visualize_steiner_tree $net_name
+}
+
 sta::define_cmd_args "report_wire_length" { [-net net_list] \
                                             [-file file] \
                                             [-global_route] \

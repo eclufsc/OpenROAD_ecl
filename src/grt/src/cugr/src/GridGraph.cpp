@@ -826,6 +826,35 @@ void GridGraph::extractCongestionView(GridGraphView<bool>& view) const
   }
 }
 
+void GridGraph::buildCongestionHeatMap(
+    std::vector<std::vector<CapacityT>>& heatmap) const
+{
+  heatmap.assign(x_size_, std::vector<CapacityT>(y_size_, 0.0));
+  for (int layer_index = constants_.min_routing_layer;
+       layer_index < getNumLayers();
+       layer_index++) {
+    const int direction = getLayerDirection(layer_index);
+    for (int x = 0; x < x_size_; x++) {
+      for (int y = 0; y < y_size_; y++) {
+        const auto& edge = graph_edges_[layer_index][x][y];
+        if (edge.capacity == 0) {
+          continue;
+        }
+
+        const CapacityT ratio = edge.demand / edge.capacity;
+        heatmap[x][y] = std::max(heatmap[x][y], ratio);
+
+        if (direction == MetalLayer::H && x + 1 < x_size_) {
+          heatmap[x + 1][y] = std::max(heatmap[x + 1][y], ratio);
+        }
+        if (direction == MetalLayer::V && y + 1 < y_size_) {
+          heatmap[x][y + 1] = std::max(heatmap[x][y + 1], ratio);
+        }
+      }
+    }
+  }
+}
+
 void GridGraph::extractWireCostView(GridGraphView<CostT>& view) const
 {
   view.assign(

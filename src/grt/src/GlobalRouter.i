@@ -248,6 +248,11 @@ void set_global_route_debug_stt_input_filename(const char* file_name)
   getGlobalRouter()->setSttInputFilename(file_name);
 }
 
+void cugr_visualize_steiner_tree(const char* net_name)
+{
+  getGlobalRouter()->cugrVisualizeSteinerTree(std::string(net_name));
+}
+
 void create_wl_report_file(const char* file_name, bool verbose)
 {
   getGlobalRouter()->createWLReportFile(file_name, verbose);

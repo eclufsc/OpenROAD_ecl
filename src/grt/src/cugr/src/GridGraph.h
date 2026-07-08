@@ -140,6 +140,9 @@ class GridGraph
       GridGraphView<CostT>& view,
       const std::shared_ptr<GRTreeNode>& routing_tree) const;
 
+  void buildCongestionHeatMap(
+      std::vector<std::vector<CapacityT>>& heatmap) const;
+
   // For visualization
   void write(const std::string& heatmap_file = "heatmap.txt") const;
 

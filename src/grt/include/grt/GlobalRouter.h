@@ -163,6 +163,8 @@ class GlobalRouter
   };
 
   void setInfiniteCapacity(bool infinite_capacity);
+  CUGR* getCUGR() { return cugr_; }
+  void cugrVisualizeSteinerTree(const std::string& net_name);
 
   // flow functions
   void readGuides(const char* file_name);
@@ -334,6 +336,7 @@ class GlobalRouter
   Rudy* getRudy();
 
   void writePinLocations(const char* file_name);
+  void verifyUnroutedNets();
 
  private:
   void finishGlobalRouting(bool save_guides = false);
