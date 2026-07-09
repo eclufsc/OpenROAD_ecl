@@ -253,6 +253,11 @@ void cugr_visualize_steiner_tree(const char* net_name)
   getGlobalRouter()->cugrVisualizeSteinerTree(std::string(net_name));
 }
 
+void cugr_visualize_steiner_congestion()
+{
+  getGlobalRouter()->cugrVisualizeSteinerCongestion();
+}
+
 void create_wl_report_file(const char* file_name, bool verbose)
 {
   getGlobalRouter()->createWLReportFile(file_name, verbose);

@@ -15,6 +15,8 @@ using namespace grt;
 %ignore grt::GlobalRouter::init;
 %ignore grt::GlobalRouter::initDebugFastRoute;
 %ignore grt::GlobalRouter::getDebugFastRoute;
+%ignore grt::GlobalRouter::initDebugCUGR;
+%ignore grt::GlobalRouter::getDebugCUGR;
 %ignore grt::GlobalRouter::setRenderer;
 %ignore grt::GlobalRouter::initGui;
 

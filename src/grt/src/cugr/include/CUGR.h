@@ -1,6 +1,5 @@
 #pragma once
 
-#include <csignal>
 #include <map>
 #include <memory>
 #include <set>
@@ -10,6 +9,9 @@
 
 #include "grt/GRoute.h"
 #include "odb/geom.h"
+#include "../../fastroute/include/AbstractFastRouteRenderer.h"
+#include "../../fastroute/include/DataType.h"
+#include "../../fastroute/include/FastRoute.h"
 
 namespace odb {
 class dbDatabase;
@@ -25,6 +27,7 @@ class dbNetwork;
 
 namespace stt {
 class SteinerTreeBuilder;
+struct Tree;
 }  // namespace stt
 
 namespace utl {
@@ -95,6 +98,18 @@ class CUGR
   void updateNet(odb::dbNet* net);
   void routeIncremental();
   void visualizeSteinerTree(const std::string& net_name);
+  void visualizeSteinerCongestion();
+  void setDebugOn(std::unique_ptr<AbstractFastRouteRenderer> renderer);
+  void setDebugNet(const odb::dbNet* net);
+  void setDebugSteinerTree(bool steinerTree);
+  void setDebugRectilinearSTree(bool rectilinearSTree);
+  void setDebugTree2D(bool tree2D);
+  void setDebugTree3D(bool tree3D);
+  void setSttInputFilename(const char* file_name);
+  AbstractFastRouteRenderer* getDebugRenderer() const;
+  const odb::dbNet* getDebugNet();
+  bool hasSaveSttInput();
+  std::string getSttInputFileName();
 
  private:
   float calculatePartialSlack();
@@ -110,6 +125,11 @@ class CUGR
   void printStatistics() const;
   void analyzeSteinerCongestion(
       const std::vector<std::vector<double>>& heatmap) const;
+  void steinerTreeVisualization(const stt::Tree& stree, GRNet* net);
+  void StTreeVisualization(const StTree& stree,
+                           GRNet* net,
+                           bool is3DVisualization);
+  void FrNetInit(GRNet* net, FrNet* frnet);
 
   std::unique_ptr<Design> design_;
   std::unique_ptr<GridGraph> grid_graph_;
@@ -128,11 +148,13 @@ class CUGR
 
   int area_of_pin_patches_ = 0;
   int area_of_wire_patches_ = 0;
+  int flute_steiner_total_ = 0;
 
   float critical_nets_percentage_ = 0;
 
   std::vector<int> nets_to_route_;
   std::vector<std::vector<double>> last_heatmap_;
+  std::unique_ptr<DebugSetting> debug_;
 };
 
 }  // namespace grt

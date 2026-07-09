@@ -51,7 +51,8 @@ CUGR::CUGR(odb::dbDatabase* db,
       logger_(log),
       callback_handler_(callback_handler),
       stt_builder_(stt_builder),
-      sta_(sta)
+      sta_(sta),
+      debug_(std::make_unique<DebugSetting>())
 {
 }
 
@@ -161,6 +162,14 @@ void CUGR::patternRoute(std::vector<int>& net_indices)
                                constants_,
                                logger_);
     pattern_route.constructSteinerTree();
+    flute_steiner_total_ += pattern_route.getFluteSteinerCount();
+
+    GRNet* net = gr_nets_[net_index].get();
+    if (debug_->isOn() && debug_->steinerTree
+        && net->getDbNet() == debug_->net && pattern_route.hasSttTree()) {
+      steinerTreeVisualization(pattern_route.getSttTree(), net);
+    }
+
     pattern_route.constructRoutingDAG();
     pattern_route.run();
     grid_graph_->addTreeUsage(gr_nets_[net_index]->getRoutingTree());
@@ -253,6 +262,24 @@ void CUGR::mazeRoute(std::vector<int>& net_indices)
 
 void CUGR::route()
 {
+  flute_steiner_total_ = 0;
+
+  if (debug_->isOn()) {
+    const int x_corner = grid_graph_->getGridline(0, 0);
+    const int y_corner = grid_graph_->getGridline(1, 0);
+    int tile_size = 0;
+    if (grid_graph_->getXSize() > 0) {
+      tile_size = grid_graph_->getGridline(0, 1) - x_corner;
+    }
+    if (tile_size <= 0 && grid_graph_->getYSize() > 0) {
+      tile_size = grid_graph_->getGridline(1, 1) - y_corner;
+    }
+    if (tile_size <= 0) {
+      tile_size = std::max(1, grid_graph_->getM2Pitch());
+    }
+    debug_->renderer->setGridVariables(tile_size, x_corner, y_corner);
+  }
+
   std::vector<int> net_indices;
   if (!nets_to_route_.empty()) {
     net_indices = nets_to_route_;
@@ -323,100 +350,270 @@ void CUGR::visualizeSteinerTree(const std::string& net_name)
       break;
     }
   }
-
   if (!found_net || !found_net->getRoutingTree()) {
     return;
   }
 
-  std::set<std::pair<int, int>> pin_positions;  // insert e count
+  std::set<std::pair<int, int>> pin_positions;
   for (auto& gpts : found_net->getPinAccessPoints()) {
     for (auto& gpt : gpts) {
       pin_positions.insert({gpt.x(), gpt.y()});
     }
   }
 
+  // Build adjacency map to know the degree of each node
+  std::map<std::pair<int, int>, std::set<std::pair<int, int>>> adjacency_map;
+  std::vector<std::shared_ptr<GRTreeNode>> adj_stack;
+  std::set<const GRTreeNode*> adj_visited;
+  adj_stack.push_back(found_net->getRoutingTree());
+  adj_visited.insert(found_net->getRoutingTree().get());
+  while (!adj_stack.empty()) {
+    auto node = adj_stack.back();
+    adj_stack.pop_back();
+    const std::pair<int, int> me = {node->x(), node->y()};
+    for (auto it = node->getChildren().rbegin();
+         it != node->getChildren().rend(); ++it) {
+      if (!*it) {
+        continue;
+      }
+      const std::pair<int, int> child_pos = {(*it)->x(), (*it)->y()};
+      if (me != child_pos) {
+        adjacency_map[me].insert(child_pos);
+        adjacency_map[child_pos].insert(me);
+      }
+      if (!adj_visited.insert(it->get()).second) {
+        continue;
+      }
+      adj_stack.push_back(*it);
+    }
+  }
+
   auto* block = db_->getChip()->getBlock();
   auto* pins_cat
       = odb::dbMarkerCategory::createOrReplace(block, "STTree - Pins");
-  auto* nodes_cat
-      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Nodes");
+  auto* steiner_cat
+      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Steiner (deg>=3)");
+  auto* bend_cat
+      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Bend (deg=2)");
   auto* edges_cat
       = odb::dbMarkerCategory::createOrReplace(block, "STTree - Edges");
   auto* stt_cat = odb::dbMarkerCategory::createOrReplace(block, "STTree");
 
   const int half = design_->getGridlineSize() / 2;
 
+  // Preorder traversal: draws edges and creates node markers with degree info
   GRTreeNode::preorder(
       found_net->getRoutingTree(),
       [&](const std::shared_ptr<GRTreeNode>& node) {
-        int x = node->x();
-        int y = node->y();
+        const int x = node->x();
+        const int y = node->y();
+        const std::pair<int, int> pos = {x, y};
 
         odb::Rect gcell_rect(grid_graph_->getGridline(0, x),
                              grid_graph_->getGridline(1, y),
                              grid_graph_->getGridline(0, x + 1),
                              grid_graph_->getGridline(1, y + 1));
 
-        auto* marker_stt = odb::dbMarker::create(stt_cat);
-        if (pin_positions.count({x, y}) != 0) {
-          auto* marker = odb::dbMarker::create(pins_cat);
-          marker->addShape(gcell_rect);
-          marker_stt->addShape(gcell_rect);
-          marker->setComment(std::format("pin layer={}", node->getLayerIdx()));
-          marker_stt->setComment(
-              std::format("pin layer={}", node->getLayerIdx()));
+        const bool in_heatmap = x >= 0 && y >= 0
+            && x < static_cast<int>(heatmap.size())
+            && y < static_cast<int>(heatmap[x].size());
+        const double hval = in_heatmap ? heatmap[x][y] : 0.0;
+        const bool congested = hval > 1.0;
+        const int deg = adjacency_map.count(pos)
+                            ? static_cast<int>(adjacency_map.at(pos).size())
+                            : 0;
+
+        auto* all_marker = odb::dbMarker::create(stt_cat);
+        all_marker->addShape(gcell_rect);
+
+        if (pin_positions.count(pos) != 0) {
+          auto* m = odb::dbMarker::create(pins_cat);
+          m->addShape(gcell_rect);
+          const std::string c = std::format("pin deg={}", deg);
+          m->setComment(c);
+          all_marker->setComment(c);
+        } else if (deg >= 3) {
+          auto* m = odb::dbMarker::create(steiner_cat);
+          m->addShape(gcell_rect);
+          const std::string c = std::format("steiner deg={} heatmap={:.2f} {}",
+                                            deg, hval,
+                                            congested ? "CONGESTED" : "ok");
+          m->setComment(c);
+          all_marker->setComment(c);
         } else {
-          auto* marker = odb::dbMarker::create(nodes_cat);
-          marker->addShape(gcell_rect);
-          marker_stt->addShape(gcell_rect);
-          marker->setComment(std::format("steiner layer={} heatmap={:.2f}",
-                                         node->getLayerIdx(),
-                                         heatmap[x][y]));
-          marker_stt->setComment(std::format("steiner layer={} heatmap={:.2f}",
-                                             node->getLayerIdx(),
-                                             heatmap[x][y]));
+          auto* m = odb::dbMarker::create(bend_cat);
+          m->addShape(gcell_rect);
+          const std::string c = std::format("bend deg={} heatmap={:.2f} {}",
+                                            deg, hval,
+                                            congested ? "CONGESTED" : "ok");
+          m->setComment(c);
+          all_marker->setComment(c);
         }
 
+        // Edges to children (original preorder logic)
         for (const auto& child : node->getChildren()) {
-          int cx = child->x();
-          int cy = child->y();
-
+          const int cx = child->x();
+          const int cy = child->y();
           if (node->getLayerIdx() == child->getLayerIdx()) {
-            int x1 = grid_graph_->getGridline(0, x) + half;
-            int y1 = grid_graph_->getGridline(1, y) + half;
-            int x2 = grid_graph_->getGridline(0, cx) + half;
-            int y2 = grid_graph_->getGridline(1, cy) + half;
-
-            auto* edge_marker = odb::dbMarker::create(edges_cat);
-            edge_marker->addShape(
-                odb::Line(odb::Point(x1, y1), odb::Point(x2, y2)));
-            marker_stt->addShape(
-                odb::Line(odb::Point(x1, y1), odb::Point(x2, y2)));
+            const int x1 = grid_graph_->getGridline(0, x) + half;
+            const int y1 = grid_graph_->getGridline(1, y) + half;
+            const int x2 = grid_graph_->getGridline(0, cx) + half;
+            const int y2 = grid_graph_->getGridline(1, cy) + half;
+            const odb::Line line(odb::Point(x1, y1), odb::Point(x2, y2));
+            auto* em = odb::dbMarker::create(edges_cat);
+            em->addShape(line);
+            auto* all_em = odb::dbMarker::create(stt_cat);
+            all_em->addShape(line);
           }
         }
       });
 }
 
+void CUGR::visualizeSteinerCongestion()
+{
+  const std::vector<std::vector<double>>& heatmap = last_heatmap_;
+  if (heatmap.empty()) {
+    logger_->warn(GRT, 991, "No heatmap available. Run global_route first.");
+    return;
+  }
+
+  auto* block = db_->getChip()->getBlock();
+  auto* br_ok_cat = odb::dbMarkerCategory::createOrReplace(
+      block, "Steiner (deg>=3) - OK");
+  auto* br_cong_cat = odb::dbMarkerCategory::createOrReplace(
+      block, "Steiner (deg>=3) - Congested");
+  auto* bend_ok_cat = odb::dbMarkerCategory::createOrReplace(
+      block, "Bend (deg 2) - OK");
+  auto* bend_cong_cat = odb::dbMarkerCategory::createOrReplace(
+      block, "Bend (deg 2) - Congested");
+  auto* edge_ok_cat = odb::dbMarkerCategory::createOrReplace(
+      block, "Steiner Edges - OK");
+  auto* edge_cong_cat = odb::dbMarkerCategory::createOrReplace(
+      block, "Steiner Edges - Congested");
+  auto* all_cat = odb::dbMarkerCategory::createOrReplace(
+      block, "Steiner All");
+
+  const int half = design_->getGridlineSize() / 2;
+
+  for (const auto& net : gr_nets_) {
+    auto& routing_tree = net->getRoutingTree();
+    if (!routing_tree) {
+      continue;
+    }
+
+    std::set<std::pair<int, int>> pin_positions;
+    for (const auto& gpts : net->getPinAccessPoints()) {
+      for (const auto& gpt : gpts) {
+        pin_positions.emplace(gpt.x(), gpt.y());
+      }
+    }
+
+    std::map<std::pair<int, int>, std::set<std::pair<int, int>>> adjacency_map;
+    std::vector<std::shared_ptr<GRTreeNode>> stack;
+    std::set<const GRTreeNode*> visited_nodes;
+    stack.push_back(routing_tree);
+    visited_nodes.insert(routing_tree.get());
+
+    while (!stack.empty()) {
+      auto node = stack.back();
+      stack.pop_back();
+
+      const auto& children = node->getChildren();
+      const std::pair<int, int> me = {node->x(), node->y()};
+      for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        if (!*it) {
+          continue;
+        }
+        const std::pair<int, int> child_pos = {(*it)->x(), (*it)->y()};
+        if (me != child_pos) {
+          adjacency_map[me].insert(child_pos);
+          adjacency_map[child_pos].insert(me);
+        }
+        if (!visited_nodes.insert(it->get()).second) {
+          continue;
+        }
+        stack.push_back(*it);
+      }
+    }
+
+    // Draw edges (each undirected edge drawn once: only when src < dst)
+    std::set<std::pair<std::pair<int,int>, std::pair<int,int>>> drawn_edges;
+    for (const auto& [pos, neighbors] : adjacency_map) {
+      const auto [x1, y1] = pos;
+      for (const auto& nb : neighbors) {
+        const auto [x2, y2] = nb;
+        const auto edge = std::make_pair(std::min(pos, nb), std::max(pos, nb));
+        if (!drawn_edges.insert(edge).second) {
+          continue;
+        }
+        const int px1 = grid_graph_->getGridline(0, x1) + half;
+        const int py1 = grid_graph_->getGridline(1, y1) + half;
+        const int px2 = grid_graph_->getGridline(0, x2) + half;
+        const int py2 = grid_graph_->getGridline(1, y2) + half;
+        const bool cong1 = x1 >= 0 && y1 >= 0
+            && x1 < static_cast<int>(heatmap.size())
+            && y1 < static_cast<int>(heatmap[x1].size())
+            && heatmap[x1][y1] > 1.0;
+        const bool cong2 = x2 >= 0 && y2 >= 0
+            && x2 < static_cast<int>(heatmap.size())
+            && y2 < static_cast<int>(heatmap[x2].size())
+            && heatmap[x2][y2] > 1.0;
+        auto* ecat = (cong1 || cong2) ? edge_cong_cat : edge_ok_cat;
+        const odb::Line edge_line(odb::Point(px1, py1), odb::Point(px2, py2));
+        auto* emarker = odb::dbMarker::create(ecat);
+        emarker->addShape(edge_line);
+        auto* all_emarker = odb::dbMarker::create(all_cat);
+        all_emarker->addShape(edge_line);
+      }
+    }
+
+    // Draw node markers
+    for (const auto& [pos, neighbors] : adjacency_map) {
+      if (pin_positions.contains(pos)) {
+        continue;
+      }
+      const auto [x, y] = pos;
+      if (x < 0 || y < 0 || x >= static_cast<int>(heatmap.size())
+          || y >= static_cast<int>(heatmap[x].size())) {
+        continue;
+      }
+      const bool congested = heatmap[x][y] > 1.0;
+      odb::Rect gcell_rect(grid_graph_->getGridline(0, x),
+                           grid_graph_->getGridline(1, y),
+                           grid_graph_->getGridline(0, x + 1),
+                           grid_graph_->getGridline(1, y + 1));
+
+      if (neighbors.size() >= 3) {
+        auto* cat = congested ? br_cong_cat : br_ok_cat;
+        auto* marker = odb::dbMarker::create(cat);
+        marker->addShape(gcell_rect);
+        auto* all_marker = odb::dbMarker::create(all_cat);
+        all_marker->addShape(gcell_rect);
+        all_marker->setComment(congested ? "steiner-congested" : "steiner-ok");
+      } else if (neighbors.size() == 2) {
+        auto* cat = congested ? bend_cong_cat : bend_ok_cat;
+        auto* marker = odb::dbMarker::create(cat);
+        marker->addShape(gcell_rect);
+        auto* all_marker = odb::dbMarker::create(all_cat);
+        all_marker->addShape(gcell_rect);
+        all_marker->setComment(congested ? "bend-congested" : "bend-ok");
+      }
+    }
+  }
+
+  logger_->report("Steiner congestion markers created. "
+                  "View in DRC/Marker panel in the GUI.");
+}
+
+
 void CUGR::analyzeSteinerCongestion(
     const std::vector<std::vector<double>>& heatmap) const
 {
-  int total_steiner = 0;
-  int total_steiner_overflow = 0;
   int total_pins = 0;
-
-  const bool enable_markers = []() {
-    const char* env = std::getenv("CUGR_STEINER_MARKERS");
-    return env != nullptr && std::string(env) == "1";
-  }();
-  odb::dbMarkerCategory* category = nullptr;
-  if (enable_markers) {
-    auto* chip = db_->getChip();
-    auto* block = chip ? chip->getBlock() : nullptr;
-    if (block != nullptr) {
-      category
-          = odb::dbMarkerCategory::createOrReplace(block, "Steiner Congestion");
-    }
-  }
+  int total_branching = 0;
+  int total_branching_overflow = 0;
+  int total_bend = 0;
+  int total_bend_overflow = 0;
 
   for (const auto& net : gr_nets_) {
     auto& routing_tree = net->getRoutingTree();
@@ -432,9 +629,7 @@ void CUGR::analyzeSteinerCongestion(
     }
     total_pins += pin_positions.size();
 
-    std::set<std::pair<int, int>> steiner_positions;
-    std::set<std::pair<int, int>> congestion_steiner_positions;
-
+    std::map<std::pair<int, int>, std::set<std::pair<int, int>>> adjacency_map;
     // Local iterative walk avoids stack overflow and malformed-tree cycles
     // without changing traversal behavior globally for all GRTree users.
     std::vector<std::shared_ptr<GRTreeNode>> stack;
@@ -459,63 +654,56 @@ void CUGR::analyzeSteinerCongestion(
       }
 
       const auto& children = node->getChildren();
+      const std::pair<int, int> me = {node->x(), node->y()};
       for (auto it = children.rbegin(); it != children.rend(); ++it) {
         if (!*it) {
           continue;
         }
+
+        const std::pair<int, int> child_pos = {(*it)->x(), (*it)->y()};
+        if (me != child_pos) {
+          adjacency_map[me].insert(child_pos);
+          adjacency_map[child_pos].insert(me);
+        }
+
         if (!visited_nodes.insert(it->get()).second) {
           continue;
         }
         stack.push_back(*it);
       }
-
-      const int x = node->x();
-      const int y = node->y();
-      if (x < 0 || y < 0 || x >= grid_graph_->getXSize()
-          || y >= grid_graph_->getYSize()) {
-        continue;
-      }
-
-      const auto key = std::make_pair(x, y);
-      if (pin_positions.count(key) > 0) {
-        continue;
-      }
-
-      if (!steiner_positions.insert(key).second) {
-        continue;
-      }
-
-      if (x >= static_cast<int>(heatmap.size())
-          || y >= static_cast<int>(heatmap[x].size()) || heatmap[x][y] <= 1.0) {
-        continue;
-      }
-
-      if (!congestion_steiner_positions.insert(key).second) {
-        continue;
-      }
-
-      if (category != nullptr) {
-        auto* marker = odb::dbMarker::create(category);
-        const int lx = grid_graph_->getGridline(0, x);
-        const int ly = grid_graph_->getGridline(1, y);
-        const int hx = grid_graph_->getGridline(0, x + 1);
-        const int hy = grid_graph_->getGridline(1, y + 1);
-        if (lx < hx && ly < hy) {
-          marker->addShape(odb::Rect(lx, ly, hx, hy));
-        }
-        marker->setComment(std::format(
-            "heatmap={:.2f} net={}", heatmap[x][y], net->getName()));
-      }
     }
 
-    total_steiner += steiner_positions.size();
-    total_steiner_overflow += congestion_steiner_positions.size();
+    for (const auto& [pos, neighbors] : adjacency_map) {
+      if (pin_positions.contains(pos)) {
+        continue;
+      }
+
+      const auto [x, y] = pos;
+      const bool congested
+          = x >= 0 && y >= 0 && x < static_cast<int>(heatmap.size())
+            && y < static_cast<int>(heatmap[x].size()) && heatmap[x][y] > 1.0;
+
+      if (neighbors.size() >= 3) {
+        total_branching++;
+        if (congested) {
+          total_branching_overflow++;
+        }
+      } else if (neighbors.size() == 2) {
+        total_bend++;
+        if (congested) {
+          total_bend_overflow++;
+        }
+      }
+    }
   }
 
   logger_->report("number of pins: {}", total_pins);
-  logger_->report("number of steiner points: {}", total_steiner);
-  logger_->report("total number of Steiner points with congestion: {}",
-                  total_steiner_overflow);
+  logger_->report("branching steiner points: {}", total_branching);
+  logger_->report("branching steiner points with congestion: {}",
+                  total_branching_overflow);
+  logger_->report("bend points: {}", total_bend);
+  logger_->report("bend points with congestion: {}", total_bend_overflow);
+  logger_->report("FLUTE effective steiner points: {}", flute_steiner_total_);
 }
 
 void CUGR::write(const std::string& guide_file)
@@ -943,6 +1131,130 @@ void CUGR::routeIncremental()
   }
 
   printStatistics();
+}
+
+void CUGR::setDebugOn(std::unique_ptr<AbstractFastRouteRenderer> renderer)
+{
+  debug_->renderer = std::move(renderer);
+}
+
+void CUGR::setDebugNet(const odb::dbNet* net)
+{
+  debug_->net = net;
+}
+
+void CUGR::setDebugSteinerTree(bool steinerTree)
+{
+  debug_->steinerTree = steinerTree;
+}
+
+void CUGR::setDebugRectilinearSTree(bool rectilinearSTree)
+{
+  debug_->rectilinearSTree = rectilinearSTree;
+}
+
+void CUGR::setDebugTree2D(bool tree2D)
+{
+  debug_->tree2D = tree2D;
+}
+
+void CUGR::setDebugTree3D(bool tree3D)
+{
+  debug_->tree3D = tree3D;
+}
+
+void CUGR::setSttInputFilename(const char* file_name)
+{
+  debug_->sttInputFileName = std::string(file_name);
+}
+
+AbstractFastRouteRenderer* CUGR::getDebugRenderer() const
+{
+  if (debug_ && debug_->renderer) {
+    return debug_->renderer.get();
+  }
+  return nullptr;
+}
+
+const odb::dbNet* CUGR::getDebugNet()
+{
+  return debug_->net;
+}
+
+bool CUGR::hasSaveSttInput()
+{
+  return !debug_->sttInputFileName.empty();
+}
+
+std::string CUGR::getSttInputFileName()
+{
+  return debug_->sttInputFileName;
+}
+
+void CUGR::steinerTreeVisualization(const stt::Tree& stree, GRNet* net)
+{
+  if (!debug_->isOn()) {
+    return;
+  }
+
+  FrNet frnet;
+  const bool is_clock
+      = (net->getDbNet()->getSigType() == odb::dbSigType::CLOCK);
+  frnet.reset(net->getDbNet(),
+              is_clock,
+              0,
+              0,
+              constants_.min_routing_layer,
+              grid_graph_->getNumLayers() - 1,
+              0.0,
+              nullptr);
+  FrNetInit(net, &frnet);
+
+  debug_->renderer->highlight(&frnet);
+  debug_->renderer->setIs3DVisualization(false);
+  debug_->renderer->setSteinerTree(stree);
+  debug_->renderer->setTreeStructure(grt::TreeStructure::steinerTreeByStt);
+  debug_->renderer->redrawAndPause();
+  debug_->renderer->highlight(nullptr);
+}
+
+void CUGR::StTreeVisualization(const StTree& stree,
+                                GRNet* net,
+                                bool is3DVisualization)
+{
+  if (!debug_->isOn()) {
+    return;
+  }
+
+  FrNet frnet;
+  const bool is_clock
+      = (net->getDbNet()->getSigType() == odb::dbSigType::CLOCK);
+  frnet.reset(net->getDbNet(),
+              is_clock,
+              0,
+              0,
+              constants_.min_routing_layer,
+              grid_graph_->getNumLayers() - 1,
+              0.0,
+              nullptr);
+  FrNetInit(net, &frnet);
+
+  debug_->renderer->highlight(&frnet);
+  debug_->renderer->setIs3DVisualization(is3DVisualization);
+  debug_->renderer->setStTreeValues(stree);
+  debug_->renderer->setTreeStructure(grt::TreeStructure::steinerTreeByFastroute);
+  debug_->renderer->redrawAndPause();
+  debug_->renderer->highlight(nullptr);
+}
+
+void CUGR::FrNetInit(GRNet* net, FrNet* frnet)
+{
+  for (const auto& pin_aps : net->getPinAccessPoints()) {
+    if (!pin_aps.empty()) {
+      const auto& ap = pin_aps[0];
+      frnet->addPin(ap.x(), ap.y(), ap.getLayerIdx());
+    }
+  }
 }
 
 }  // namespace grt

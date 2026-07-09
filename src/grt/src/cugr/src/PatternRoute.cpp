@@ -7,6 +7,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -107,7 +108,10 @@ void PatternRoute::constructSteinerTree()
     ys.push_back(y);
   }
 
+  stt_tree_valid_ = false;
   stt::Tree flute_tree = stt_builder_->flute(xs, ys, flute_accuracy_);
+  stt_tree_ = flute_tree;
+  stt_tree_valid_ = true;
   const int num_branches = degree + degree - 2;
   std::vector<PointT> steiner_points;
   steiner_points.reserve(num_branches);
@@ -121,6 +125,20 @@ void PatternRoute::constructSteinerTree()
     }
     adjacent_list[branch_index].push_back(branch.n);
     adjacent_list[branch.n].push_back(branch_index);
+  }
+
+  // Cross-check for the Steiner congestion analysis: count effective FLUTE
+  // steiner points (degree >= 3, not co-located with a pin).
+  const std::set<std::pair<int, int>> pin_set(sorted_points.begin(),
+                                              sorted_points.end());
+  std::set<std::pair<int, int>> counted;
+  for (int i = degree; i < num_branches; i++) {
+    const std::pair<int, int> pos
+        = {steiner_points[i].x(), steiner_points[i].y()};
+    const bool on_pin = pin_set.contains(pos);
+    if (!on_pin && adjacent_list[i].size() >= 3 && counted.insert(pos).second) {
+      flute_steiner_count_++;
+    }
   }
 
   std::function<void(std::shared_ptr<SteinerTreeNode>&, int, int)>

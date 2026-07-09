@@ -11,6 +11,7 @@
 #include "GRTree.h"
 #include "GridGraph.h"
 #include "geo.h"
+#include "stt/SteinerTreeBuilder.h"
 
 namespace grt {
 
@@ -157,6 +158,11 @@ class PatternRoute
 
   int getNumDAGNodes() const { return num_dag_nodes_; }
 
+  int getFluteSteinerCount() const { return flute_steiner_count_; }
+
+  const stt::Tree& getSttTree() const { return stt_tree_; }
+  bool hasSttTree() const { return stt_tree_valid_; }
+
   std::shared_ptr<SteinerTreeNode> getSteinerTree() const
   {
     return steiner_tree_;
@@ -180,6 +186,9 @@ class PatternRoute
   const GridGraph* grid_graph_;
   stt::SteinerTreeBuilder* stt_builder_;
   int num_dag_nodes_{0};
+  int flute_steiner_count_{0};
+  stt::Tree stt_tree_;
+  bool stt_tree_valid_{false};
   std::shared_ptr<SteinerTreeNode> steiner_tree_;
   std::shared_ptr<PatternRoutingNode> routing_dag_;
   std::vector<std::vector<int>> gridlines_;

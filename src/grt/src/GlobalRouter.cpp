@@ -492,6 +492,14 @@ void GlobalRouter::cugrVisualizeSteinerTree(const std::string& net_name)
   cugr_->visualizeSteinerTree(net_name);
 }
 
+void GlobalRouter::cugrVisualizeSteinerCongestion()
+{
+  if (!use_cugr_ || cugr_ == nullptr) {
+    logger_->error(GRT, 306, "cugrVisualizeSteinerCongestion requires -use_cugr.");
+  }
+  cugr_->visualizeSteinerCongestion();
+}
+
 int GlobalRouter::repairAntennas(odb::dbMTerm* diode_mterm,
                                  int iterations,
                                  float ratio_margin,
@@ -5797,29 +5805,63 @@ AbstractFastRouteRenderer* GlobalRouter::getDebugFastRoute() const
 {
   return fastroute_->fastrouteRender();
 }
+void GlobalRouter::initDebugCUGR(
+    std::unique_ptr<AbstractFastRouteRenderer> renderer)
+{
+  if (cugr_) {
+    cugr_->setDebugOn(std::move(renderer));
+  }
+}
+
+AbstractFastRouteRenderer* GlobalRouter::getDebugCUGR() const
+{
+  if (cugr_) {
+    return cugr_->getDebugRenderer();
+  }
+  return nullptr;
+}
+
 void GlobalRouter::setDebugSteinerTree(bool steinerTree)
 {
   fastroute_->setDebugSteinerTree(steinerTree);
+  if (cugr_) {
+    cugr_->setDebugSteinerTree(steinerTree);
+  }
 }
 void GlobalRouter::setDebugNet(const odb::dbNet* net)
 {
   fastroute_->setDebugNet(net);
+  if (cugr_) {
+    cugr_->setDebugNet(net);
+  }
 }
 void GlobalRouter::setDebugRectilinearSTree(bool rectilinearSTree)
 {
   fastroute_->setDebugRectilinearSTree(rectilinearSTree);
+  if (cugr_) {
+    cugr_->setDebugRectilinearSTree(rectilinearSTree);
+  }
 }
 void GlobalRouter::setDebugTree2D(bool tree2D)
 {
   fastroute_->setDebugTree2D(tree2D);
+  if (cugr_) {
+    cugr_->setDebugTree2D(tree2D);
+  }
 }
 void GlobalRouter::setDebugTree3D(bool tree3D)
 {
   fastroute_->setDebugTree3D(tree3D);
+  if (cugr_) {
+    cugr_->setDebugTree3D(tree3D);
+  }
 }
 void GlobalRouter::setSttInputFilename(const char* file_name)
 {
   fastroute_->setSttInputFilename(file_name);
+  if (cugr_) {
+    cugr_->setSttInputFilename(file_name);
+  }
 }
 
 // For rsz::makeBufferedNetGlobalRoute so Pin/Net classes do not have to be

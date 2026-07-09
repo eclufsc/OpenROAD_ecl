@@ -441,6 +441,12 @@ proc cugr_visualize_steiner_tree { net_name } {
   grt::cugr_visualize_steiner_tree $net_name
 }
 
+sta::define_cmd_args "cugr_visualize_steiner_congestion" {}
+
+proc cugr_visualize_steiner_congestion {} {
+  grt::cugr_visualize_steiner_congestion
+}
+
 sta::define_cmd_args "report_wire_length" { [-net net_list] \
                                             [-file file] \
                                             [-global_route] \
