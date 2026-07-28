@@ -389,15 +389,10 @@ void CUGR::visualizeSteinerTree(const std::string& net_name)
   }
 
   auto* block = db_->getChip()->getBlock();
-  auto* pins_cat
-      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Pins");
-  auto* steiner_cat
-      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Steiner (deg>=3)");
-  auto* bend_cat
-      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Bend (deg=2)");
-  auto* edges_cat
-      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Edges");
-  auto* stt_cat = odb::dbMarkerCategory::createOrReplace(block, "STTree");
+  auto* full_tree_cat
+      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Full Tree");
+  auto* steiner_only_cat
+      = odb::dbMarkerCategory::createOrReplace(block, "STTree - Full Tree Steiner Only");
 
   const int half = design_->getGridlineSize() / 2;
 
@@ -409,11 +404,6 @@ void CUGR::visualizeSteinerTree(const std::string& net_name)
         const int y = node->y();
         const std::pair<int, int> pos = {x, y};
 
-        odb::Rect gcell_rect(grid_graph_->getGridline(0, x),
-                             grid_graph_->getGridline(1, y),
-                             grid_graph_->getGridline(0, x + 1),
-                             grid_graph_->getGridline(1, y + 1));
-
         const bool in_heatmap = x >= 0 && y >= 0
             && x < static_cast<int>(heatmap.size())
             && y < static_cast<int>(heatmap[x].size());
@@ -423,47 +413,47 @@ void CUGR::visualizeSteinerTree(const std::string& net_name)
                             ? static_cast<int>(adjacency_map.at(pos).size())
                             : 0;
 
-        auto* all_marker = odb::dbMarker::create(stt_cat);
-        all_marker->addShape(gcell_rect);
+        const int cx = grid_graph_->getGridline(0, x) + half;
+        const int cy = grid_graph_->getGridline(1, y) + half;
 
-        if (pin_positions.count(pos) != 0) {
-          auto* m = odb::dbMarker::create(pins_cat);
-          m->addShape(gcell_rect);
-          const std::string c = std::format("pin deg={}", deg);
-          m->setComment(c);
-          all_marker->setComment(c);
+        auto addX = [](odb::dbMarker* m, int x0, int y0, int arm) {
+          m->addShape(odb::Line(odb::Point(x0 - arm, y0 - arm),
+                                odb::Point(x0 + arm, y0 + arm)));
+          m->addShape(odb::Line(odb::Point(x0 - arm, y0 + arm),
+                                odb::Point(x0 + arm, y0 - arm)));
+        };
+
+        if (pin_positions.contains(pos)) {
+          auto* m = odb::dbMarker::create(full_tree_cat);
+          addX(m, cx, cy, half);
+          m->setComment(std::format("pin deg={}", deg));
         } else if (deg >= 3) {
-          auto* m = odb::dbMarker::create(steiner_cat);
-          m->addShape(gcell_rect);
-          const std::string c = std::format("steiner deg={} heatmap={:.2f} {}",
-                                            deg, hval,
-                                            congested ? "CONGESTED" : "ok");
+          const std::string c = std::format(
+              "steiner deg={} heatmap={:.2f} {}", deg, hval,
+              congested ? "CONGESTED" : "ok");
+          auto* m = odb::dbMarker::create(full_tree_cat);
+          addX(m, cx, cy, half / 2);
           m->setComment(c);
-          all_marker->setComment(c);
-        } else {
-          auto* m = odb::dbMarker::create(bend_cat);
-          m->addShape(gcell_rect);
-          const std::string c = std::format("bend deg={} heatmap={:.2f} {}",
-                                            deg, hval,
-                                            congested ? "CONGESTED" : "ok");
-          m->setComment(c);
-          all_marker->setComment(c);
+          auto* so = odb::dbMarker::create(steiner_only_cat);
+          addX(so, cx, cy, half / 2);
+          so->setComment(c);
         }
+        // bend nodes: no marker in either category
 
-        // Edges to children (original preorder logic)
+        // Edges to children — all edges go into both categories
         for (const auto& child : node->getChildren()) {
-          const int cx = child->x();
-          const int cy = child->y();
+          const int ccx = child->x();
+          const int ccy = child->y();
           if (node->getLayerIdx() == child->getLayerIdx()) {
             const int x1 = grid_graph_->getGridline(0, x) + half;
             const int y1 = grid_graph_->getGridline(1, y) + half;
-            const int x2 = grid_graph_->getGridline(0, cx) + half;
-            const int y2 = grid_graph_->getGridline(1, cy) + half;
+            const int x2 = grid_graph_->getGridline(0, ccx) + half;
+            const int y2 = grid_graph_->getGridline(1, ccy) + half;
             const odb::Line line(odb::Point(x1, y1), odb::Point(x2, y2));
-            auto* em = odb::dbMarker::create(edges_cat);
+            auto* em = odb::dbMarker::create(full_tree_cat);
             em->addShape(line);
-            auto* all_em = odb::dbMarker::create(stt_cat);
-            all_em->addShape(line);
+            auto* so_em = odb::dbMarker::create(steiner_only_cat);
+            so_em->addShape(line);
           }
         }
       });
@@ -476,30 +466,27 @@ void CUGR::visualizeSteinerCongestion()
     logger_->warn(GRT, 991, "No heatmap available. Run global_route first.");
     return;
   }
+  if (!grid_graph_) {
+    logger_->warn(GRT, 992, "Grid graph not initialized. Run global_route first.");
+    return;
+  }
 
   auto* block = db_->getChip()->getBlock();
-  auto* br_ok_cat = odb::dbMarkerCategory::createOrReplace(
-      block, "Steiner (deg>=3) - OK");
-  auto* br_cong_cat = odb::dbMarkerCategory::createOrReplace(
-      block, "Steiner (deg>=3) - Congested");
-  auto* bend_ok_cat = odb::dbMarkerCategory::createOrReplace(
-      block, "Bend (deg 2) - OK");
-  auto* bend_cong_cat = odb::dbMarkerCategory::createOrReplace(
-      block, "Bend (deg 2) - Congested");
-  auto* edge_ok_cat = odb::dbMarkerCategory::createOrReplace(
-      block, "Steiner Edges - OK");
-  auto* edge_cong_cat = odb::dbMarkerCategory::createOrReplace(
-      block, "Steiner Edges - Congested");
-  auto* all_cat = odb::dbMarkerCategory::createOrReplace(
-      block, "Steiner All");
+  auto* all_cat = odb::dbMarkerCategory::createOrReplace(block, "Steiner - All");
+  auto* cong_cat = odb::dbMarkerCategory::createOrReplace(block, "Steiner - Congested");
+  auto* ok_cat = odb::dbMarkerCategory::createOrReplace(block, "Steiner - OK");
+  auto* edges_cat = odb::dbMarkerCategory::createOrReplace(block, "Steiner - Edges");
 
   const int half = design_->getGridlineSize() / 2;
 
+  std::map<std::string, int> congested_count;
+
   for (const auto& net : gr_nets_) {
     auto& routing_tree = net->getRoutingTree();
-    if (!routing_tree) {
+    if (!routing_tree || !net->getDbNet()) {
       continue;
     }
+    const std::string net_name = net->getDbNet()->getName();
 
     std::set<std::pair<int, int>> pin_positions;
     for (const auto& gpts : net->getPinAccessPoints()) {
@@ -537,11 +524,19 @@ void CUGR::visualizeSteinerCongestion()
     }
 
     // Draw edges (each undirected edge drawn once: only when src < dst)
+    const int xs = grid_graph_->getXSize();
+    const int ys = grid_graph_->getYSize();
     std::set<std::pair<std::pair<int,int>, std::pair<int,int>>> drawn_edges;
     for (const auto& [pos, neighbors] : adjacency_map) {
       const auto [x1, y1] = pos;
+      if (x1 < 0 || y1 < 0 || x1 >= xs || y1 >= ys) {
+        continue;
+      }
       for (const auto& nb : neighbors) {
         const auto [x2, y2] = nb;
+        if (x2 < 0 || y2 < 0 || x2 >= xs || y2 >= ys) {
+          continue;
+        }
         const auto edge = std::make_pair(std::min(pos, nb), std::max(pos, nb));
         if (!drawn_edges.insert(edge).second) {
           continue;
@@ -550,22 +545,19 @@ void CUGR::visualizeSteinerCongestion()
         const int py1 = grid_graph_->getGridline(1, y1) + half;
         const int px2 = grid_graph_->getGridline(0, x2) + half;
         const int py2 = grid_graph_->getGridline(1, y2) + half;
-        const bool cong1 = x1 >= 0 && y1 >= 0
-            && x1 < static_cast<int>(heatmap.size())
-            && y1 < static_cast<int>(heatmap[x1].size())
-            && heatmap[x1][y1] > 1.0;
-        const bool cong2 = x2 >= 0 && y2 >= 0
-            && x2 < static_cast<int>(heatmap.size())
-            && y2 < static_cast<int>(heatmap[x2].size())
-            && heatmap[x2][y2] > 1.0;
-        auto* ecat = (cong1 || cong2) ? edge_cong_cat : edge_ok_cat;
         const odb::Line edge_line(odb::Point(px1, py1), odb::Point(px2, py2));
-        auto* emarker = odb::dbMarker::create(ecat);
-        emarker->addShape(edge_line);
-        auto* all_emarker = odb::dbMarker::create(all_cat);
-        all_emarker->addShape(edge_line);
+        if (auto* emarker = odb::dbMarker::create(edges_cat)) {
+          emarker->addShape(edge_line);
+        }
       }
     }
+
+    auto addX = [](odb::dbMarker* m, int x0, int y0, int arm) {
+      m->addShape(
+          odb::Line(odb::Point(x0 - arm, y0 - arm), odb::Point(x0 + arm, y0 + arm)));
+      m->addShape(
+          odb::Line(odb::Point(x0 - arm, y0 + arm), odb::Point(x0 + arm, y0 - arm)));
+    };
 
     // Draw node markers
     for (const auto& [pos, neighbors] : adjacency_map) {
@@ -573,34 +565,42 @@ void CUGR::visualizeSteinerCongestion()
         continue;
       }
       const auto [x, y] = pos;
-      if (x < 0 || y < 0 || x >= static_cast<int>(heatmap.size())
+      if (x < 0 || y < 0 || x >= xs || y >= ys
+          || x >= static_cast<int>(heatmap.size())
           || y >= static_cast<int>(heatmap[x].size())) {
         continue;
       }
       const bool congested = heatmap[x][y] > 1.0;
-      odb::Rect gcell_rect(grid_graph_->getGridline(0, x),
-                           grid_graph_->getGridline(1, y),
-                           grid_graph_->getGridline(0, x + 1),
-                           grid_graph_->getGridline(1, y + 1));
+      const int cx = grid_graph_->getGridline(0, x) + half;
+      const int cy = grid_graph_->getGridline(1, y) + half;
 
       if (neighbors.size() >= 3) {
-        auto* cat = congested ? br_cong_cat : br_ok_cat;
-        auto* marker = odb::dbMarker::create(cat);
-        marker->addShape(gcell_rect);
-        auto* all_marker = odb::dbMarker::create(all_cat);
-        all_marker->addShape(gcell_rect);
-        all_marker->setComment(congested ? "steiner-congested" : "steiner-ok");
-      } else if (neighbors.size() == 2) {
-        auto* cat = congested ? bend_cong_cat : bend_ok_cat;
-        auto* marker = odb::dbMarker::create(cat);
-        marker->addShape(gcell_rect);
-        auto* all_marker = odb::dbMarker::create(all_cat);
-        all_marker->addShape(gcell_rect);
-        all_marker->setComment(congested ? "bend-congested" : "bend-ok");
+        auto* node_cat = congested ? cong_cat : ok_cat;
+        if (auto* marker = odb::dbMarker::create(node_cat)) {
+          addX(marker, cx, cy, half / 2);
+          marker->setComment(net_name);
+        }
+        if (auto* marker = odb::dbMarker::create(all_cat)) {
+          addX(marker, cx, cy, half / 2);
+          marker->setComment(net_name);
+        }
+        if (congested) {
+          congested_count[net_name]++;
+        }
       }
     }
   }
 
+  std::vector<std::pair<int, std::string>> sorted_nets;
+  for (const auto& [name, cnt] : congested_count) {
+    sorted_nets.push_back({cnt, name});
+  }
+  std::sort(sorted_nets.rbegin(), sorted_nets.rend());
+  logger_->report("Top nets by congested Steiner points (deg>=3):");
+  const int top_n = std::min(10, static_cast<int>(sorted_nets.size()));
+  for (int i = 0; i < top_n; i++) {
+    logger_->report("  {:6d}  {}", sorted_nets[i].first, sorted_nets[i].second);
+  }
   logger_->report("Steiner congestion markers created. "
                   "View in DRC/Marker panel in the GUI.");
 }
