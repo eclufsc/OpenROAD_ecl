@@ -355,6 +355,23 @@ void CUGR::visualizeSteinerTree(const std::string& net_name)
   }
 
   std::set<std::pair<int, int>> pin_positions;
+  std::pair<int, int> source_gcell = {-1, -1}; 
+
+    for (const auto& [iterm, ap] : found_net->getITermAccessPoints()) {
+            const odb::dbIoType type = iterm->getMTerm()->getIoType();
+            if (type == odb::dbIoType::OUTPUT || type == odb::dbIoType::INOUT) {
+                source_gcell = {ap.point.x(), ap.point.y()};               break;
+            }
+        }
+
+    if ((source_gcell.first == -1)) {
+        for (const auto& [bterm, ap]: found_net->getBTermAccessPoints()) {
+            if (bterm->getIoType() == odb::dbIoType::INPUT) {
+                source_gcell = {ap.point.x(), ap.point.y()};
+                }
+            }
+        }
+    
   for (auto& gpts : found_net->getPinAccessPoints()) {
     for (auto& gpt : gpts) {
       pin_positions.insert({gpt.x(), gpt.y()});
@@ -394,7 +411,7 @@ void CUGR::visualizeSteinerTree(const std::string& net_name)
   auto* steiner_only_cat
       = odb::dbMarkerCategory::createOrReplace(block, "STTree - Full Tree Steiner Only");
 
-  const int half = design_->getGridlineSize() / 2;
+const int half = design_->getGridlineSize() / 2;
 
   // Preorder traversal: draws edges and creates node markers with degree info
   GRTreeNode::preorder(
@@ -423,7 +440,30 @@ void CUGR::visualizeSteinerTree(const std::string& net_name)
                                 odb::Point(x0 + arm, y0 - arm)));
         };
 
-        if (pin_positions.contains(pos)) {
+        auto addDiamond = [](odb::dbMarker* m, int x0, int y0, int arm) {
+            m->addShape(odb::Polygon(std::vector<odb::Point>{
+                {x0, y0 + arm},
+                {x0 + arm, y0},
+                {x0, y0 - arm},
+                {x0 - arm, y0},
+                {x0, y0+arm},
+        }));
+    };
+
+        auto addTriangle = [](odb::dbMarker* m, int x0, int y0, int arm) {
+            m->addShape(odb::Polygon(std::vector<odb::Point>{
+                {x0, y0 + arm},
+                {x0 + arm, y0 - arm},
+                {x0 - arm, y0 - arm},
+                {x0, y0 + arm},
+        }));
+};
+
+        if (pos == source_gcell) {
+                auto* m = odb::dbMarker::create(full_tree_cat);
+                addDiamond(m, cx, cy, half);
+                m->setComment(std::format("SOURCE deg={} heatmap={:.2f} {}", deg, hval, congested ? "CONGESTED" : "ok"));
+        } else if (pin_positions.contains(pos)) {
           auto* m = odb::dbMarker::create(full_tree_cat);
           addX(m, cx, cy, half);
           m->setComment(std::format("pin deg={}", deg));
@@ -432,7 +472,7 @@ void CUGR::visualizeSteinerTree(const std::string& net_name)
               "steiner deg={} heatmap={:.2f} {}", deg, hval,
               congested ? "CONGESTED" : "ok");
           auto* m = odb::dbMarker::create(full_tree_cat);
-          addX(m, cx, cy, half / 2);
+          addTriangle(m, cx, cy, half / 2);
           m->setComment(c);
           auto* so = odb::dbMarker::create(steiner_only_cat);
           addX(so, cx, cy, half / 2);
@@ -622,12 +662,17 @@ void CUGR::analyzeSteinerCongestion(
     }
 
     std::set<std::pair<int, int>> pin_positions;
+
+
     for (const auto& gpts : net->getPinAccessPoints()) {
       for (const auto& gpt : gpts) {
         pin_positions.emplace(gpt.x(), gpt.y());
       }
     }
     total_pins += pin_positions.size();
+
+    
+
 
     std::map<std::pair<int, int>, std::set<std::pair<int, int>>> adjacency_map;
     // Local iterative walk avoids stack overflow and malformed-tree cycles
