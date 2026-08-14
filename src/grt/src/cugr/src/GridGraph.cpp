@@ -829,40 +829,23 @@ void GridGraph::extractCongestionView(GridGraphView<bool>& view) const
 void GridGraph::buildCongestionHeatMap(
     std::vector<std::vector<CapacityT>>& heatmap) const
 {
-std::vector<std::vector<CapacityT>> h_usage(x_size_, std::vector<CapacityT>(y_size_, 0.0));
-std::vector<std::vector<CapacityT>> h_cap(x_size_, std::vector<CapacityT>(y_size_, 0.0));
-std::vector<std::vector<CapacityT>> v_usage(x_size_, std::vector<CapacityT>(y_size_, 0.0));
-std::vector<std::vector<CapacityT>> v_cap(x_size_, std::vector<CapacityT>(y_size_, 0.0));
-
-//  heatmap.assign(x_size_, std::vector<CapacityT>(y_size_, 0.0));
+  heatmap.assign(x_size_, std::vector<CapacityT>(y_size_, 0.0));
   for (int layer_index = constants_.min_routing_layer;
        layer_index < getNumLayers();
        layer_index++) {
-    const int dir = getLayerDirection(layer_index);
     for (int x = 0; x < x_size_; x++) {
       for (int y = 0; y < y_size_; y++) {
         const auto& edge = graph_edges_[layer_index][x][y];
-        
-        if (dir == MetalLayer::H) {
-            h_usage[x][y] += edge.demand;
-            h_cap[x][y] += edge.capacity;
+        if (edge.capacity == 0) {
+          continue;
+        }
+        const CapacityT ratio = edge.demand / edge.capacity;
+        heatmap[x][y] = std::max(heatmap[x][y], ratio);
+      }
+    }
+  }
+}
 
-        } else {
-            v_usage[x][y] += edge.demand;
-            v_cap[x][y] += edge.capacity;
-        }
-        }
-    }
-}
-     heatmap.assign(x_size_, std::vector<CapacityT>(y_size_, 0.0));
-     for (int x = 0; x < x_size_; x++) {
-        for (int y = 0; y < y_size_; y++) {
-            const CapacityT h_congestion = h_cap[x][y] > 0 ? h_usage[x][y] / h_cap[x][y] : 0.0;
-            const CapacityT v_congestion = v_cap[x][y] > 0 ? v_usage[x][y] / v_cap[x][y] : 0.0;
-            heatmap[x][y] = std::max(h_congestion, v_congestion);
-        }
-    }
-}
 void GridGraph::extractWireCostView(GridGraphView<CostT>& view) const
 {
   view.assign(
