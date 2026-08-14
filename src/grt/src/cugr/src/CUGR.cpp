@@ -472,7 +472,7 @@ const int half = design_->getGridlineSize() / 2;
               "steiner deg={} heatmap={:.2f} {}", deg, hval,
               congested ? "CONGESTED" : "ok");
           auto* m = odb::dbMarker::create(full_tree_cat);
-          addTriangle(m, cx, cy, half / 2);
+          addTriangle(m, cx, cy, half);
           m->setComment(c);
           auto* so = odb::dbMarker::create(steiner_only_cat);
           addX(so, cx, cy, half / 2);
