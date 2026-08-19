@@ -125,6 +125,8 @@ class CUGR
   void printStatistics() const;
   void analyzeSteinerCongestion(
       const std::vector<std::vector<double>>& heatmap) const;
+  void analyzeSteinerEdgeCongestion(
+      const std::vector<std::vector<double>>& heatmap) const;
   void steinerTreeVisualization(const stt::Tree& stree, GRNet* net);
   void StTreeVisualization(const StTree& stree,
                            GRNet* net,

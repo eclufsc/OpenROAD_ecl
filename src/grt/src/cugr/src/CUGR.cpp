@@ -331,6 +331,7 @@ void CUGR::route()
   }();
   if (run_steiner_analysis) {
     CUGR::analyzeSteinerCongestion(heatmap);
+    CUGR::analyzeSteinerEdgeCongestion(heatmap);
   }
 
   printStatistics();
@@ -749,6 +750,118 @@ void CUGR::analyzeSteinerCongestion(
   logger_->report("bend points: {}", total_bend);
   logger_->report("bend points with congestion: {}", total_bend_overflow);
   logger_->report("FLUTE effective steiner points: {}", flute_steiner_total_);
+}
+
+void CUGR::analyzeSteinerEdgeCongestion(
+    const std::vector<std::vector<double>>& heatmap) const
+{
+  int total_pins = 0;
+  int total_branching = 0;
+  int total_branching_overflow = 0;
+  int total_bend = 0;
+  int total_bend_overflow = 0;
+
+  for (const auto& net : gr_nets_) {
+    auto& routing_tree = net->getRoutingTree();
+    if (!routing_tree) {
+      continue;
+    }
+
+    std::set<std::pair<int, int>> pin_positions;
+
+
+    for (const auto& gpts : net->getPinAccessPoints()) {
+      for (const auto& gpt : gpts) {
+        pin_positions.emplace(gpt.x(), gpt.y());
+      }
+    }
+    total_pins += pin_positions.size();
+
+    
+
+
+    std::map<std::pair<int, int>, std::set<std::pair<int, int>>> adjacency_map;
+    // Local iterative walk avoids stack overflow and malformed-tree cycles
+    // without changing traversal behavior globally for all GRTree users.
+    std::vector<std::shared_ptr<GRTreeNode>> stack;
+    std::set<const GRTreeNode*> visited_nodes;
+    stack.push_back(routing_tree);
+    visited_nodes.insert(routing_tree.get());
+    int visited_count = 0;
+    constexpr int kMaxVisitedNodes = 10'000'000;
+    std::map<std::pair<int,int>, bool> node_has_overflow;
+
+    while (!stack.empty()) {
+      auto node = stack.back();
+      stack.pop_back();
+      visited_count++;
+      if (visited_count > kMaxVisitedNodes) {
+        logger_->warn(GRT,
+                      993,
+                      "Steiner congestion analysis stopped for net {} after {} "
+                      "visited nodes.",
+                      net->getName(),
+                      kMaxVisitedNodes);
+        break;
+      }
+
+      const auto& children = node->getChildren();
+      const std::pair<int, int> me = {node->x(), node->y()};
+      for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        if (!*it) {
+          continue;
+        }
+
+        const std::pair<int, int> child_pos = {(*it)->x(), (*it)->y()};
+        if (me != child_pos) {
+          adjacency_map[me].insert(child_pos);
+          adjacency_map[child_pos].insert(me);
+        }
+
+        if (node->getLayerIdx() == (*it)->getLayerIdx()) {
+            if (grid_graph_->checkOverflow(
+                node->getLayerIdx(), (PointT)*node, (PointT)**it)> 0) {
+                   node_has_overflow[me] = true;
+                   node_has_overflow[child_pos] = true;
+                }
+}
+
+        if (!visited_nodes.insert(it->get()).second) {
+          continue;
+        }
+        stack.push_back(*it);
+      }
+    }
+
+    for (const auto& [pos, neighbors] : adjacency_map) {
+      if (pin_positions.contains(pos)) {
+        continue;
+      }
+
+      const auto [x, y] = pos;
+      const bool congested = node_has_overflow.count(pos) > 0;
+
+      if (neighbors.size() >= 3) {
+        total_branching++;
+        if (congested) {
+          total_branching_overflow++;
+        }
+      } else if (neighbors.size() == 2) {
+        total_bend++;
+        if (congested) {
+          total_bend_overflow++;
+        }
+      }
+    }
+  }
+
+  logger_->report("=== Edge-based Steiner congestion analysis ===");
+  logger_->report("number of pins: {}", total_pins);
+  logger_->report("branching steiner points: {}", total_branching);
+  logger_->report("branching steiner points with overflow edges: {}",
+                  total_branching_overflow);
+  logger_->report("bend points: {}", total_bend);
+  logger_->report("bend points with overflow edges: {}", total_bend_overflow);
 }
 
 void CUGR::write(const std::string& guide_file)
