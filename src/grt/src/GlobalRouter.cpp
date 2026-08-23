@@ -500,6 +500,14 @@ void GlobalRouter::cugrVisualizeSteinerCongestion()
   cugr_->visualizeSteinerCongestion();
 }
 
+void GlobalRouter::cugrVisualizeSteinerEdgeCongestion()
+{
+  if (!use_cugr_ || cugr_ == nullptr) {
+    logger_->error(GRT, 307, "cugrVisualizeSteinerEdgeCongestion requires -use_cugr.");
+  }
+  cugr_->visualizeSteinerEdgeCongestion();
+}
+
 int GlobalRouter::repairAntennas(odb::dbMTerm* diode_mterm,
                                  int iterations,
                                  float ratio_margin,

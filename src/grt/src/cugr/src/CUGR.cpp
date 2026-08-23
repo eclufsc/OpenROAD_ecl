@@ -646,6 +646,152 @@ void CUGR::visualizeSteinerCongestion()
                   "View in DRC/Marker panel in the GUI.");
 }
 
+void CUGR::visualizeSteinerEdgeCongestion()
+{
+  if (!grid_graph_) {
+    logger_->warn(GRT, 994, "Grid graph not initialized. Run global_route first.");
+    return;
+  }
+
+  auto* block = db_->getChip()->getBlock();
+  auto* all_cat = odb::dbMarkerCategory::createOrReplace(block, "SteinerEdge - All");
+  auto* cong_cat = odb::dbMarkerCategory::createOrReplace(block, "SteinerEdge - Congested");
+  auto* ok_cat = odb::dbMarkerCategory::createOrReplace(block, "SteinerEdge - OK");
+  auto* edges_cat = odb::dbMarkerCategory::createOrReplace(block, "SteinerEdge - Edges");
+
+  const int half = design_->getGridlineSize() / 2;
+  const int xs = grid_graph_->getXSize();
+  const int ys = grid_graph_->getYSize();
+
+  std::map<std::string, int> congested_count;
+
+  for (const auto& net : gr_nets_) {
+    auto& routing_tree = net->getRoutingTree();
+    if (!routing_tree || !net->getDbNet()) {
+      continue;
+    }
+    const std::string net_name = net->getDbNet()->getName();
+
+    std::set<std::pair<int, int>> pin_positions;
+    for (const auto& gpts : net->getPinAccessPoints()) {
+      for (const auto& gpt : gpts) {
+        pin_positions.emplace(gpt.x(), gpt.y());
+      }
+    }
+
+    std::map<std::pair<int, int>, std::set<std::pair<int, int>>> adjacency_map;
+    std::map<std::pair<int, int>, bool> node_has_overflow;
+    std::vector<std::shared_ptr<GRTreeNode>> stack;
+    std::set<const GRTreeNode*> visited_nodes;
+    stack.push_back(routing_tree);
+    visited_nodes.insert(routing_tree.get());
+
+    while (!stack.empty()) {
+      auto node = stack.back();
+      stack.pop_back();
+
+      const auto& children = node->getChildren();
+      const std::pair<int, int> me = {node->x(), node->y()};
+      for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        if (!*it) {
+          continue;
+        }
+        const std::pair<int, int> child_pos = {(*it)->x(), (*it)->y()};
+        if (me != child_pos) {
+          adjacency_map[me].insert(child_pos);
+          adjacency_map[child_pos].insert(me);
+        }
+        if (node->getLayerIdx() == (*it)->getLayerIdx()) {
+          if (grid_graph_->checkOverflow(
+                  node->getLayerIdx(), (PointT)*node, (PointT)**it) > 0) {
+            node_has_overflow[me] = true;
+            node_has_overflow[child_pos] = true;
+          }
+        }
+        if (!visited_nodes.insert(it->get()).second) {
+          continue;
+        }
+        stack.push_back(*it);
+      }
+    }
+
+    // Draw edges
+    std::set<std::pair<std::pair<int,int>, std::pair<int,int>>> drawn_edges;
+    for (const auto& [pos, neighbors] : adjacency_map) {
+      const auto [x1, y1] = pos;
+      if (x1 < 0 || y1 < 0 || x1 >= xs || y1 >= ys) {
+        continue;
+      }
+      for (const auto& nb : neighbors) {
+        const auto [x2, y2] = nb;
+        if (x2 < 0 || y2 < 0 || x2 >= xs || y2 >= ys) {
+          continue;
+        }
+        const auto edge = std::make_pair(std::min(pos, nb), std::max(pos, nb));
+        if (!drawn_edges.insert(edge).second) {
+          continue;
+        }
+        const int px1 = grid_graph_->getGridline(0, x1) + half;
+        const int py1 = grid_graph_->getGridline(1, y1) + half;
+        const int px2 = grid_graph_->getGridline(0, x2) + half;
+        const int py2 = grid_graph_->getGridline(1, y2) + half;
+        if (auto* emarker = odb::dbMarker::create(edges_cat)) {
+          emarker->addShape(odb::Line(odb::Point(px1, py1), odb::Point(px2, py2)));
+        }
+      }
+    }
+
+    auto addX = [](odb::dbMarker* m, int x0, int y0, int arm) {
+      m->addShape(
+          odb::Line(odb::Point(x0 - arm, y0 - arm), odb::Point(x0 + arm, y0 + arm)));
+      m->addShape(
+          odb::Line(odb::Point(x0 - arm, y0 + arm), odb::Point(x0 + arm, y0 - arm)));
+    };
+
+    // Draw node markers
+    for (const auto& [pos, neighbors] : adjacency_map) {
+      if (pin_positions.contains(pos)) {
+        continue;
+      }
+      const auto [x, y] = pos;
+      if (x < 0 || y < 0 || x >= xs || y >= ys) {
+        continue;
+      }
+      const bool congested = node_has_overflow.count(pos) > 0;
+      const int cx = grid_graph_->getGridline(0, x) + half;
+      const int cy = grid_graph_->getGridline(1, y) + half;
+
+      if (neighbors.size() >= 3) {
+        auto* node_cat = congested ? cong_cat : ok_cat;
+        if (auto* marker = odb::dbMarker::create(node_cat)) {
+          addX(marker, cx, cy, half / 2);
+          marker->setComment(net_name);
+        }
+        if (auto* marker = odb::dbMarker::create(all_cat)) {
+          addX(marker, cx, cy, half / 2);
+          marker->setComment(net_name);
+        }
+        if (congested) {
+          congested_count[net_name]++;
+        }
+      }
+    }
+  }
+
+  std::vector<std::pair<int, std::string>> sorted_nets;
+  for (const auto& [name, cnt] : congested_count) {
+    sorted_nets.push_back({cnt, name});
+  }
+  std::sort(sorted_nets.rbegin(), sorted_nets.rend());
+  logger_->report("Top nets by congested Steiner points (deg>=3) [edge-based]:");
+  const int top_n = std::min(10, static_cast<int>(sorted_nets.size()));
+  for (int i = 0; i < top_n; i++) {
+    logger_->report("  {:6d}  {}", sorted_nets[i].first, sorted_nets[i].second);
+  }
+  logger_->report("Steiner edge congestion markers created. "
+                  "View in DRC/Marker panel in the GUI.");
+}
+
 
 void CUGR::analyzeSteinerCongestion(
     const std::vector<std::vector<double>>& heatmap) const

@@ -258,6 +258,11 @@ void cugr_visualize_steiner_congestion()
   getGlobalRouter()->cugrVisualizeSteinerCongestion();
 }
 
+void cugr_visualize_steiner_edge_congestion()
+{
+  getGlobalRouter()->cugrVisualizeSteinerEdgeCongestion();
+}
+
 void create_wl_report_file(const char* file_name, bool verbose)
 {
   getGlobalRouter()->createWLReportFile(file_name, verbose);

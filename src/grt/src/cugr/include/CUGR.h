@@ -99,6 +99,7 @@ class CUGR
   void routeIncremental();
   void visualizeSteinerTree(const std::string& net_name);
   void visualizeSteinerCongestion();
+  void visualizeSteinerEdgeCongestion();
   void setDebugOn(std::unique_ptr<AbstractFastRouteRenderer> renderer);
   void setDebugNet(const odb::dbNet* net);
   void setDebugSteinerTree(bool steinerTree);

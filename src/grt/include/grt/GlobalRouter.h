@@ -166,6 +166,7 @@ class GlobalRouter
   CUGR* getCUGR() { return cugr_; }
   void cugrVisualizeSteinerTree(const std::string& net_name);
   void cugrVisualizeSteinerCongestion();
+  void cugrVisualizeSteinerEdgeCongestion();
   void initDebugCUGR(std::unique_ptr<AbstractFastRouteRenderer> renderer);
   AbstractFastRouteRenderer* getDebugCUGR() const;
   bool hasCUGR() const { return cugr_ != nullptr; }
