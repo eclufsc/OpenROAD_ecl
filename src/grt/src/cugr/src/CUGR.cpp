@@ -38,6 +38,7 @@
 #include "utl/CallBackHandler.h"
 #include "utl/Logger.h"
 
+using std::shared_ptr;
 using utl::GRT;
 
 namespace grt {
@@ -178,6 +179,119 @@ void CUGR::patternRoute(std::vector<int>& net_indices)
   updateOverflowNets(net_indices);
 }
 
+void CUGR::refineSteinerTopology(std::vector<int>& net_indices, int radius=3) 
+{
+    struct SteinerTreeNodeInfo {
+        std::shared_ptr<SteinerTreeNode> node; 
+        std::shared_ptr<SteinerTreeNode> parent;
+    };
+
+    if (net_indices.empty()) {
+        return;
+}
+  logger_->report("Stage 1.5: Steiner Tree topology refinement.");
+
+  if (critical_nets_percentage_ != 0) {
+    logger_->report("critical_nets_percentage_ != 0");
+  }
+  
+  GridGraphView<bool> congestion_view;
+  grid_graph_->extractCongestionView(congestion_view);
+  sortNetIndices(net_indices);
+  for (const int net_index : net_indices) {
+    GRNet* net = gr_nets_[net_index].get();
+    if (net->getNumPins() < 2) {
+      continue;
+    }
+    grid_graph_->removeTreeUsage(net->getRoutingTree());
+    PatternRoute pattern_route(
+        net, grid_graph_.get(), stt_builder_, constants_, logger_);
+    pattern_route.constructSteinerTree();
+    
+    int h_layer = -1, v_layer = -1;
+    for (int l = constants_.min_routing_layer; l < grid_graph_->getNumLayers(); l++) {
+        if (h_layer < 0 && grid_graph_->getLayerDirection(l) == MetalLayer::H) h_layer = l;
+        if (v_layer < 0 && grid_graph_->getLayerDirection(l) == MetalLayer::V) v_layer = l;
+        if (h_layer >= 0 && v_layer >= 0) break;
+        
+        }
+    
+    auto steinerChangeCost = [&](const std::shared_ptr<SteinerTreeNode>& u, const std::shared_ptr<SteinerTreeNode>& v) -> CostT {
+        if (u->x() == v->x()) 
+            return grid_graph_->getWireCost(v_layer, *u, *v);
+        if (u->y() == v->y()) 
+            return grid_graph_->getWireCost(h_layer, *u, *v);
+
+        //L-shape 1; horizontal from uy to vx, then vertical from vx to vy 
+        //L-shape 2; vertical from ux to vy, then horizontal from ux to vy
+        PointT bend1 (v->x(), u->y()); 
+        PointT bend2 (u->x(), v->y());
+
+        CostT cost1 = grid_graph_->getWireCost(h_layer, *u, bend1) + grid_graph_->getWireCost(v_layer, bend1, *v);
+        CostT cost2 = grid_graph_->getWireCost(v_layer, *u, bend2) + grid_graph_->getWireCost(v_layer, bend2, *v);
+
+        return std::min(cost1, cost2);
+}   
+
+
+    std::vector<SteinerTreeNodeInfo> steiner_nodes;
+    
+    std::function<void(const std::shared_ptr<SteinerTreeNode>&, const std::shared_ptr<SteinerTreeNode>&)> dfs = 
+        [&](const std::shared_ptr<SteinerTreeNode>& node,
+            const std::shared_ptr<SteinerTreeNode>& parent) {
+            
+            if (!node->getFixedLayers().isValid()) steiner_nodes.push_back(SteinerTreeNodeInfo{node, parent});
+            for (const auto& child : node->getChildren()) {
+              dfs(child, node);
+            }
+    };
+    
+    dfs(pattern_route.getSteinerTree(), nullptr);
+    
+    std::vector<std::shared_ptr<SteinerTreeNode>> neighbors;
+    for (const auto& node : steiner_nodes) {
+        if (node.parent) neighbors.push_back(node.parent);
+        
+        for (auto& child : node.node->getChildren()) {
+            neighbors.push_back(child);
+        }
+
+        CostT custo_atual = 0;
+        CostT best_cost = 0;
+        PointT best_pos;
+        for (auto& v : neighbors) { 
+            custo_atual += steinerChangeCost(node.node, v); 
+            }
+        
+        best_cost = custo_atual;
+        best_pos = PointT(node.node->x(), node.node->y());
+        
+        for (int dx = -radius;  dx < radius; ++dx) {
+            for (int dy= -radius;  dy < radius; ++dy) {
+                
+                if (dx == 0 && dy == 0) continue; 
+                int ox  = node.node->x(); 
+                int oy  = node.node->y();
+                int cx = ox + dx, cy = oy + dy;
+                if (cx < 0 || cx >= grid_graph_->getXSize()) continue;
+                if (cy < 0 || cy >= grid_graph_->getYSize()) continue;
+
+                //move temporaly
+                (*node.node)[0] = cx;
+                (*node.node)[1] = cy;
+                
+                CostT temp_cost = 0;
+                for (auto& v : neighbors) { 
+                    temp_cost += steinerChangeCost(node.node, v); 
+                    }
+                
+            }
+        }
+}
+
+    }
+}
+
 void CUGR::patternRouteWithDetours(std::vector<int>& net_indices)
 {
   if (net_indices.empty()) {
@@ -293,6 +407,7 @@ void CUGR::route()
 
   patternRoute(net_indices);
 
+  refineSteinerTopology(net_indices);
   patternRouteWithDetours(net_indices);
 
   mazeRoute(net_indices);

@@ -118,6 +118,8 @@ class CUGR
   void setInitialNetSlacks();
   void updateOverflowNets(std::vector<int>& net_indices);
   void patternRoute(std::vector<int>& net_indices);
+  void refineSteinerTopology(std::vector<int>& net_indices);
+//  int steinerChangeCost(std::shared_ptr<SteinerTreeNode> u, std::shared_ptr<SteinerTreeNode> v, int h_layer, int v_layer);
   void patternRouteWithDetours(std::vector<int>& net_indices);
   void mazeRoute(std::vector<int>& net_indices);
   void sortNetIndices(std::vector<int>& net_indices) const;
