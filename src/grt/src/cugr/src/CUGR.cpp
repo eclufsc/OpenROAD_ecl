@@ -1,4 +1,4 @@
-/include "CUGR.h"
+#include "CUGR.h"
 
 #include <algorithm>
 #include <cmath>
