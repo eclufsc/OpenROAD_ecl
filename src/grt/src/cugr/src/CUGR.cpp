@@ -1,4 +1,4 @@
-#include "CUGR.h"
+/include "CUGR.h"
 
 #include <algorithm>
 #include <cmath>
@@ -228,10 +228,10 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices, int radius=3)
         PointT bend2 (u->x(), v->y());
 
         CostT cost1 = grid_graph_->getWireCost(h_layer, *u, bend1) + grid_graph_->getWireCost(v_layer, bend1, *v);
-        CostT cost2 = grid_graph_->getWireCost(v_layer, *u, bend2) + grid_graph_->getWireCost(v_layer, bend2, *v);
+        CostT cost2 = grid_graph_->getWireCost(v_layer, *u, bend2) + grid_graph_->getWireCost(h_layer, bend2, *v);
 
         return std::min(cost1, cost2);
-}   
+}; 
 
 
     std::vector<SteinerTreeNodeInfo> steiner_nodes;
@@ -248,8 +248,8 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices, int radius=3)
     
     dfs(pattern_route.getSteinerTree(), nullptr);
     
-    std::vector<std::shared_ptr<SteinerTreeNode>> neighbors;
     for (const auto& node : steiner_nodes) {
+        std::vector<std::shared_ptr<SteinerTreeNode>> neighbors;
         if (node.parent) neighbors.push_back(node.parent);
         
         for (auto& child : node.node->getChildren()) {
@@ -266,8 +266,8 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices, int radius=3)
         best_cost = custo_atual;
         best_pos = PointT(node.node->x(), node.node->y());
         
-        for (int dx = -radius;  dx < radius; ++dx) {
-            for (int dy= -radius;  dy < radius; ++dy) {
+        for (int dx = -radius;  dx <= radius; ++dx) {
+            for (int dy= -radius;  dy <= radius; ++dy) {
                 
                 if (dx == 0 && dy == 0) continue; 
                 int ox  = node.node->x(); 
@@ -285,11 +285,28 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices, int radius=3)
                     temp_cost += steinerChangeCost(node.node, v); 
                     }
                 
+                if (temp_cost < best_cost) {
+                    best_cost = temp_cost;
+                    best_pos = PointT(cx, cy);
+
+                (*node.node)[0] = ox;    
+                (*node.node)[1] = oy;    
+}
+                
             }
         }
-}
+        
+        (*node.node)[0] = best_pos.x();
+        (*node.node)[1] = best_pos.y();
 
     }
+    
+    pattern_route.constructRoutingDAG();
+    pattern_route.run();
+    grid_graph_->addTreeUsage(net->getRoutingTree());
+
+    }
+    updateOverflowNets(net_indices);
 }
 
 void CUGR::patternRouteWithDetours(std::vector<int>& net_indices)
