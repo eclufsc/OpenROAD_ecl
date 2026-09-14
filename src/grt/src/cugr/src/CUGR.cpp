@@ -193,6 +193,39 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
   }
   logger_->report("Stage 1.5: Steiner Tree topology refinement.");
 
+  std::vector<std::vector<CapacityT>> heatmap;
+  grid_graph_->buildCongestionHeatMap(heatmap);
+  const int xsize = grid_graph_->getXSize();
+  const int ysize = grid_graph_->getYSize();
+
+  auto heatmapSeg = [&](int x1, int y1, int x2, int y2) -> CostT {
+    CostT cost = 0;
+    if (x1 == x2) {
+      const auto [lo, hi] = std::minmax(y1, y2);
+      for (int y = lo; y < hi; y++)
+        cost += heatmap[x1][y];
+    } else {
+      const auto [lo, hi] = std::minmax(x1, x2);
+      for (int x = lo; x < hi; x++)
+        cost += heatmap[x][y1];
+    }
+    return cost;
+  };
+
+  auto steinerChangeCost = [&](const std::shared_ptr<SteinerTreeNode>& u,
+                               const std::shared_ptr<SteinerTreeNode>& v) -> CostT {
+    if (u->x() == v->x() || u->y() == v->y())
+      return heatmapSeg(u->x(), u->y(), v->x(), v->y());
+
+    CostT cost1 = heatmapSeg(u->x(), u->y(), v->x(), u->y())
+                + heatmapSeg(v->x(), u->y(), v->x(), v->y());
+
+    CostT cost2 = heatmapSeg(u->x(), u->y(), u->x(), v->y())
+                + heatmapSeg(u->x(), v->y(), v->x(), v->y());
+
+    return std::min(cost1, cost2);
+  };
+
   sortNetIndices(net_indices);
   for (const int net_index : net_indices) {
     GRNet* net = gr_nets_[net_index].get();
@@ -203,31 +236,6 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     PatternRoute pattern_route(
         net, grid_graph_.get(), stt_builder_, constants_, logger_);
     pattern_route.constructSteinerTree();
-    
-    int h_layer = -1, v_layer = -1;
-    for (int l = constants_.min_routing_layer; l < grid_graph_->getNumLayers(); l++) {
-        if (h_layer < 0 && grid_graph_->getLayerDirection(l) == MetalLayer::H) h_layer = l;
-        if (v_layer < 0 && grid_graph_->getLayerDirection(l) == MetalLayer::V) v_layer = l;
-        if (h_layer >= 0 && v_layer >= 0) break;
-        
-        }
-    
-    auto steinerChangeCost = [&](const std::shared_ptr<SteinerTreeNode>& u, const std::shared_ptr<SteinerTreeNode>& v) -> CostT {
-        if (u->x() == v->x()) 
-            return grid_graph_->getWireCost(v_layer, *u, *v);
-        if (u->y() == v->y()) 
-            return grid_graph_->getWireCost(h_layer, *u, *v);
-
-        //L-shape 1; horizontal from uy to vx, then vertical from vx to vy 
-        //L-shape 2; vertical from ux to vy, then horizontal from ux to vy
-        PointT bend1 (v->x(), u->y()); 
-        PointT bend2 (u->x(), v->y());
-
-        CostT cost1 = grid_graph_->getWireCost(h_layer, *u, bend1) + grid_graph_->getWireCost(v_layer, bend1, *v);
-        CostT cost2 = grid_graph_->getWireCost(v_layer, *u, bend2) + grid_graph_->getWireCost(h_layer, bend2, *v);
-
-        return std::min(cost1, cost2);
-}; 
 
 
     std::vector<SteinerTreeNodeInfo> steiner_nodes;
