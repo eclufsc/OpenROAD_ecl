@@ -179,24 +179,20 @@ void CUGR::patternRoute(std::vector<int>& net_indices)
   updateOverflowNets(net_indices);
 }
 
-void CUGR::refineSteinerTopology(std::vector<int>& net_indices, int radius=3) 
+void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 {
-    struct SteinerTreeNodeInfo {
-        std::shared_ptr<SteinerTreeNode> node; 
-        std::shared_ptr<SteinerTreeNode> parent;
-    };
+  const int radius = 3;
 
-    if (net_indices.empty()) {
-        return;
-}
+  struct SteinerTreeNodeInfo {
+    std::shared_ptr<SteinerTreeNode> node;
+    std::shared_ptr<SteinerTreeNode> parent;
+  };
+
+  if (net_indices.empty()) {
+    return;
+  }
   logger_->report("Stage 1.5: Steiner Tree topology refinement.");
 
-  if (critical_nets_percentage_ != 0) {
-    logger_->report("critical_nets_percentage_ != 0");
-  }
-  
-  GridGraphView<bool> congestion_view;
-  grid_graph_->extractCongestionView(congestion_view);
   sortNetIndices(net_indices);
   for (const int net_index : net_indices) {
     GRNet* net = gr_nets_[net_index].get();
@@ -288,10 +284,10 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices, int radius=3)
                 if (temp_cost < best_cost) {
                     best_cost = temp_cost;
                     best_pos = PointT(cx, cy);
+                }
 
-                (*node.node)[0] = ox;    
-                (*node.node)[1] = oy;    
-}
+                (*node.node)[0] = ox;
+                (*node.node)[1] = oy;
                 
             }
         }
