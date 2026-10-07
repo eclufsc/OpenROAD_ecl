@@ -846,6 +846,24 @@ void GridGraph::buildCongestionHeatMap(
   }
 }
 
+void GridGraph::buildCongestionHeatMapAt(
+int x, int y, std::vector<std::vector<CapacityT>>& heatmap) const 
+{
+        CapacityT best = 0;
+        for (int layer_index = constants_.min_routing_layer;
+            layer_index < getNumLayers();
+            layer_index++) {
+            const auto& edge = graph_edges_[layer_index][x][y];
+            if (edge.capacity == 0) continue;
+            
+            const CapacityT ratio = edge.demand / edge.capacity;
+            best = std::max(best, ratio);
+            }
+
+        heatmap[x][y] = best;
+}
+
+
 void GridGraph::extractWireCostView(GridGraphView<CostT>& view) const
 {
   view.assign(
@@ -933,7 +951,7 @@ void GridGraph::updateWireCostView(
                                      constants_.maze_logistic_slope)));
   };
   GRTreeNode::preorder(
-      routing_tree, [&](const std::shared_ptr<GRTreeNode>& node) {
+          routing_tree, [&](const std::shared_ptr<GRTreeNode>& node) {
         for (const auto& child : node->getChildren()) {
           if (node->getLayerIdx() == child->getLayerIdx()) {
             const int direction = getLayerDirection(node->getLayerIdx());

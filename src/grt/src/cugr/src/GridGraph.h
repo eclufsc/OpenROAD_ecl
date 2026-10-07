@@ -143,6 +143,7 @@ class GridGraph
   void buildCongestionHeatMap(
       std::vector<std::vector<CapacityT>>& heatmap) const;
 
+  void buildCongestionHeatMapAt(int x, int y, std::vector<std::vector<CapacityT>>& heatmap) const; 
   // For visualization
   void write(const std::string& heatmap_file = "heatmap.txt") const;
 
