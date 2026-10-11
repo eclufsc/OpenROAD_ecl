@@ -191,12 +191,10 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
   if (net_indices.empty()) {
     return;
   }
-  logger_->report("Stage 2.5: Steiner Tree topology refinement.");
+  logger_->report("Stage 1.5: Steiner Tree topology refinement.");
 
-  std::vector<std::vector<CapacityT>> heatmap; //talvez aqui ao inves de ta calculando isso toda vez a gente pode fazer so por net individual na hora da funçao de custo?
+  std::vector<std::vector<CapacityT>> heatmap;
   grid_graph_->buildCongestionHeatMap(heatmap);
-  const int xsize = grid_graph_->getXSize();
-  const int ysize = grid_graph_->getYSize();
 
   auto heatmapSeg = [&](int x1, int y1, int x2, int y2) -> CostT {
     CostT cost = 0;
@@ -233,40 +231,10 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
       continue;
     }
 
-  std::vector<PointT> touched;
-  GRTreeNode::preorder(
-    net->getRoutingTree(),
-    [&](const std::shared_ptr<GRTreeNode>& node) {
-      for (const auto& child : node->getChildren()) {
-        if (node->getLayerIdx() == child->getLayerIdx()) {
-          // Mesmo layer: segmento de fio (horizontal ou vertical)
-          if (node->y() == child->y()) {
-            // Horizontal
-            const auto [l, h] = std::minmax(node->x(), child->x());
-            for (int x = l; x < h; x++) {
-              touched.push_back(PointT(x, node->y()));
-            }
-          } else {
-            // Vertical
-            const auto [l, h] = std::minmax(node->y(), child->y());
-            for (int y = l; y < h; y++) {
-              touched.push_back(PointT(node->x(), y));
-            }
-          }
-        } else {
-          // Layer diferente: via
-          touched.push_back(PointT(node->x(), node->y()));
-        }
-      }
-    });
-
     grid_graph_->removeTreeUsage(net->getRoutingTree());
     PatternRoute pattern_route(
         net, grid_graph_.get(), stt_builder_, constants_, logger_);
-
-    for (auto p : touched) grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
     pattern_route.constructSteinerTree();
-
 
     std::vector<SteinerTreeNodeInfo> steiner_nodes;
     
@@ -283,6 +251,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     dfs(pattern_route.getSteinerTree(), nullptr);
     
     for (const auto& node : steiner_nodes) {
+        if (heatmap[node.node->x()][node.node->y()] <= 0.4) continue; //skip non congested nodes
         std::vector<std::shared_ptr<SteinerTreeNode>> neighbors;
         if (node.parent) neighbors.push_back(node.parent);
         
@@ -309,6 +278,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
                 int cx = ox + dx, cy = oy + dy;
                 if (cx < 0 || cx >= grid_graph_->getXSize()) continue;
                 if (cy < 0 || cy >= grid_graph_->getYSize()) continue;
+                if (heatmap[cx][cy] >= 0.8) continue; //ignore moving to almost congested areas
 
                 //move temporaly
                 (*node.node)[0] = cx;
@@ -338,36 +308,6 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     pattern_route.constructRoutingDAG();
     pattern_route.run();
     grid_graph_->addTreeUsage(net->getRoutingTree());
- 
-    std::vector<PointT> new_touched;
-    GRTreeNode::preorder(
-    net->getRoutingTree(),
-    [&](const std::shared_ptr<GRTreeNode>& node) {
-      for (const auto& child : node->getChildren()) {
-        if (node->getLayerIdx() == child->getLayerIdx()) {
-          // Mesmo layer: segmento de fio (horizontal ou vertical)
-          if (node->y() == child->y()) {
-            // Horizontal
-            const auto [l, h] = std::minmax(node->x(), child->x());
-            for (int x = l; x < h; x++) {
-              new_touched.push_back(PointT(x, node->y()));
-            }
-          } else {
-            // Vertical
-            const auto [l, h] = std::minmax(node->y(), child->y());
-            for (int y = l; y < h; y++) {
-              new_touched.push_back(PointT(node->x(), y));
-            }
-          }
-        } else {
-          // Layer diferente: via
-          new_touched.push_back(PointT(node->x(), node->y()));
-        }
-      }
-    });
-
-    for (auto p : new_touched) grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
-
     }
     updateOverflowNets(net_indices);
 }
@@ -487,6 +427,7 @@ void CUGR::route()
 
   patternRoute(net_indices);
 
+  refineSteinerTopology(net_indices);
   patternRouteWithDetours(net_indices);
   refineSteinerTopology(net_indices);
 
