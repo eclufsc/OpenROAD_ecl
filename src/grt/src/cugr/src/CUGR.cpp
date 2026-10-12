@@ -182,7 +182,6 @@ void CUGR::patternRoute(std::vector<int>& net_indices)
 void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 {
   const int radius = 3;
-  const int move_threshold = 0.3;
 
   struct SteinerTreeNodeInfo {
     std::shared_ptr<SteinerTreeNode> node;
@@ -224,8 +223,6 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 
     return std::min(cost1, cost2);
   };
-  int moved_steiner = 0;
-  int nets_processed = 0;
   sortNetIndices(net_indices);
   for (const int net_index : net_indices) {
     GRNet* net = gr_nets_[net_index].get();
@@ -233,7 +230,6 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
       continue;
     }
 
-    nets_processed++;
     grid_graph_->removeTreeUsage(net->getRoutingTree());
     PatternRoute pattern_route(
         net, grid_graph_.get(), stt_builder_, constants_, logger_);
@@ -303,21 +299,14 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
             }
         }
 
-        if (best_pos.x() != node.node->x() || best_pos.y() != node.node->y()) 
-            moved_steiner++;
-
         (*node.node)[0] = best_pos.x();
         (*node.node)[1] = best_pos.y();
-        
-        if (moved_steiner > nets_processed * move_threshold) {
-            moved_steiner = 0;
-            grid_graph_->buildCongestionHeatMap(heatmap);
-        }
     }
-    
+
     pattern_route.constructRoutingDAG();
     pattern_route.run();
     grid_graph_->addTreeUsage(net->getRoutingTree());
+    grid_graph_->buildCongestionHeatMap(heatmap);
     }
     updateOverflowNets(net_indices);
 }
