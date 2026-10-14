@@ -226,16 +226,20 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     return std::min(cost1, cost2);
   };
   sortNetIndices(net_indices);
+
+  int moved_sp = 0;
   for (const int net_index : net_indices) {
     GRNet* net = gr_nets_[net_index].get();
     if (net->getNumPins() < 2) {
       continue;
     }
+    grid_graph_->removeTreeUsage(net->getRoutingTree());
+
   if (heatmap_model == 1) {
       std::vector<PointT> touched = grid_graph_->getTouchedCells(net);
       for (auto p : touched) grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
 }
-    grid_graph_->removeTreeUsage(net->getRoutingTree());
+
     PatternRoute pattern_route(
         net, grid_graph_.get(), stt_builder_, constants_, logger_);
     pattern_route.constructSteinerTree();
@@ -253,7 +257,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     };
     
     dfs(pattern_route.getSteinerTree(), nullptr);
-    
+     
     for (const auto& node : steiner_nodes) {
       //  if (heatmap[node.node->x()][node.node->y()] <= 0.4) continue; //skip non congested nodes
         std::vector<std::shared_ptr<SteinerTreeNode>> neighbors;
@@ -271,6 +275,8 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
             }
         
         best_cost = custo_atual;
+        
+        PointT og_pos = PointT(node.node->x(), node.node->y());
         best_pos = PointT(node.node->x(), node.node->y());
         
         for (int dx = -radius;  dx <= radius; ++dx) {
@@ -306,6 +312,9 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 
         (*node.node)[0] = best_pos.x();
         (*node.node)[1] = best_pos.y();
+        
+        if (((*node.node)[0] != og_pos.x()) || ((*node.node)[1] != og_pos.y())) moved_sp++;
+
     }
 
     pattern_route.constructRoutingDAG();
@@ -320,6 +329,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
         grid_graph_->buildCongestionHeatMap(heatmap);
     }
     updateOverflowNets(net_indices);
+    logger_->report("Steiner points moved: {}", moved_sp);
 }
 
 void CUGR::patternRouteWithDetours(std::vector<int>& net_indices)

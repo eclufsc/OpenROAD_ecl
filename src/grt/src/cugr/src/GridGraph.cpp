@@ -1065,7 +1065,7 @@ std::vector<PointT> GridGraph::getTouchedCells(const GRNet* net) const
             } else {
                 int min_layer = std::min(node->getLayerIdx(), child->getLayerIdx()); 
                 int max_layer = std::max(node->getLayerIdx(), child->getLayerIdx());
-                for (int i = min_layer; i < max_layer; ++i) {
+                for (int i = min_layer; i <= max_layer; ++i) {
                     const int direction = layer_directions_[i];
                     touched_cells.push_back(PointT(node->x(), node->y()));
                     if (direction == MetalLayer::H && node->x() > 0) {
