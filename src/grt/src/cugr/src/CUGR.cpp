@@ -182,6 +182,8 @@ void CUGR::patternRoute(std::vector<int>& net_indices)
 void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 {
   const int radius = 3;
+  const char* env = std::getenv("CUGR_STEINER_HEATMAP");
+  int heatmap_model = env ? std::atoi(env) : 0;
 
   struct SteinerTreeNodeInfo {
     std::shared_ptr<SteinerTreeNode> node;
@@ -228,8 +230,11 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     GRNet* net = gr_nets_[net_index].get();
     if (net->getNumPins() < 2) {
       continue;
-    }%
-
+    }
+  if (heatmap_model == 1) {
+      std::vector<PointT> touched = grid_graph_->getTouchedCells(net);
+      for (auto p : touched) grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
+}
     grid_graph_->removeTreeUsage(net->getRoutingTree());
     PatternRoute pattern_route(
         net, grid_graph_.get(), stt_builder_, constants_, logger_);
@@ -306,7 +311,13 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     pattern_route.constructRoutingDAG();
     pattern_route.run();
     grid_graph_->addTreeUsage(net->getRoutingTree());
-    grid_graph_->buildCongestionHeatMap(heatmap);
+
+    if (heatmap_model == 1) {
+        std::vector<PointT> new_touched = grid_graph_->getTouchedCells(net);
+        for (auto p : new_touched) grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
+}
+    if (heatmap_model == 2) 
+        grid_graph_->buildCongestionHeatMap(heatmap);
     }
     updateOverflowNets(net_indices);
 }

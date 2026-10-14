@@ -118,6 +118,7 @@ class GridGraph
   void addTreeUsage(const std::shared_ptr<GRTreeNode>& tree);
   void removeTreeUsage(const std::shared_ptr<GRTreeNode>& tree);
 
+  std::vector<PointT> getTouchedCells(const GRNet* net) const;
   // Checks
   bool checkOverflow(int layer_index, int x, int y) const
   {
@@ -142,6 +143,8 @@ class GridGraph
 
   void buildCongestionHeatMap(
       std::vector<std::vector<CapacityT>>& heatmap) const;
+
+  void buildCongestionHeatMapAt(int x, int y, std::vector<std::vector<CapacityT>>& heatmap) const;
 
   // For visualization
   void write(const std::string& heatmap_file = "heatmap.txt") const;

@@ -846,6 +846,23 @@ void GridGraph::buildCongestionHeatMap(
   }
 }
 
+void GridGraph::buildCongestionHeatMapAt(
+int x, int y, std::vector<std::vector<CapacityT>>& heatmap) const
+{
+  CapacityT best = 0;
+  for (int layer_index = constants_.min_routing_layer;
+      layer_index < getNumLayers();
+      layer_index++) {
+    const auto& edge = graph_edges_[layer_index][x][y];
+    if (edge.capacity == 0) continue;
+
+    const CapacityT ratio = edge.demand / edge.capacity;
+    best = std::max(best, ratio);
+  }
+
+  heatmap[x][y] = best;
+}
+
 
 void GridGraph::extractWireCostView(GridGraphView<CostT>& view) const
 {
@@ -1021,6 +1038,48 @@ void GridGraph::removeTreeUsage(const std::shared_ptr<GRTreeNode>& tree)
   if (tree) {
     commitTree(tree, true);
   }
+}
+
+std::vector<PointT> GridGraph::getTouchedCells(const GRNet* net) const
+{
+        std::vector<PointT> touched_cells;
+        GRTreeNode::preorder(
+        net->getRoutingTree(),
+        [&](const std::shared_ptr<GRTreeNode>& node) {
+          for (const auto& child : node->getChildren()) {
+            if (node->getLayerIdx() == child->getLayerIdx()) {
+              // Mesmo layer: segmento de fio (horizontal ou vertical)
+              if (node->y() == child->y()) {
+                // Horizontal
+                const auto [l, h] = std::minmax(node->x(), child->x());
+                for (int x = l; x < h; x++) {
+                  touched_cells.push_back(PointT(x, node->y()));
+                }
+              } else {
+                // Vertical
+                const auto [l, h] = std::minmax(node->y(), child->y());
+                for (int y = l; y < h; y++) {
+                  touched_cells.push_back(PointT(node->x(), y));
+                }
+              }
+            } else {
+                int min_layer = std::min(node->getLayerIdx(), child->getLayerIdx()); 
+                int max_layer = std::max(node->getLayerIdx(), child->getLayerIdx());
+                for (int i = min_layer; i < max_layer; ++i) {
+                    const int direction = layer_directions_[i];
+                    touched_cells.push_back(PointT(node->x(), node->y()));
+                    if (direction == MetalLayer::H && node->x() > 0) {
+                        touched_cells.push_back(PointT(node->x() - 1, node->y()));
+                    } else if (direction == MetalLayer::V && node->y() > 0) {
+                        touched_cells.push_back(PointT(node->x(), node->y() - 1));
+                    }
+                }
+              // Layer diferente: via
+            }
+          }
+        });
+
+    return touched_cells;
 }
 
 }  // namespace grt
