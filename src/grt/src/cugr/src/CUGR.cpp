@@ -228,7 +228,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     GRNet* net = gr_nets_[net_index].get();
     if (net->getNumPins() < 2) {
       continue;
-    }
+    }%
 
     grid_graph_->removeTreeUsage(net->getRoutingTree());
     PatternRoute pattern_route(
@@ -250,7 +250,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     dfs(pattern_route.getSteinerTree(), nullptr);
     
     for (const auto& node : steiner_nodes) {
-        if (heatmap[node.node->x()][node.node->y()] <= 0.4) continue; //skip non congested nodes
+      //  if (heatmap[node.node->x()][node.node->y()] <= 0.4) continue; //skip non congested nodes
         std::vector<std::shared_ptr<SteinerTreeNode>> neighbors;
         if (node.parent) neighbors.push_back(node.parent);
         
@@ -277,7 +277,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
                 int cx = ox + dx, cy = oy + dy;
                 if (cx < 0 || cx >= grid_graph_->getXSize()) continue;
                 if (cy < 0 || cy >= grid_graph_->getYSize()) continue;
-                if (heatmap[cx][cy] >= 0.95) continue; //ignore moving to almost congested areas
+           //     if (heatmap[cx][cy] >= 0.95) continue; //ignore moving to almost congested areas
 
                 //move temporaly
                 (*node.node)[0] = cx;
