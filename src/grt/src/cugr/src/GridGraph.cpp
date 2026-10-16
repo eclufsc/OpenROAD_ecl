@@ -855,11 +855,9 @@ int x, int y, std::vector<std::vector<CapacityT>>& heatmap) const
       layer_index++) {
     const auto& edge = graph_edges_[layer_index][x][y];
     if (edge.capacity == 0) continue;
-
     const CapacityT ratio = edge.demand / edge.capacity;
     best = std::max(best, ratio);
   }
-
   heatmap[x][y] = best;
 }
 
@@ -1051,13 +1049,13 @@ std::vector<PointT> GridGraph::getTouchedCells(const GRNet* net) const
               // Mesmo layer: segmento de fio (horizontal ou vertical)
               if (node->y() == child->y()) {
                 // Horizontal
-                const auto [l, h] = std::minmax(node->x(), child->x());
+                const auto [l, h] = std::minmax({node->x(), child->x()});
                 for (int x = l; x < h; x++) {
                   touched_cells.push_back(PointT(x, node->y()));
                 }
               } else {
                 // Vertical
-                const auto [l, h] = std::minmax(node->y(), child->y());
+                const auto [l, h] = std::minmax({node->y(), child->y()});
                 for (int y = l; y < h; y++) {
                   touched_cells.push_back(PointT(node->x(), y));
                 }

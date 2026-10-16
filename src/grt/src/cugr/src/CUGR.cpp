@@ -193,7 +193,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
   if (net_indices.empty()) {
     return;
   }
-  logger_->report("Stage 1.5: Steiner Tree topology refinement.");
+  logger_->report("Stage 1.5: Steiner Tree topology refinement. heatmap_model={}", heatmap_model);
 
   std::vector<std::vector<CapacityT>> heatmap;
   grid_graph_->buildCongestionHeatMap(heatmap);
@@ -233,12 +233,11 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     if (net->getNumPins() < 2) {
       continue;
     }
-    grid_graph_->removeTreeUsage(net->getRoutingTree());
+    std::vector<PointT> old_touched;
+    if (heatmap_model == 1)
+      old_touched = grid_graph_->getTouchedCells(net);
 
-  if (heatmap_model == 1) {
-      std::vector<PointT> touched = grid_graph_->getTouchedCells(net);
-      for (auto p : touched) grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
-}
+    grid_graph_->removeTreeUsage(net->getRoutingTree());
 
     PatternRoute pattern_route(
         net, grid_graph_.get(), stt_builder_, constants_, logger_);
@@ -259,54 +258,45 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     dfs(pattern_route.getSteinerTree(), nullptr);
      
     for (const auto& node : steiner_nodes) {
-      //  if (heatmap[node.node->x()][node.node->y()] <= 0.4) continue; //skip non congested nodes
         std::vector<std::shared_ptr<SteinerTreeNode>> neighbors;
         if (node.parent) neighbors.push_back(node.parent);
-        
         for (auto& child : node.node->getChildren()) {
             neighbors.push_back(child);
         }
 
         CostT custo_atual = 0;
-        CostT best_cost = 0;
-        PointT best_pos;
-        for (auto& v : neighbors) { 
-            custo_atual += steinerChangeCost(node.node, v); 
-            }
-        
-        best_cost = custo_atual;
-        
+        for (auto& v : neighbors) {
+            custo_atual += steinerChangeCost(node.node, v);
+        }
+        CostT best_cost = custo_atual;
+
         PointT og_pos = PointT(node.node->x(), node.node->y());
-        best_pos = PointT(node.node->x(), node.node->y());
-        
-        for (int dx = -radius;  dx <= radius; ++dx) {
-            for (int dy= -radius;  dy <= radius; ++dy) {
-                
-                if (dx == 0 && dy == 0) continue; 
-                int ox  = node.node->x(); 
-                int oy  = node.node->y();
-                int cx = ox + dx, cy = oy + dy;
-                if (cx < 0 || cx >= grid_graph_->getXSize()) continue;
-                if (cy < 0 || cy >= grid_graph_->getYSize()) continue;
-           //     if (heatmap[cx][cy] >= 0.95) continue; //ignore moving to almost congested areas
+        PointT best_pos = og_pos;
 
-                //move temporaly
-                (*node.node)[0] = cx;
-                (*node.node)[1] = cy;
-                
-                CostT temp_cost = 0;
-                for (auto& v : neighbors) { 
-                    temp_cost += steinerChangeCost(node.node, v); 
+        for (int dx = -radius; dx <= radius; ++dx) {
+            for (int dy = -radius; dy <= radius; ++dy) {
+                if (dx != 0 || dy != 0) {
+                    int ox = node.node->x();
+                    int oy = node.node->y();
+                    int cx = ox + dx, cy = oy + dy;
+                    if (cx >= 0 && cx < grid_graph_->getXSize()
+                        && cy >= 0 && cy < grid_graph_->getYSize()) {
+                        (*node.node)[0] = cx;
+                        (*node.node)[1] = cy;
+
+                        CostT temp_cost = 0;
+                        for (auto& v : neighbors) {
+                            temp_cost += steinerChangeCost(node.node, v);
+                        }
+                        if (temp_cost < best_cost) {
+                            best_cost = temp_cost;
+                            best_pos = PointT(cx, cy);
+                        }
+
+                        (*node.node)[0] = ox;
+                        (*node.node)[1] = oy;
                     }
-                
-                if (temp_cost < best_cost) {
-                    best_cost = temp_cost;
-                    best_pos = PointT(cx, cy);
                 }
-
-                (*node.node)[0] = ox;
-                (*node.node)[1] = oy;
-                
             }
         }
 
@@ -322,10 +312,12 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     grid_graph_->addTreeUsage(net->getRoutingTree());
 
     if (heatmap_model == 1) {
-        std::vector<PointT> new_touched = grid_graph_->getTouchedCells(net);
-        for (auto p : new_touched) grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
-}
-    if (heatmap_model == 2) 
+      for (auto p : old_touched)
+        grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
+      for (auto p : grid_graph_->getTouchedCells(net))
+        grid_graph_->buildCongestionHeatMapAt(p.x(), p.y(), heatmap);
+    }
+    if (heatmap_model == 2)
         grid_graph_->buildCongestionHeatMap(heatmap);
     }
     updateOverflowNets(net_indices);
