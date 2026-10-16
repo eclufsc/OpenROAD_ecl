@@ -202,12 +202,22 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     CostT cost = 0;
     if (x1 == x2) {
       const auto [lo, hi] = std::minmax(y1, y2);
-      for (int y = lo; y < hi; y++)
+      for (int y = lo; y < hi; y++) {
+        if (heatmap[x1][y] >= 0.8) {
+            cost = std::numeric_limits<CostT>::max(); 
+            break;
+        }
         cost += heatmap[x1][y];
+    }
     } else {
       const auto [lo, hi] = std::minmax(x1, x2);
-      for (int x = lo; x < hi; x++)
+      for (int x = lo; x < hi; x++) {
+        if (heatmap[x][y1] >= 0.8) {
+            cost = std::numeric_limits<CostT>::max();
+            break;
+        }
         cost += heatmap[x][y1];
+      }
     }
     return cost;
   };
