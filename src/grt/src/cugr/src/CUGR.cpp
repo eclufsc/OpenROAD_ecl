@@ -197,6 +197,11 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 
   std::vector<std::vector<CapacityT>> heatmap;
   grid_graph_->buildCongestionHeatMap(heatmap);
+  constexpr double alpha = 4.0;
+  
+   auto penalty_function = [&](double alpha, double h) -> double {
+        return  (h * std::exp(alpha * h));
+};
 
   auto heatmapSeg = [&](int x1, int y1, int x2, int y2) -> CostT {
     CostT cost = 0;
@@ -204,29 +209,13 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
       const auto [lo, hi] = std::minmax(y1, y2);
       for (int y = lo; y < hi; y++) {
         const double h = heatmap[x1][y];
-        if (h >= 0.8) {
-          cost += h * 10;
-        } else if (h >= 0.6) {
-          cost += h * 3;
-        } else if (h >= 0.4) {
-          cost += h * 2;
-        } else {
-          cost += h;
-        }
-      }
+        cost += penalty_function(alpha, h);          
+    }
     } else {
       const auto [lo, hi] = std::minmax(x1, x2);
       for (int x = lo; x < hi; x++) {
         const double h = heatmap[x][y1];
-        if (h >= 0.8) {
-          cost += h * 10;
-        } else if (h >= 0.6) {
-          cost += h * 3;
-        } else if (h >= 0.4) {
-          cost += h * 2;
-        } else {
-          cost += h;
-        }
+        cost += penalty_function(alpha, h);          
       }
     }
     return cost;
