@@ -55,6 +55,7 @@ class Graphics : public gui::Renderer, public gui::HeatMapDataSource
   void addIter(int iter, double overflow);
 
   void status(std::string_view message);
+  void setDrawFillers(bool draw) { draw_fillers_ = draw; };
 
   bool enabled();
 
@@ -187,6 +188,7 @@ class Graphics : public gui::Renderer, public gui::HeatMapDataSource
   gui::Chart* stepLength_chart_{nullptr};
   gui::Chart* routing_chart_{nullptr};
   bool debug_on_{false};
+  bool draw_fillers_{true};
 
   void initHeatmap();
   void drawNesterov(gui::Painter& painter);

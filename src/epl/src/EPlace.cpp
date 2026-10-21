@@ -234,7 +234,7 @@ void EPlace::place(int threads,
       nesterov_->step(max_backtracking);
     }
 
-    if (gui_ && gui_->enabled()) {
+    if (gui_ && gui_->enabled() && iter % 5 == 0) {
       gui_->cellPlot((pause_interval_ > 0)
                      && (iter % pause_interval_) == 0);  //(iter % 10) == 0);
       odb::Rect region;
@@ -298,6 +298,17 @@ void EPlace::place(int threads,
   }
 
   if (gui_ && gui_->enabled()) {
+    gui_->cellPlot((pause_interval_ > 0));
+    odb::Rect region;
+    odb::Rect bbox = pbc_->db()->getChip()->getBlock()->getBBox()->getBox();
+    int max_dim = std::max(bbox.dx(), bbox.dy());
+    double dbu_per_pixel = static_cast<double>(max_dim) / 1000.0;
+    gui_->gifAddFrame(gif_key, region, 500, dbu_per_pixel, 20*2);
+  
+    gui_->setDrawFillers(false);
+    gui_->cellPlot((pause_interval_ > 0));
+    gui_->gifAddFrame(gif_key, region, 500, dbu_per_pixel, 20*2);
+  
     gui_->gifEnd(gif_key);
     gui_->setDebugOn(false);
     gui_->cellPlot(false);

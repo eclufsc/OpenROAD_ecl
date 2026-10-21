@@ -278,7 +278,9 @@ void Graphics::drawNesterov(gui::Painter& painter)
   painter.setPen(gui::Painter::kWhite);
   for (size_t idx = 0; idx < edVec_.size(); ++idx) {
     drawCells(pbVec_[idx]->getInsts(), painter, idx);
-    drawFillerCells(edVec_[idx]->fillers(), painter, idx);
+    if (draw_fillers_) {
+      drawFillerCells(edVec_[idx]->fillers(), painter, idx);
+    }
   }
 
   // Create lighter versions of the region_colors_ with alpha 50
