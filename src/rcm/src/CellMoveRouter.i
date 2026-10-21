@@ -31,6 +31,34 @@ move_rerout()
 }
 
 void
+report_cells_slack()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->reportCellSlack();
+}
+
+void
+report_wl_2_slack_ratio(const char * file_name)
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->reportWl2SlackRatio(file_name);
+}
+
+void
+report_candidate_cells(const char * file_name)
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->reportCandidateCells(file_name);
+}
+
+void
+move_specific_cell()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->moveSpecificCell();
+}
+
+void
 test_init_cells_wight()
 {
   CellMoveRouter* cellMoveRouter = getCellMoveRouter();
