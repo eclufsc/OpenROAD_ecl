@@ -198,12 +198,29 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
   std::vector<std::vector<CapacityT>> heatmap;
   grid_graph_->buildCongestionHeatMap(heatmap);
 
+  auto calculateBlur = [&](int r, int x, int y) -> double {
+        double h;
+        int count = 0;
+        
+        for (int dx = -r; dx < r; ++dx) {
+            for (int dy = -r; dy < r; ++dy) {
+                    if (x + dx >= 0 && x + dx < grid_graph_->getXSize()
+                        && y + dy >= 0 && y + dy < grid_graph_->getYSize()) {
+                        
+                            h += heatmap[x+dx][y+dy];
+                            count++;
+            }
+          }
+        }
+       h /= count;
+       return h; 
+};
   auto heatmapSeg = [&](int x1, int y1, int x2, int y2) -> CostT {
     CostT cost = 0;
     if (x1 == x2) {
       const auto [lo, hi] = std::minmax(y1, y2);
       for (int y = lo; y < hi; y++) {
-        const double h = heatmap[x1][y];
+        double h = calculateBlur(3, x1, y); //heatmap[x1][y];
         if (h >= 0.8) {
           cost += h * 10;
         } else if (h >= 0.6) {
@@ -217,7 +234,8 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     } else {
       const auto [lo, hi] = std::minmax(x1, x2);
       for (int x = lo; x < hi; x++) {
-        const double h = heatmap[x][y1];
+        double h = calculateBlur(3, x, y1); //heatmap[x1][y];
+        //const double h = heatmap[x][y1];
         if (h >= 0.8) {
           cost += h * 10;
         } else if (h >= 0.6) {
