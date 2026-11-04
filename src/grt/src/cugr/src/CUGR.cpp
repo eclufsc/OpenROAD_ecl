@@ -228,6 +228,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     return heatmap_vals[static_cast<int>(p * (heatmap_vals.size() - 1))];
   };
 
+  const int k = 1;
   const double t_low    = percentile_h(0.60);
   const double t_medium = percentile_h(0.80);
   const double t_high   = percentile_h(0.95);
@@ -237,7 +238,9 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     if (x1 == x2) {
       const auto [lo, hi] = std::minmax(y1, y2);
       for (int y = lo; y < hi; y++) {
-        double h = calculateBlur(3, x1, y); //heatmap[x1][y];
+      double h_raw  = heatmap[x1][y];
+      double h_blur = calculateBlur(3, x1, y);
+      double h      = h_raw * (1 + k * h_blur);
         if (h >= t_high) {
           cost += h * 10;
         } else if (h >= t_medium) {
