@@ -199,41 +199,41 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
   grid_graph_->buildCongestionHeatMap(heatmap);
 
 
+  auto calculateBlur = [&](int r, int x, int y) -> double {
+    double h = 0;
+    int count = 0;
+    for (int dx = -r; dx <= r; ++dx) {
+      for (int dy = -r; dy <= r; ++dy) {
+        if (x + dx >= 0 && x + dx < grid_graph_->getXSize()
+            && y + dy >= 0 && y + dy < grid_graph_->getYSize()) {
+          h += heatmap[x + dx][y + dy];
+          count++;
+        }
+      }
+    }
+    return h / count;
+  };
+
   std::vector<double> heatmap_vals;
   for (int x = 0; x < grid_graph_->getXSize(); x++) {
-      for (int y = 0; y < grid_graph_->getYSize(); y++) {
-            if (heatmap[x][y] > 0) heatmap_vals.push_back(heatmap[x][y]);
-        }
+    for (int y = 0; y < grid_graph_->getYSize(); y++) {
+      if (heatmap[x][y] > 0)
+        heatmap_vals.push_back(calculateBlur(3, x, y));
     }
-    
-    std::ranges::sort(heatmap_vals,);
+  }
 
-    auto percentile_h = [&](double p) {
-         return heatmap_vals[static_cast<int>(p * heatmap_vals.size())];
-};
-    
-  auto calculateBlur = [&](int r, int x, int y) -> double {
-        double h;
-        int count = 0;
-        
-        for (int dx = -r; dx < r; ++dx) {
-            for (int dy = -r; dy < r; ++dy) {
-                    if (x + dx >= 0 && x + dx < grid_graph_->getXSize()
-                        && y + dy >= 0 && y + dy < grid_graph_->getYSize()) {
-                        
-                            h += heatmap[x+dx][y+dy];
-                            count++;
-            }
-          }
-        }
-       h /= count;
-       return h; 
-};
+  std::ranges::sort(heatmap_vals);
+
+  auto percentile_h = [&](double p) {
+    return heatmap_vals[static_cast<int>(p * (heatmap_vals.size() - 1))];
+  };
+
+  const double t_low    = percentile_h(0.60);
+  const double t_medium = percentile_h(0.80);
+  const double t_high   = percentile_h(0.95);
+
   auto heatmapSeg = [&](int x1, int y1, int x2, int y2) -> CostT {
     CostT cost = 0;
-    t_low = percentile_h(0.60);
-    t_medium = percentile_h(0.80);
-    t_high = percentile_h(0.95);
     if (x1 == x2) {
       const auto [lo, hi] = std::minmax(y1, y2);
       for (int y = lo; y < hi; y++) {
