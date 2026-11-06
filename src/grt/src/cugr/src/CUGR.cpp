@@ -237,6 +237,62 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
   const double t_medium = percentile_h(0.80);
   const double t_high   = percentile_h(0.95);
 
+  const bool blur_debug = []() {
+    const char* e = std::getenv("CUGR_STEINER_BLUR_DEBUG");
+    return e != nullptr && std::string(e) == "1";
+  }();
+
+  if (blur_debug) {
+    static int pass_counter = 0;
+    ++pass_counter;
+    const int xs = grid_graph_->getXSize();
+    const int ys = grid_graph_->getYSize();
+    logger_->report("[BLUR_DEBUG] pass={} grid={}x{} blur_r={} sigma={:.2f} k={}",
+                    pass_counter, xs, ys, blur_radius, blur_radius / 2.0, k);
+    logger_->report("[BLUR_DEBUG] pass={} t_low={:.4f} t_medium={:.4f} t_high={:.4f}"
+                    " hot_cells={} total_cells={}",
+                    pass_counter, t_low, t_medium, t_high,
+                    heatmap_vals.size(), xs * ys);
+
+    int cnt_x1 = 0, cnt_x2 = 0, cnt_x3 = 0, cnt_x10 = 0;
+    double h_max = 0, h_sum = 0;
+    std::vector<double> h_all;
+    h_all.reserve(heatmap_vals.size());
+    for (int x = 0; x < xs; x++) {
+      for (int y = 0; y < ys; y++) {
+        if (heatmap[x][y] <= 0) {
+          continue;
+        }
+        const double h_raw  = heatmap[x][y];
+        const double h_blur = calculateBlur(blur_radius, x, y);
+        const double h = (h_raw >= t_medium) ? h_raw * (1 + k * h_blur) : h_raw;
+        h_all.push_back(h);
+        h_sum += h;
+        if (h > h_max) {
+          h_max = h;
+        }
+        if (h >= t_high)       { ++cnt_x10; }
+        else if (h >= t_medium){ ++cnt_x3;  }
+        else if (h >= t_low)   { ++cnt_x2;  }
+        else                   { ++cnt_x1;  }
+      }
+    }
+    std::ranges::sort(h_all);
+    const int n = static_cast<int>(h_all.size());
+    const double h_p95 = n > 0 ? h_all[static_cast<int>(0.95 * (n - 1))] : 0.0;
+    const double h_mean = n > 0 ? h_sum / n : 0.0;
+    logger_->report("[BLUR_DEBUG] pass={} h_max={:.4f} h_p95={:.4f} h_mean={:.4f}",
+                    pass_counter, h_max, h_p95, h_mean);
+    logger_->report("[BLUR_DEBUG] pass={} tier_x1={}({:.1f}%) tier_x2={}({:.1f}%)"
+                    " tier_x3={}({:.1f}%) tier_x10={}({:.1f}%) hot_n={}",
+                    pass_counter,
+                    cnt_x1,  n > 0 ? 100.0 * cnt_x1  / n : 0.0,
+                    cnt_x2,  n > 0 ? 100.0 * cnt_x2  / n : 0.0,
+                    cnt_x3,  n > 0 ? 100.0 * cnt_x3  / n : 0.0,
+                    cnt_x10, n > 0 ? 100.0 * cnt_x10 / n : 0.0,
+                    n);
+  }
+
   auto heatmapSeg = [&](int x1, int y1, int x2, int y2) -> CostT {
     CostT cost = 0;
     if (x1 == x2) {
@@ -244,7 +300,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
       for (int y = lo; y < hi; y++) {
       double h_raw  = heatmap[x1][y];
       double h_blur = calculateBlur(blur_radius, x1, y);
-      double h      = (h_raw >= t_low) ? h_raw * (1 + k * h_blur) : h_raw;
+      double h      = (h_raw >= t_medium) ? h_raw * (1 + k * h_blur) : h_raw;
         if (h >= t_high) {
           cost += h * 10;
         } else if (h >= t_medium) {
