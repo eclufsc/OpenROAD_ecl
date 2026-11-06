@@ -200,25 +200,27 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 
 
   auto calculateBlur = [&](int r, int x, int y) -> double {
+    const double sigma = r / 2.0;
     double h = 0;
-    int count = 0;
+    double weight_sum = 0;
     for (int dx = -r; dx <= r; ++dx) {
       for (int dy = -r; dy <= r; ++dy) {
         if (x + dx >= 0 && x + dx < grid_graph_->getXSize()
             && y + dy >= 0 && y + dy < grid_graph_->getYSize()) {
-          h += heatmap[x + dx][y + dy];
-          count++;
+          const double w = std::exp(-(dx * dx + dy * dy) / (2.0 * sigma * sigma));
+          h += heatmap[x + dx][y + dy] * w;
+          weight_sum += w;
         }
       }
     }
-    return h / count;
+    return weight_sum > 0 ? h / weight_sum : 0.0;
   };
 
   std::vector<double> heatmap_vals;
   for (int x = 0; x < grid_graph_->getXSize(); x++) {
     for (int y = 0; y < grid_graph_->getYSize(); y++) {
       if (heatmap[x][y] > 0)
-        heatmap_vals.push_back(calculateBlur(3, x, y));
+        heatmap_vals.push_back(calculateBlur(1, x, y));
     }
   }
 
@@ -228,7 +230,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     return heatmap_vals[static_cast<int>(p * (heatmap_vals.size() - 1))];
   };
 
-  const int k = 1;
+  const int k = 2;
   const double t_low    = percentile_h(0.60);
   const double t_medium = percentile_h(0.80);
   const double t_high   = percentile_h(0.95);
@@ -239,8 +241,8 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
       const auto [lo, hi] = std::minmax(y1, y2);
       for (int y = lo; y < hi; y++) {
       double h_raw  = heatmap[x1][y];
-      double h_blur = calculateBlur(3, x1, y);
-      double h      = h_raw * (1 + k * h_blur);
+      double h_blur = calculateBlur(1, x1, y);
+      double h      = (h_raw >= t_low) ? h_raw * (1 + k * h_blur) : h_raw;
         if (h >= t_high) {
           cost += h * 10;
         } else if (h >= t_medium) {
@@ -254,8 +256,9 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
     } else {
       const auto [lo, hi] = std::minmax(x1, x2);
       for (int x = lo; x < hi; x++) {
-        double h = calculateBlur(3, x, y1); //heatmap[x1][y];
-        //const double h = heatmap[x][y1];
+        double h_raw  = heatmap[x][y1];
+        double h_blur = calculateBlur(1, x, y1);
+        double h      = h_raw * (1 + k * h_blur);
         if (h >= t_high) {
           cost += h * 10;
         } else if (h >= t_medium) {
