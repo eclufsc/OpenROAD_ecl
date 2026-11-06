@@ -325,14 +325,14 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
             neighbors.push_back(child);
         }
 
-        CostT custo_atual = 0;
+        CostT current_cost = 0;
         for (auto& v : neighbors) {
-            custo_atual += steinerChangeCost(node.node, v);
+            current_cost += steinerChangeCost(node.node, v);
         }
-        CostT best_cost = custo_atual;
+        CostT best_cost = current_cost;
 
-        PointT og_pos = PointT(node.node->x(), node.node->y());
-        PointT best_pos = og_pos;
+        PointT original_pos = PointT(node.node->x(), node.node->y());
+        PointT best_pos = original_pos;
 
         for (int dx = -radius; dx <= radius; ++dx) {
             for (int dy = -radius; dy <= radius; ++dy) {
@@ -364,7 +364,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
         (*node.node)[0] = best_pos.x();
         (*node.node)[1] = best_pos.y();
         
-        if (((*node.node)[0] != og_pos.x()) || ((*node.node)[1] != og_pos.y())) moved_sp++;
+        if (((*node.node)[0] != original_pos.x()) || ((*node.node)[1] != original_pos.y())) moved_sp++;
 
     }
 
