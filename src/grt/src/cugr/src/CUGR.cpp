@@ -182,6 +182,7 @@ void CUGR::patternRoute(std::vector<int>& net_indices)
 void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 {
   const int radius = 3;
+  const int blur_radius = 3;  // sigma = blur_radius / 2.0 = 1.5
   const char* env = std::getenv("CUGR_STEINER_HEATMAP");
   int heatmap_model = env ? std::atoi(env) : 0;
 
@@ -220,7 +221,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
   for (int x = 0; x < grid_graph_->getXSize(); x++) {
     for (int y = 0; y < grid_graph_->getYSize(); y++) {
       if (heatmap[x][y] > 0)
-        heatmap_vals.push_back(calculateBlur(1, x, y));
+        heatmap_vals.push_back(calculateBlur(blur_radius, x, y));
     }
   }
 
@@ -242,7 +243,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
       const auto [lo, hi] = std::minmax(y1, y2);
       for (int y = lo; y < hi; y++) {
       double h_raw  = heatmap[x1][y];
-      double h_blur = calculateBlur(1, x1, y);
+      double h_blur = calculateBlur(blur_radius, x1, y);
       double h      = (h_raw >= t_low) ? h_raw * (1 + k * h_blur) : h_raw;
         if (h >= t_high) {
           cost += h * 10;
@@ -258,7 +259,7 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
       const auto [lo, hi] = std::minmax(x1, x2);
       for (int x = lo; x < hi; x++) {
         double h_raw  = heatmap[x][y1];
-        double h_blur = calculateBlur(1, x, y1);
+        double h_blur = calculateBlur(blur_radius, x, y1);
         double h      = (h_raw >= t_low) ? h_raw * (1 + k * h_blur) : h_raw;
         if (h >= t_high) {
           cost += h * 10;
