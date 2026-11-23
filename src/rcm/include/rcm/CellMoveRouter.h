@@ -43,6 +43,10 @@ class LibertyCell;
 class Pin;
 }
 
+namespace est {
+class EstimateParasitics;
+}
+
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 typedef bg::model::point<int64_t, 2, bg::cs::cartesian> point_t;
@@ -57,9 +61,9 @@ struct RcmCell {
   odb::dbInst* inst;
   odb::dbITerm* iterm;
   double weight;
-  int distance_to_mediana;
-  int init_stwl;
-  median mediana;
+  int64_t distance_to_mediana;
+  int64_t init_stwl;
+  odb::Point mediana;
   bool operator<(const RcmCell& c2) const {
     if (init_stwl != c2.init_stwl)
         return init_stwl < c2.init_stwl;
@@ -74,7 +78,7 @@ struct TimeSubPath {
   odb::dbITerm* driver;
   odb::dbITerm* sink;
   double weight;
-  int wl;
+  int64_t wl;
   bool operator<(const TimeSubPath& c2) const {
     if (wl != c2.wl)
         return wl < c2.wl;
@@ -89,7 +93,7 @@ using Node = std::tuple<int, int, int>; // (x, y, layer)
 
 struct NodeData {
     int  x, y, layer;
-    int  distance = std::numeric_limits<int>::max(); // initialized as unreachable
+    int64_t  distance = std::numeric_limits<int64_t>::max(); // initialized as unreachable
     bool visited  = false;
 };
 
@@ -135,11 +139,19 @@ class CellMoveRouter {
 
     void Cell_Move_Rerout();
 
+    void RcmTimeMove();
+
     bool isClockBuffer(odb::dbInst* cell);
 
     bool isSequential(odb::dbInst* cell);
 
     void InitCellsWeight();
+
+    void InitCellsWeightRand();
+
+    void InitCellsWeightWl();
+
+    void InitCellsWeightSlack();
     
     void set_debug(bool debug) { debug_ = debug; };
 
@@ -188,9 +200,9 @@ class CellMoveRouter {
 
     void findCandidatePaths();
 
-    odb::Point findSinkTargetPosition(odb::dbInst* cell, odb::dbITerm* input_pin);
+    std::optional<std::pair<odb::Point, int64_t>> findSinkTargetPosition(odb::dbInst* cell, odb::dbITerm* input_pin, int64_t original_wl);
 
-    odb::Point findSourceTargetPosition(odb::dbITerm* output_pin);
+    std::optional<std::pair<odb::Point, int64_t>> findSourceTargetPosition(odb::dbITerm* output_pin, int64_t original_wl);
 
     sta::Slack slackWeigthSimple(odb::dbITerm* term);
 
@@ -199,6 +211,8 @@ class CellMoveRouter {
     sta::Slack slackWeigthExpSum(odb::dbITerm* term);
   
     bool Swap_and_Rerout(odb::dbInst * moving_cell, int& failed_legalization, int& worse_wl, int before_estimate);
+  
+    bool moveRerout(RcmCell cell_to_move);
 
     
     median nets_Bboxes_median(std::vector<int>& Xs, std::vector<int>& Ys);
@@ -246,5 +260,6 @@ class CellMoveRouter {
     stt::SteinerTreeBuilder *stt_ = nullptr;
     sta::dbSta* openSta_ = nullptr;
     sta::dbNetwork* network_ = nullptr;
+    est::EstimateParasitics* estimate_parasitics_ = nullptr;
 };
 }

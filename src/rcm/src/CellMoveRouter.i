@@ -31,6 +31,13 @@ move_rerout()
 }
 
 void
+rcm_time_move()
+{
+  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
+  cellMoveRouter->RcmTimeMove();
+}
+
+void
 report_cells_slack()
 {
   CellMoveRouter* cellMoveRouter = getCellMoveRouter();
@@ -66,13 +73,6 @@ test_init_cells_wight()
 }
 
 void
-test_revert()
-{
-  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
-  cellMoveRouter->testRevertingRouting();
-}
-
-void
 run_abacus()
 {
   CellMoveRouter* cellMoveRouter = getCellMoveRouter();
@@ -92,14 +92,6 @@ set_debug_cmd(bool debug)
   CellMoveRouter* cellMoveRouter = getCellMoveRouter();
   cellMoveRouter->set_debug(debug);
 }
-
-void
-report_nets_pins()
-{
-  CellMoveRouter* cellMoveRouter = getCellMoveRouter();
-  cellMoveRouter->report_nets_pins();
-}
-
 
 } // namespace
 
