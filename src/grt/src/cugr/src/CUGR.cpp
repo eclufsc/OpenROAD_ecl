@@ -1,6 +1,7 @@
 #include "CUGR.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -181,9 +182,12 @@ void CUGR::patternRoute(std::vector<int>& net_indices)
 
 void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 {
+  const auto t_refine_start = std::chrono::steady_clock::now();
   const int radius = 3;
   const char* env = std::getenv("CUGR_STEINER_HEATMAP");
   int heatmap_model = env ? std::atoi(env) : 0;
+  const char* k_env = std::getenv("CUGR_STEINER_K");
+  const int k = k_env ? std::atoi(k_env) : 2;
 
   struct SteinerTreeNodeInfo {
     std::shared_ptr<SteinerTreeNode> node;
@@ -221,20 +225,29 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
   std::vector<double> heatmap_vals;
   for (int x = 0; x < grid_graph_->getXSize(); x++) {
     for (int y = 0; y < grid_graph_->getYSize(); y++) {
-      if (heatmap[x][y] > 0)
-        heatmap_vals.push_back(calculateBlur(3, x, y));
+      if (heatmap[x][y] > 0) {
+        double h_raw  = heatmap[x][y];
+        double h_blur = calculateBlur(2, x, y);
+        heatmap_vals.push_back(h_raw * (1 + k * h_blur));
+      }
     }
   }
 
   std::ranges::sort(heatmap_vals);
 
-  auto percentile_h = [&](double p) {
+  auto percentile_h = [&](double p) -> double {
+    if (heatmap_vals.empty()) {
+      return 0.0;
+    }
     return heatmap_vals[static_cast<int>(p * (heatmap_vals.size() - 1))];
   };
-  int k = 2;
   const double t_low    = percentile_h(0.60);
   const double t_medium = percentile_h(0.80);
   const double t_high   = percentile_h(0.95);
+  const auto t_setup_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - t_refine_start).count();
+  logger_->report("  refine setup (heatmap+blur+sort): {} ms", t_setup_ms);
+  const auto t_loop_start = std::chrono::steady_clock::now();
 
   auto heatmapSeg = [&](int x1, int y1, int x2, int y2) -> CostT {
     CostT cost = 0;
@@ -384,7 +397,14 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
         grid_graph_->buildCongestionHeatMap(heatmap);
     }
     updateOverflowNets(net_indices);
-    logger_->report("Steiner points moved: {}", moved_sp);
+  const auto t_loop_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - t_loop_start).count();
+  logger_->report("  refine loop (local search+reroute): {} ms", t_loop_ms);
+  logger_->report("Steiner points moved: {}", moved_sp);
+  const auto t_refine_end = std::chrono::steady_clock::now();
+  const auto refine_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      t_refine_end - t_refine_start).count();
+  logger_->report("refineSteinerTopology runtime: {} ms", refine_ms);
 }
 
 void CUGR::patternRouteWithDetours(std::vector<int>& net_indices)
@@ -471,6 +491,7 @@ void CUGR::mazeRoute(std::vector<int>& net_indices)
 
 void CUGR::route()
 {
+  const auto t_route_start = std::chrono::steady_clock::now();
   flute_steiner_total_ = 0;
 
   if (debug_->isOn()) {
@@ -545,6 +566,10 @@ void CUGR::route()
     CUGR::analyzeSteinerEdgeCongestion(heatmap);
   }
 
+  const auto t_route_end = std::chrono::steady_clock::now();
+  const auto route_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      t_route_end - t_route_start).count();
+  logger_->report("CUGR route() runtime: {} ms", route_ms);
   printStatistics();
   if (constants_.write_heatmap) {
     grid_graph_->write();
