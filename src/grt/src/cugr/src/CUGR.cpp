@@ -204,22 +204,20 @@ void CUGR::refineSteinerTopology(std::vector<int>& net_indices)
 
 
   auto calculateBlur = [&](int r, int x, int y) -> double {
+    const double sigma = r / 2.0;
     double h = 0;
-    int count = 0;
+    double weight_sum = 0;
     for (int dx = -r; dx <= r; ++dx) {
       for (int dy = -r; dy <= r; ++dy) {
-	  if ((dy == -2 || dy == 2) && (dx != 0)) continue;
-	  if ((dy == -1 || dy == 1) && (dx != 1 && dx != -1 && dx != 0)) continue;
-
-
         if (x + dx >= 0 && x + dx < grid_graph_->getXSize()
             && y + dy >= 0 && y + dy < grid_graph_->getYSize()) {
-          h += heatmap[x + dx][y + dy];
-          count++;
+          const double w = std::exp(-(dx * dx + dy * dy) / (2.0 * sigma * sigma));
+          h += heatmap[x + dx][y + dy] * w;
+          weight_sum += w;
         }
       }
     }
-    return h / count;
+    return weight_sum > 0 ? h / weight_sum : 0.0;
   };
 
   std::vector<double> heatmap_vals;
